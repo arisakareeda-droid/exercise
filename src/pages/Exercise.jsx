@@ -1,14 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pose } from '@mediapipe/pose';
 import * as drawingUtils from '@mediapipe/drawing_utils';
 
 export default function Exercise() {
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
   const [repCount, setRepCount] = useState(0);
-  const [exerciseStatus, setExerciseStatus] = useState('พร้อมเริ่ม');
+  const [exerciseStatus, setExerciseStatus] = useState('กำลังโหลด AI...');
   const [currentExercise, setCurrentExercise] = useState('squat');
-  const [facingMode, setFacingMode] = useState('user'); // 'user' = กล้องหน้า, 'environment' = กล้องหลัง
+  const [facingMode, setFacingMode] = useState('user');
   const [errorMessage, setErrorMessage] = useState('');
 
   // ฟังก์ชันคำนวณมุมระหว่างจุด 3 จุด
@@ -25,6 +24,7 @@ export default function Exercise() {
     let isActive = true;
     let cameraStream = null;
     let animationFrameId = null;
+    let poseInstance = null;
 
     const videoElement = webcamRef.current;
     const canvasElement = canvasRef.current;
@@ -33,60 +33,87 @@ export default function Exercise() {
     const canvasCtx = canvasElement.getContext('2d');
     let stage = 'up';
 
-    // ตั้งค่า MediaPipe Pose
-    const pose = new Pose({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
-    });
-
-    pose.setOptions({
-      modelComplexity: 1,
-      smoothLandmarks: true,
-      enableSegmentation: false,
-      smoothSegmentation: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
-
-    pose.onResults((results) => {
-      if (!isActive) return;
-      canvasCtx.save();
-      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      
-      // วาดภาพจากกล้องลงบน Canvas
-      if (results.image) {
-        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-      }
-
-      if (results.poseLandmarks) {
-        drawingUtils.drawConnectors(canvasCtx, results.poseLandmarks, Pose.POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
-        drawingUtils.drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#FF0000', lineWidth: 1 });
-
-        const landmarks = results.poseLandmarks;
-
-        if (currentExercise === 'squat') {
-          const hip = landmarks[23];
-          const knee = landmarks[25];
-          const ankle = landmarks[27];
-
-          if (hip && knee && ankle) {
-            const angle = calculateAngle(hip, knee, ankle);
-            
-            if (angle > 160) {
-              stage = 'up';
-              setExerciseStatus('ยืดตัวขึ้น');
-            }
-            if (angle < 90 && stage === 'up') {
-              stage = 'down';
-              setExerciseStatus('ย่อลงลึกเยี่ยม!');
-              setRepCount((prev) => prev + 1);
-            }
-          }
+    // โหลด Script MediaPipe จาก CDN แบบ Dynamic เพื่อป้องกันปัญหา Vite Module Error
+    const loadMediaPipeScript = () => {
+      return new Promise((resolve, reject) => {
+        if (window.Pose) {
+          resolve(window.Pose);
+          return;
         }
-      }
-      canvasCtx.restore();
-    });
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js';
+        script.async = true;
+        script.onload = () => resolve(window.Pose);
+        script.onerror = (err) => reject(err);
+        document.body.appendChild(script);
+      });
+    };
 
-    // เปิดใช้งานกล้องที่รองรับทั้ง มือถือ และ PC
+    async function initPose() {
+      try {
+        const PoseConstructor = await loadMediaPipeScript();
+        if (!isActive) return;
+
+        poseInstance = new PoseConstructor({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
+        });
+
+        poseInstance.setOptions({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          enableSegmentation: false,
+          smoothSegmentation: true,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+
+        poseInstance.onResults((results) => {
+          if (!isActive) return;
+          canvasCtx.save();
+          canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+          
+          if (results.image) {
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+          }
+
+          if (results.poseLandmarks) {
+            drawingUtils.drawConnectors(canvasCtx, results.poseLandmarks, window.Pose.POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
+            drawingUtils.drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#FF0000', lineWidth: 1 });
+
+            const landmarks = results.poseLandmarks;
+
+            if (currentExercise === 'squat') {
+              const hip = landmarks[23];
+              const knee = landmarks[25];
+              const ankle = landmarks[27];
+
+              if (hip && knee && ankle) {
+                const angle = calculateAngle(hip, knee, ankle);
+                
+                if (angle > 160) {
+                  stage = 'up';
+                  setExerciseStatus('ยืดตัวขึ้น');
+                }
+                if (angle < 90 && stage === 'up') {
+                  stage = 'down';
+                  setExerciseStatus('ย่อลงลึกเยี่ยม!');
+                  setRepCount((prev) => prev + 1);
+                }
+              }
+            }
+          } else {
+            setExerciseStatus('ไม่พบตัวผู้ใช้งาน กรุณาถอยหลังให้เห็นเต็มตัว');
+          }
+          canvasCtx.restore();
+        });
+
+        startCamera();
+      } catch (err) {
+        console.error("MediaPipe Load Error:", err);
+        setErrorMessage("ไม่สามารถโหลดระบบ AI MediaPipe ได้");
+      }
+    }
+
     async function startCamera() {
       try {
         const constraints = {
@@ -101,18 +128,16 @@ export default function Exercise() {
         videoElement.srcObject = cameraStream;
         
         await new Promise((resolve) => {
-          videoElement.onloadedmetadata = () => {
-            resolve();
-          };
+          videoElement.onloadedmetadata = () => resolve();
         });
 
         videoElement.play();
+        setExerciseStatus('พร้อมเริ่มออกกำลังกาย');
 
-        // ส่งภาพเข้า MediaPipe อย่างต่อเนื่อง
         async function sendFrame() {
           if (!isActive) return;
-          if (videoElement.readyState >= 2) {
-            await pose.send({ image: videoElement });
+          if (videoElement.readyState >= 2 && poseInstance) {
+            await poseInstance.send({ image: videoElement });
           }
           animationFrameId = requestAnimationFrame(sendFrame);
         }
@@ -120,11 +145,11 @@ export default function Exercise() {
 
       } catch (err) {
         console.error("Camera Error:", err);
-        setErrorMessage("ไม่สามารถเปิดใช้งานกล้องได้ กรุณาอนุญาตการเข้าถึงกล้อง (Permission) หรือลองใช้ผ่าน HTTPS / Localhost");
+        setErrorMessage("ไม่สามารถเปิดใช้งานกล้องได้ กรุณาตรวจสอบสิทธิ์การเข้าถึงกล้อง");
       }
     }
 
-    startCamera();
+    initPose();
 
     return () => {
       isActive = false;
@@ -132,18 +157,19 @@ export default function Exercise() {
       if (cameraStream) {
         cameraStream.getTracks().forEach(track => track.stop());
       }
-      pose.close();
+      if (poseInstance) {
+        poseInstance.close();
+      }
     };
   }, [currentExercise, facingMode]);
 
-  // สลับกล้องหน้า / กล้องหลัง (สำหรับมือถือ)
   const toggleCamera = () => {
     setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
   };
 
   return (
     <div className="flex flex-col items-center justify-center p-4 bg-gray-900 min-h-screen text-white">
-      <h1 className="text-2xl md:text-3xl font-bold mb-4 text-center">AI Exercise Tracker (Mobile & PC)</h1>
+      <h1 className="text-2xl md:text-3xl font-bold mb-4 text-center">AI Exercise Tracker (MediaPipe)</h1>
 
       {errorMessage && (
         <div className="mb-4 p-3 bg-red-600 text-white rounded-lg text-sm max-w-md text-center">
@@ -181,7 +207,7 @@ export default function Exercise() {
         </div>
         <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow">
           <p className="text-gray-400 text-sm">สถานะท่าทาง</p>
-          <p className="text-lg font-bold text-yellow-400 mt-2">{exerciseStatus}</p>
+          <p className="text-sm font-bold text-yellow-400 mt-2">{exerciseStatus}</p>
         </div>
       </div>
     </div>
