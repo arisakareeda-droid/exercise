@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import * as drawingUtils from '@mediapipe/drawing_utils';
 
 export default function Exercise() {
   const webcamRef = useRef(null);
@@ -33,7 +32,7 @@ export default function Exercise() {
     const canvasCtx = canvasElement.getContext('2d');
     let stage = 'up';
 
-    // โหลด Script MediaPipe จาก CDN แบบ Dynamic เพื่อป้องกันปัญหา Vite Module Error
+    // โหลด Script MediaPipe Pose จาก CDN
     const loadMediaPipeScript = () => {
       return new Promise((resolve, reject) => {
         if (window.Pose) {
@@ -77,10 +76,21 @@ export default function Exercise() {
           }
 
           if (results.poseLandmarks) {
-            drawingUtils.drawConnectors(canvasCtx, results.poseLandmarks, window.Pose.POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 2 });
-            drawingUtils.drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#FF0000', lineWidth: 1 });
-
             const landmarks = results.poseLandmarks;
+
+            // วาดจุดและเส้นโครงกระดูกแบบง่ายด้วย Canvas 2D API ปกติ
+            canvasCtx.fillStyle = '#FF0000';
+            canvasCtx.strokeStyle = '#00FF00';
+            canvasCtx.lineWidth = 2;
+
+            // วาดจุดข้อต่อหลักๆ
+            landmarks.forEach((landmark) => {
+              const x = landmark.x * canvasElement.width;
+              const y = landmark.y * canvasElement.height;
+              canvasCtx.beginPath();
+              canvasCtx.arc(x, y, 4, 0, 2 * Math.PI);
+              canvasCtx.fill();
+            });
 
             if (currentExercise === 'squat') {
               const hip = landmarks[23];
