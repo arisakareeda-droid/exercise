@@ -7,11 +7,13 @@ export default function Exercise() {
   const canvasRef = useRef(null);
   const [repCount, setRepCount] = useState(0);
   const [exerciseStatus, setExerciseStatus] = useState('กำลังโหลด AI...');
-  const [currentExercise, setCurrentExercise] = useState('jumping_jack');
-  const [facingMode, setFacingMode] = useState('user');
   const [errorMessage, setErrorMessage] = useState('');
 
-  // ฟังก์ชันคำนวณระยะห่างหรือตำแหน่ง (ในที่นี้ใช้เช็กท่ากระโดดตบจากความสูงของมือเทียบกับหัวไหล่ และระยะห่างขา)
+  // สถานะการออกกำลังกาย (สำหรับติดตามจังหวะ)
+  const stageRef = useRef('in'); // 'in' = หุบแขนขา, 'out' = กางแขนขาออก
+  const isCountingRef = useRef(false); // ป้องกันการนับซ้ำในจังหวะเดียว
+
+  // โหลด MediaPipe Pose
   useEffect(() => {
     let isActive = true;
     let cameraStream = null;
@@ -23,7 +25,6 @@ export default function Exercise() {
     if (!canvasElement || !videoElement) return;
 
     const canvasCtx = canvasElement.getContext('2d');
-    let stage = 'in'; // 'in' = หุบแขนขา, 'out' = กางแขนขาออก (กระโดดตบ)
 
     // โหลด Script MediaPipe Pose จาก CDN
     const loadMediaPipeScript = () => {
@@ -41,6 +42,7 @@ export default function Exercise() {
       });
     };
 
+    // ฟังก์ชันหลักในการตรวจจับท่าทาง
     async function initPose() {
       try {
         const PoseConstructor = await loadMediaPipeScript();
@@ -54,16 +56,17 @@ export default function Exercise() {
           modelComplexity: 1,
           smoothLandmarks: true,
           enableSegmentation: false,
-          smoothSegmentation: true,
           minDetectionConfidence: 0.5,
           minTrackingConfidence: 0.5,
         });
 
+        // Callback เมื่อได้ผลลัพธ์จาก AI
         poseInstance.onResults((results) => {
           if (!isActive) return;
           canvasCtx.save();
           canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
           
+          // วาดภาพจากกล้อง
           if (results.image) {
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
           }
@@ -72,8 +75,8 @@ export default function Exercise() {
             const landmarks = results.poseLandmarks;
 
             // วาดจุดและเส้นโครงกระดูก
-            canvasCtx.fillStyle = '#FF0000';
-            canvasCtx.strokeStyle = '#00FF00';
+            canvasCtx.fillStyle = '#FF0000'; // จุดสีแดง
+            canvasCtx.strokeStyle = '#00FF00'; // เส้นสีเขียว
             canvasCtx.lineWidth = 2;
 
             landmarks.forEach((landmark) => {
@@ -84,8 +87,10 @@ export default function Exercise() {
               canvasCtx.fill();
             });
 
-            // ดัชนี MediaPipe Pose สำหรับกระโดดตบ:
-            // ข้อมือซ้าย (15), ข้อมือขวา (16), หัวไหล่ซ้าย (11), หัวไหล่ขวา (12)
+            // --- ลอจิกการตรวจจับท่า "กระโดดตบ" (Jumping Jack) ---
+            // อ้างอิงตามดัชนีของ MediaPipe Pose
+            // หัวไหล่ซ้าย (11), หัวไหล่ขวา (12)
+            // ข้อมือซ้าย (15), ข้อมือขวา (16)
             // ข้อเท้าซ้าย (27), ข้อเท้าขวา (28)
             const leftWrist = landmarks[15];
             const rightWrist = landmarks[16];
@@ -95,23 +100,26 @@ export default function Exercise() {
             const rightAnkle = landmarks[28];
 
             if (leftWrist && rightWrist && leftShoulder && rightShoulder && leftAnkle && rightAnkle) {
-              // เช็กว่ากางแขนออกหรือยัง (ข้อมืออยู่สูงกว่าหรือระดับเดียวกับไหล่ และกว้างกว่าไหล่)
-              // ในระบบพิกัด Canvas ของ MediaPipe แกน Y ยิ่งน้อยยิ่งอยู่สูง
+              // 1. ตรวจสอบท่า "กาง" (OUT): ข้อมือสูงกว่าหัวไหล่ และระยะห่างขามากกว่าเกณฑ์
               const isHandsUp = leftWrist.y < leftShoulder.y && rightWrist.y < rightShoulder.y;
-              const isFeetSpread = Math.abs(leftAnkle.x - rightAnkle.x) > 0.25; // ระยะห่างขา
+              const isFeetSpread = Math.abs(leftAnkle.x - rightAnkle.x) > 0.3; // เกณฑ์ระยะห่างขา (ปรับได้ตามความเหมาะสม)
 
+              // 2. ตรวจสอบท่า "หุบ" (IN): ข้อมือต่ำกว่าหัวไหล่ และระยะห่างขาน้อยกว่าเกณฑ์
               const isHandsDown = leftWrist.y > leftShoulder.y && rightWrist.y > rightShoulder.y;
-              const isFeetClose = Math.abs(leftAnkle.x - rightAnkle.x) < 0.18;
+              const isFeetClose = Math.abs(leftAnkle.x - rightAnkle.x) < 0.15;
 
-              if (isHandsDown && isFeetClose) {
-                stage = 'in';
+              // อัปเดตสถานะและนับจำนวนครั้ง
+              if (isHandsDown && isFeetClose && stageRef.current === 'out') {
+                stageRef.current = 'in';
                 setExerciseStatus('เตรียมตัว (หุบแขนขา)');
+                isCountingRef.current = false; // รีเซ็ตสถานะการนับ
               }
 
-              if (isHandsUp && isFeetSpread && stage === 'in') {
-                stage = 'out';
+              if (isHandsUp && isFeetSpread && stageRef.current === 'in' && !isCountingRef.current) {
+                stageRef.current = 'out';
                 setExerciseStatus('ยอดเยี่ยม! กางแขนขาออก');
                 setRepCount((prev) => prev + 1);
+                isCountingRef.current = true; // ป้องกันการนับซ้ำในจังหวะนี้
               }
             }
           } else {
@@ -127,11 +135,12 @@ export default function Exercise() {
       }
     }
 
+    // ฟังก์ชันเปิดใช้งานกล้อง
     async function startCamera() {
       try {
         const constraints = {
           video: {
-            facingMode: facingMode,
+            facingMode: 'user', // ใช้กล้องหน้า
             width: { ideal: 640 },
             height: { ideal: 480 }
           }
@@ -147,6 +156,7 @@ export default function Exercise() {
         videoElement.play();
         setExerciseStatus('พร้อมเริ่มออกกำลังกาย');
 
+        // ส่งเฟรมภาพจากวิดีโอไปยัง MediaPipe Pose อย่างต่อเนื่อง
         async function sendFrame() {
           if (!isActive) return;
           if (videoElement.readyState >= 2 && poseInstance) {
@@ -162,8 +172,10 @@ export default function Exercise() {
       }
     }
 
+    // เริ่มต้นระบบ AI
     initPose();
 
+    // ฟังก์ชัน Cleanup เมื่อคอมโพเนนต์ถูกทำลาย
     return () => {
       isActive = false;
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
@@ -174,11 +186,7 @@ export default function Exercise() {
         poseInstance.close();
       }
     };
-  }, [facingMode]);
-
-  const toggleCamera = () => {
-    setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
-  };
+  }, []); // ทำงานเพียงครั้งเดียวตอนโหลดหน้า
 
   return (
     <div className="flex flex-col items-center justify-center p-4 bg-gray-900 min-h-screen text-white">
@@ -194,14 +202,14 @@ export default function Exercise() {
       {/* ปุ่มควบคุม */}
       <div className="mb-4 flex flex-wrap justify-center gap-3">
         <button 
-          onClick={toggleCamera}
-          className="px-4 py-2 rounded-lg font-semibold bg-purple-600 hover:bg-purple-700"
+          onClick={() => navigate('/exercises')}
+          className="px-4 py-2 rounded-lg font-semibold bg-gray-700 hover:bg-gray-600"
         >
-          🔄 สลับกล้องหน้า/หลัง
+          ← กลับไปเลือกท่าอื่น
         </button>
         <button 
           onClick={() => navigate('/dashboard')}
-          className="px-4 py-2 rounded-lg font-semibold bg-gray-700 hover:bg-gray-600"
+          className="px-4 py-2 rounded-lg font-semibold bg-gray-800 hover:bg-gray-700"
         >
           ← กลับหน้าหลัก
         </button>
