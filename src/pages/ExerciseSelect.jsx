@@ -9,10 +9,12 @@ export default function ExerciseSelect() {
       
       {/* ท่า Squat */}
       <div style={{ marginTop: '20px', padding: '20px', border: '1px solid #444', borderRadius: '12px', backgroundColor: '#1e1e1e' }}>
-        {/* ส่วนแสดงวิดีโอตัวอย่าง Squat */}
-        <div style={{ marginBottom: '15px' }}>
+        <h3>Squat (ลุกนั่ง)</h3>
+        
+        {/* วิดีโอแสดงใต้ชื่อท่า */}
+        <div style={{ margin: '15px 0' }}>
           <video 
-            src="/videos/squat.mp4" 
+            src="/videos/squats.mp4" 
             autoPlay 
             loop 
             muted 
@@ -21,7 +23,6 @@ export default function ExerciseSelect() {
           />
         </div>
         
-        <h3>Squat (ลุกนั่ง)</h3>
         <p style={{ color: '#aaa', fontSize: '14px' }}>บริหารกล้ามเนื้อต้นขาและสะโพกด้วยระบบตรวจจับท่าทาง AI</p>
         <button 
           onClick={() => navigate('/settings?exercise=squat')} 
@@ -33,10 +34,12 @@ export default function ExerciseSelect() {
 
       {/* ท่า Jumping Jack */}
       <div style={{ marginTop: '30px', padding: '20px', border: '1px solid #444', borderRadius: '12px', backgroundColor: '#1e1e1e' }}>
-        {/* ส่วนแสดงวิดีโอตัวอย่าง Jumping Jack */}
-        <div style={{ marginBottom: '15px' }}>
+        <h3>Jumping Jack (กระโดดตบ)</h3>
+        
+        {/* วิดีโอแสดงใต้ชื่อท่า */}
+        <div style={{ margin: '15px 0' }}>
           <video 
-            src="squats.mp4" 
+            src="/videos/jumping_jack.mp4" 
             autoPlay 
             loop 
             muted 
@@ -45,7 +48,6 @@ export default function ExerciseSelect() {
           />
         </div>
 
-        <h3>Jumping Jack (กระโดดตบ)</h3>
         <p style={{ color: '#aaa', fontSize: '14px' }}>เพิ่มอัตราการเต้นของหัวใจและเผาผลาญไขมันด้วยระบบตรวจจับท่าทาง AI</p>
         <button 
           onClick={() => navigate('/settings?exercise=jumping_jack')} 
