@@ -175,22 +175,23 @@ export default function ExerciseSelect() {
 
         /* Card */
 
-        .exercise-card {
-          min-height: 125px;
+         .exercise-card {
+        /* เปลี่ยนจาก min-height: 125px; เป็น min-content เพื่อให้สูงพอดีเนื้อหา */
+        min-height: min-content;
 
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 25px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 25px;
 
-          padding: 25px 26px;
+        padding: 25px 26px;
 
-          background: #1d1f1f;
+        background: #1d1f1f;
 
-          border: 1px solid #333636;
-          border-radius: 12px;
+        border: 1px solid #333636;
+        border-radius: 12px;
 
-          transition:
+        transition:
             transform 0.2s ease,
             border-color 0.2s ease,
             background 0.2s ease;
