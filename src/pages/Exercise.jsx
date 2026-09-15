@@ -1,23 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
-import { Camera } from '@mediapipe/camera_utils';
 
 export default function Exercise() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
-  // ดึงค่าท่าและเป้าหมายจาก URL พารามิเตอร์
   const exerciseType = searchParams.get('exercise') || 'squat';
   const targetCount = parseInt(searchParams.get('target') || '10', 10);
 
-  const webcamRef = useRef(null);
+  const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [counter, setCounter] = useState(0);
   const [feedback, setFeedback] = useState("เตรียมตัวให้พร้อม");
   const stageRef = useRef("up");
 
-  // ฟังก์ชันคำนวณมุมองศาจากข้อต่อ 3 จุด
   const calculateAngle = (a, b, c) => {
     const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
     let angle = Math.abs((radians * 180.0) / Math.PI);
@@ -26,121 +23,142 @@ export default function Exercise() {
   };
 
   useEffect(() => {
-    const pose = new Pose({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
-    });
+    let active = true;
+    let pose = null;
+    let animationFrameId = null;
 
-    pose.setOptions({
-      modelComplexity: 1,
-      smoothLandmarks: true,
-      enableSegmentation: false,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
-    });
+    const initPoseAndCamera = async () => {
+      pose = new Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
+      });
 
-    pose.onResults((results) => {
-      if (!canvasRef.current) return;
-      const canvasCtx = canvasRef.current.getContext('2d');
-      const width = canvasRef.current.width;
-      const height = canvasRef.current.height;
-      
-      canvasCtx.save();
-      canvasCtx.clearRect(0, 0, width, height);
-      
-      // วาดภาพจากกล้องลงบน Canvas
-      canvasCtx.drawImage(results.image, 0, 0, width, height);
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
 
-      if (results.poseLandmarks) {
-        const lm = results.poseLandmarks;
+      pose.onResults((results) => {
+        if (!canvasRef.current || !active) return;
+        const canvasCtx = canvasRef.current.getContext('2d');
+        const width = canvasRef.current.width;
+        const height = canvasRef.current.height;
+        
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, width, height);
+        
+        if (results.image) {
+          canvasCtx.drawImage(results.image, 0, 0, width, height);
+        }
 
-        // วาดเส้นเชื่อมโครงกระดูก (Connectors) แบบใช้ MediaPipe Pose Connections
-        canvasCtx.strokeStyle = '#00FF00';
-        canvasCtx.lineWidth = 4;
-        POSE_CONNECTIONS.forEach(([i, j]) => {
-          const p1 = lm[i];
-          const p2 = lm[j];
-          if (p1 && p2) {
-            canvasCtx.beginPath();
-            canvasCtx.moveTo(p1.x * width, p1.y * height);
-            canvasCtx.lineTo(p2.x * width, p2.y * height);
-            canvasCtx.stroke();
-          }
-        });
+        if (results.poseLandmarks) {
+          const lm = results.poseLandmarks;
 
-        // วาดจุดข้อต่อ (Landmarks)
-        canvasCtx.fillStyle = '#FF0000';
-        lm.forEach((p) => {
-          if (p) {
-            canvasCtx.beginPath();
-            canvasCtx.arc(p.x * width, p.y * height, 4, 0, 2 * Math.PI);
-            canvasCtx.fill();
-          }
-        });
-
-        // --- เงื่อนไขท่า SQUAT ---
-        if (exerciseType === "squat") {
-          const hip = lm[23], knee = lm[25], ankle = lm[27];
-          if (hip && knee && ankle) {
-            const angle = calculateAngle(hip, knee, ankle);
-            if (angle > 160) {
-              stageRef.current = "up";
-              setFeedback("ยืนตัวตรง");
+          // วาดเส้นเชื่อมโครงกระดูก
+          canvasCtx.strokeStyle = '#00FF00';
+          canvasCtx.lineWidth = 4;
+          POSE_CONNECTIONS.forEach(([i, j]) => {
+            const p1 = lm[i];
+            const p2 = lm[j];
+            if (p1 && p2) {
+              canvasCtx.beginPath();
+              canvasCtx.moveTo(p1.x * width, p1.y * height);
+              canvasCtx.lineTo(p2.x * width, p2.y * height);
+              canvasCtx.stroke();
             }
-            if (angle < 90 && stageRef.current === "up") {
-              stageRef.current = "down";
-              setCounter((prev) => {
-                const nextCount = prev + 1;
-                if (nextCount >= targetCount) {
-                  setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}`), 1000);
-                }
-                return nextCount;
-              });
-              setFeedback("ยอดเยี่ยม! ดันตัวขึ้น");
+          });
+
+          // วาดจุดข้อต่อ
+          canvasCtx.fillStyle = '#FF0000';
+          lm.forEach((p) => {
+            if (p) {
+              canvasCtx.beginPath();
+              canvasCtx.arc(p.x * width, p.y * height, 4, 0, 2 * Math.PI);
+              canvasCtx.fill();
             }
-          }
-        } 
-        // --- เงื่อนไขท่า JUMPING JACK ---
-        else if (exerciseType === "jumping_jack") {
-          const shoulderL = lm[11], wristL = lm[15];
-          if (shoulderL && wristL) {
-            if (wristL.y > shoulderL.y) {
-              stageRef.current = "down";
-              setFeedback("กางแขนและขาออก");
+          });
+
+          // เงื่อนไขท่า SQUAT
+          if (exerciseType === "squat") {
+            const hip = lm[23], knee = lm[25], ankle = lm[27];
+            if (hip && knee && ankle) {
+              const angle = calculateAngle(hip, knee, ankle);
+              if (angle > 160) {
+                stageRef.current = "up";
+                setFeedback("ยืนตัวตรง");
+              }
+              if (angle < 90 && stageRef.current === "up") {
+                stageRef.current = "down";
+                setCounter((prev) => {
+                  const nextCount = prev + 1;
+                  if (nextCount >= targetCount) {
+                    setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}`), 1000);
+                  }
+                  return nextCount;
+                });
+                setFeedback("ยอดเยี่ยม! ดันตัวขึ้น");
+              }
             }
-            if (wristL.y < shoulderL.y && stageRef.current === "down") {
-              stageRef.current = "up";
-              setCounter((prev) => {
-                const nextCount = prev + 1;
-                if (nextCount >= targetCount) {
-                  setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}`), 1000);
-                }
-                return nextCount;
-              });
-              setFeedback("ยอดเยี่ยม!");
+          } 
+          // เงื่อนไขท่า JUMPING JACK
+          else if (exerciseType === "jumping_jack") {
+            const shoulderL = lm[11], wristL = lm[15];
+            if (shoulderL && wristL) {
+              if (wristL.y > shoulderL.y) {
+                stageRef.current = "down";
+                setFeedback("กางแขนและขาออก");
+              }
+              if (wristL.y < shoulderL.y && stageRef.current === "down") {
+                stageRef.current = "up";
+                setCounter((prev) => {
+                  const nextCount = prev + 1;
+                  if (nextCount >= targetCount) {
+                    setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}`), 1000);
+                  }
+                  return nextCount;
+                });
+                setFeedback("ยอดเยี่ยม!");
+              }
             }
           }
         }
-      }
-      canvasCtx.restore();
-    });
-
-    let camera = null;
-    if (webcamRef.current) {
-      camera = new Camera(webcamRef.current, {
-        onFrame: async () => {
-          if (webcamRef.current) {
-            await pose.send({ image: webcamRef.current });
-          }
-        },
-        width: 640,
-        height: 480,
+        canvasCtx.restore();
       });
-      camera.start();
-    }
+
+      // เปิดกล้องด้วยมาตรฐาน HTML5 MediaDevices
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { width: 640, height: 480 } 
+        });
+        if (videoRef.current && active) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+          
+          const sendFrame = async () => {
+            if (!active) return;
+            if (videoRef.current && videoRef.current.readyState === 4) {
+              await pose.send({ image: videoRef.current });
+            }
+            animationFrameId = requestAnimationFrame(sendFrame);
+          };
+          sendFrame();
+        }
+      } catch (err) {
+        console.error("ไม่สามารถเปิดกล้องได้:", err);
+        setFeedback("กรุณาอนุญาตการใช้งานกล้อง");
+      }
+    };
+
+    initPoseAndCamera();
 
     return () => {
-      if (camera) {
-        // ทำความสะอาดการทำงานเมื่อเปลี่ยนหน้า
+      active = false;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      if (videoRef.current && videoRef.current.srcObject) {
+        const tracks = videoRef.current.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
       }
     };
   }, [exerciseType, targetCount, navigate]);
@@ -171,10 +189,10 @@ export default function Exercise() {
           </div>
         </div>
 
-        {/* Video ซ่อนสำหรับดึง Stream กล้อง */}
-        <video ref={webcamRef} style={{ display: 'none' }} playsInline />
+        {/* Video ซ่อนสำหรับประมวลผลกล้อง */}
+        <video ref={videoRef} style={{ display: 'none' }} playsInline muted />
         
-        {/* Canvas แสดงภาพกล้องพร้อมโครงกระดูก */}
+        {/* Canvas แสดงผล */}
         <canvas 
           ref={canvasRef} 
           width="640" 
