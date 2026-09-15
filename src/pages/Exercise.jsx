@@ -27,7 +27,7 @@ export default function Exercise() {
 
     const initPose = () => {
       if (!window.Pose || !window.Camera) {
-        setTimeout(initPose, 500); // รอจนกว่าสคริปต์จาก CDN ใน index.html จะโหลดเสร็จ
+        setTimeout(initPose, 500);
         return;
       }
 
@@ -35,12 +35,13 @@ export default function Exercise() {
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
       });
 
+      // ปรับแต่งค่าความเสถียรและการตรวจจับให้แม่นยำขึ้น
       pose.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
+        modelComplexity: 1, // ใช้โมเดลระดับปานกลางถึงสูง
+        smoothLandmarks: true, // เปิดระบบเกลี่ยความเนียนของจุดข้อต่อเพื่อลดอาการกระตุก
         enableSegmentation: false,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
+        minDetectionConfidence: 0.65, // เพิ่มความเข้มงวดในการเริ่มจับตัว (จาก 0.5 เป็น 0.65)
+        minTrackingConfidence: 0.65, // เพิ่มความเข้มงวดในการติดตามโครงกระดูกต่อเนื่อง
       });
 
       pose.onResults((results) => {
@@ -59,14 +60,14 @@ export default function Exercise() {
         if (results.poseLandmarks) {
           const lm = results.poseLandmarks;
 
-          // วาดเส้นเชื่อมโครงกระดูก
+          // กรองเฉพาะจุดที่มีความชัดเจน (Visibility > 0.6) เพื่อป้องกันเส้นกระดูกพับผิดรูป
           if (window.POSE_CONNECTIONS) {
             canvasCtx.strokeStyle = '#00FF00';
             canvasCtx.lineWidth = 4;
             window.POSE_CONNECTIONS.forEach(([i, j]) => {
               const p1 = lm[i];
               const p2 = lm[j];
-              if (p1 && p2) {
+              if (p1 && p2 && (p1.visibility ?? 1) > 0.6 && (p2.visibility ?? 1) > 0.6) {
                 canvasCtx.beginPath();
                 canvasCtx.moveTo(p1.x * width, p1.y * height);
                 canvasCtx.lineTo(p2.x * width, p2.y * height);
@@ -78,25 +79,27 @@ export default function Exercise() {
           // วาดจุดข้อต่อ
           canvasCtx.fillStyle = '#FF0000';
           lm.forEach((p) => {
-            if (p) {
+            if (p && (p.visibility ?? 1) > 0.6) {
               canvasCtx.beginPath();
               canvasCtx.arc(p.x * width, p.y * height, 4, 0, 2 * Math.PI);
               canvasCtx.fill();
             }
           });
 
-          setFeedback("เตรียมตัวให้พร้อม");
+          setFeedback("จัดท่าทางให้เห็นเต็มตัว");
 
-          // เงื่อนไขท่า SQUAT
+          // --- เงื่อนไขท่า SQUAT (ปรับช่วงองศาให้ธรรมชาติและนับแม่นขึ้น) ---
           if (exerciseType === "squat") {
             const hip = lm[23], knee = lm[25], ankle = lm[27];
             if (hip && knee && ankle) {
               const angle = calculateAngle(hip, knee, ankle);
+              
               if (angle > 160) {
                 stageRef.current = "up";
-                setFeedback("ยืนตัวตรง");
+                setFeedback("ยืนตัวตรง - พร้อมแล้วย่อตัวลง");
               }
-              if (angle < 90 && stageRef.current === "up") {
+              // ปรับเกณฑ์ย่อลงให้น้อยกว่า 100 องศา และต้องมาจากสถานะ UP เท่านั้น
+              if (angle < 100 && stageRef.current === "up") {
                 stageRef.current = "down";
                 setCounter((prev) => {
                   const nextCount = prev + 1;
@@ -109,15 +112,20 @@ export default function Exercise() {
               }
             }
           } 
-          // เงื่อนไขท่า JUMPING JACK
+          // --- เงื่อนไขท่า JUMPING JACK ---
           else if (exerciseType === "jumping_jack") {
             const shoulderL = lm[11], wristL = lm[15];
-            if (shoulderL && wristL) {
-              if (wristL.y > shoulderL.y) {
+            const hipL = lm[23], ankleL = lm[27], ankleR = lm[28];
+            
+            if (shoulderL && wristL && hipL && ankleL && ankleR) {
+              // เช็คเงื่อนไขมือขึ้นเหนือไหล่ และขาแยกออกจากกัน
+              const isHandsUp = wristL.y < shoulderL.y;
+              
+              if (!isHandsUp) {
                 stageRef.current = "down";
-                setFeedback("กางแขนและขาออก");
+                setFeedback("เตรียมตัว - กระโดดตบ");
               }
-              if (wristL.y < shoulderL.y && stageRef.current === "down") {
+              if (isHandsUp && stageRef.current === "down") {
                 stageRef.current = "up";
                 setCounter((prev) => {
                   const nextCount = prev + 1;
