@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../services/firebase';
+import { auth } from '../firebase';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -55,7 +55,6 @@ export default function Login() {
             sans-serif;
         }
 
-        /* Background decoration */
         .bg-circle {
           position: absolute;
           border-radius: 50%;
@@ -79,7 +78,6 @@ export default function Login() {
           left: -130px;
         }
 
-        /* Main container */
         .login-container {
           width: 100%;
           max-width: 950px;
@@ -96,7 +94,6 @@ export default function Login() {
             0 8px 25px rgba(16, 185, 129, 0.08);
         }
 
-        /* Left banner */
         .login-banner {
           display: flex;
           align-items: center;
@@ -165,7 +162,6 @@ export default function Login() {
           font-size: 14px;
         }
 
-        /* Login card */
         .login-card {
           display: flex;
           flex-direction: column;
@@ -196,7 +192,6 @@ export default function Login() {
           line-height: 1.6;
         }
 
-        /* Form */
         .form-group {
           margin-bottom: 22px;
         }
@@ -262,7 +257,6 @@ export default function Login() {
           opacity: 1;
         }
 
-        /* Error */
         .error-message {
           display: flex;
           align-items: center;
@@ -276,7 +270,6 @@ export default function Login() {
           font-size: 13px;
         }
 
-        /* Login button */
         .login-button {
           width: 100%;
           height: 52px;
@@ -322,7 +315,6 @@ export default function Login() {
           font-size: 20px;
         }
 
-        /* Loading */
         .spinner {
           width: 17px;
           height: 17px;
@@ -338,7 +330,6 @@ export default function Login() {
           }
         }
 
-        /* Divider */
         .divider {
           display: flex;
           align-items: center;
@@ -356,7 +347,6 @@ export default function Login() {
           background: #e5e7eb;
         }
 
-        /* Register */
         .register-text {
           margin: 0;
           text-align: center;
@@ -377,7 +367,6 @@ export default function Login() {
           text-decoration: underline;
         }
 
-        /* Footer */
         .login-footer {
           margin: 35px 0 0;
           text-align: center;
@@ -385,7 +374,6 @@ export default function Login() {
           font-size: 11px;
         }
 
-        /* Tablet / Mobile */
         @media (max-width: 800px) {
           .login-page {
             padding: 20px;
@@ -448,13 +436,11 @@ export default function Login() {
 
       <div className="login-page">
 
-        {/* Background */}
         <div className="bg-circle circle-1"></div>
         <div className="bg-circle circle-2"></div>
 
         <div className="login-container">
 
-          {/* ฝั่งซ้าย */}
           <div className="login-banner">
             <div className="banner-content">
 
@@ -488,7 +474,6 @@ export default function Login() {
             </div>
           </div>
 
-          {/* ฝั่งขวา */}
           <div className="login-card">
 
             <div className="login-header">
@@ -509,7 +494,6 @@ export default function Login() {
 
             <form onSubmit={handleLogin}>
 
-              {/* Email */}
               <div className="form-group">
 
                 <label htmlFor="email">
@@ -535,7 +519,6 @@ export default function Login() {
 
               </div>
 
-              {/* Password */}
               <div className="form-group">
 
                 <label htmlFor="password">
@@ -572,7 +555,6 @@ export default function Login() {
 
               </div>
 
-              {/* Error */}
               {error && (
                 <div className="error-message">
                   <span>⚠️</span>
@@ -580,7 +562,6 @@ export default function Login() {
                 </div>
               )}
 
-              {/* Login */}
               <button
                 type="submit"
                 className="login-button"
@@ -603,12 +584,10 @@ export default function Login() {
 
             </form>
 
-            {/* Divider */}
             <div className="divider">
               <span>หรือ</span>
             </div>
 
-            {/* Register */}
             <p className="register-text">
               ยังไม่มีบัญชี?
               <Link to="/register">
@@ -616,7 +595,6 @@ export default function Login() {
               </Link>
             </p>
 
-            {/* Footer */}
             <p className="login-footer">
               © 2026 FitTrack
             </p>
