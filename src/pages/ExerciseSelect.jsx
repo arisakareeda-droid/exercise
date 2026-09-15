@@ -14,7 +14,7 @@ export default function ExerciseSelect() {
         {/* วิดีโอแสดงใต้ชื่อท่า */}
         <div style={{ margin: '15px 0' }}>
           <video 
-            src="/videos/squats.mp4" 
+            src="/squats.mp4" 
             autoPlay 
             loop 
             muted 
@@ -39,7 +39,7 @@ export default function ExerciseSelect() {
         {/* วิดีโอแสดงใต้ชื่อท่า */}
         <div style={{ margin: '15px 0' }}>
           <video 
-            src="/videos/jumping_jack.mp4" 
+            src="/jumping_jack.mp4" 
             autoPlay 
             loop 
             muted 
