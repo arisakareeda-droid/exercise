@@ -12,15 +12,17 @@ export default function ExerciseSelect() {
         <h3>Squat (ลุกนั่ง)</h3>
         
         {/* วิดีโอแสดงใต้ชื่อท่า */}
-        <div style={{ margin: '15px 0' }}>
+        <div style={{ margin: '15px 0', display: 'flex', justifyContent: 'center' }}>
           <video 
-            src="/squats.mp4" 
             autoPlay 
             loop 
             muted 
             playsInline
-            style={{ width: '100%', maxWidth: '300px', borderRadius: '8px', objectFit: 'cover' }}
-          />
+            style={{ width: '100%', maxWidth: '300px', height: '180px', borderRadius: '8px', objectFit: 'cover' }}
+          >
+            <source src="/squats.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         </div>
         
         <p style={{ color: '#aaa', fontSize: '14px' }}>บริหารกล้ามเนื้อต้นขาและสะโพกด้วยระบบตรวจจับท่าทาง AI</p>
@@ -37,15 +39,17 @@ export default function ExerciseSelect() {
         <h3>Jumping Jack (กระโดดตบ)</h3>
         
         {/* วิดีโอแสดงใต้ชื่อท่า */}
-        <div style={{ margin: '15px 0' }}>
+        <div style={{ margin: '15px 0', display: 'flex', justifyContent: 'center' }}>
           <video 
-            src="/jumping_jack.mp4" 
             autoPlay 
             loop 
             muted 
             playsInline
-            style={{ width: '100%', maxWidth: '300px', borderRadius: '8px', objectFit: 'cover' }}
-          />
+            style={{ width: '100%', maxWidth: '300px', height: '180px', borderRadius: '8px', objectFit: 'cover' }}
+          >
+            <source src="/jumping_jack.mp4" type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
         </div>
 
         <p style={{ color: '#aaa', fontSize: '14px' }}>เพิ่มอัตราการเต้นของหัวใจและเผาผลาญไขมันด้วยระบบตรวจจับท่าทาง AI</p>
