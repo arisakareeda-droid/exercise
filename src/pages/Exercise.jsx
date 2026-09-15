@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
 
 export default function Exercise() {
   const [searchParams] = useSearchParams();
@@ -12,7 +11,7 @@ export default function Exercise() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [counter, setCounter] = useState(0);
-  const [feedback, setFeedback] = useState("เตรียมตัวให้พร้อม");
+  const [feedback, setFeedback] = useState("กำลังโหลด AI...");
   const stageRef = useRef("up");
 
   const calculateAngle = (a, b, c) => {
@@ -24,11 +23,15 @@ export default function Exercise() {
 
   useEffect(() => {
     let active = true;
-    let pose = null;
-    let animationFrameId = null;
+    let camera = null;
 
-    const initPoseAndCamera = async () => {
-      pose = new Pose({
+    const initPose = () => {
+      if (!window.Pose || !window.Camera) {
+        setTimeout(initPose, 500); // รอจนกว่าสคริปต์จาก CDN ใน index.html จะโหลดเสร็จ
+        return;
+      }
+
+      const pose = new window.Pose({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
       });
 
@@ -57,18 +60,20 @@ export default function Exercise() {
           const lm = results.poseLandmarks;
 
           // วาดเส้นเชื่อมโครงกระดูก
-          canvasCtx.strokeStyle = '#00FF00';
-          canvasCtx.lineWidth = 4;
-          POSE_CONNECTIONS.forEach(([i, j]) => {
-            const p1 = lm[i];
-            const p2 = lm[j];
-            if (p1 && p2) {
-              canvasCtx.beginPath();
-              canvasCtx.moveTo(p1.x * width, p1.y * height);
-              canvasCtx.lineTo(p2.x * width, p2.y * height);
-              canvasCtx.stroke();
-            }
-          });
+          if (window.POSE_CONNECTIONS) {
+            canvasCtx.strokeStyle = '#00FF00';
+            canvasCtx.lineWidth = 4;
+            window.POSE_CONNECTIONS.forEach(([i, j]) => {
+              const p1 = lm[i];
+              const p2 = lm[j];
+              if (p1 && p2) {
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(p1.x * width, p1.y * height);
+                canvasCtx.lineTo(p2.x * width, p2.y * height);
+                canvasCtx.stroke();
+              }
+            });
+          }
 
           // วาดจุดข้อต่อ
           canvasCtx.fillStyle = '#FF0000';
@@ -79,6 +84,8 @@ export default function Exercise() {
               canvasCtx.fill();
             }
           });
+
+          setFeedback("เตรียมตัวให้พร้อม");
 
           // เงื่อนไขท่า SQUAT
           if (exerciseType === "squat") {
@@ -127,38 +134,26 @@ export default function Exercise() {
         canvasCtx.restore();
       });
 
-      // เปิดกล้องด้วยมาตรฐาน HTML5 MediaDevices
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: 640, height: 480 } 
-        });
-        if (videoRef.current && active) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-          
-          const sendFrame = async () => {
-            if (!active) return;
-            if (videoRef.current && videoRef.current.readyState === 4) {
+      if (videoRef.current) {
+        camera = new window.Camera(videoRef.current, {
+          onFrame: async () => {
+            if (videoRef.current && active) {
               await pose.send({ image: videoRef.current });
             }
-            animationFrameId = requestAnimationFrame(sendFrame);
-          };
-          sendFrame();
-        }
-      } catch (err) {
-        console.error("ไม่สามารถเปิดกล้องได้:", err);
-        setFeedback("กรุณาอนุญาตการใช้งานกล้อง");
+          },
+          width: 640,
+          height: 480,
+        });
+        camera.start();
       }
     };
 
-    initPoseAndCamera();
+    initPose();
 
     return () => {
       active = false;
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-      if (videoRef.current && videoRef.current.srcObject) {
-        const tracks = videoRef.current.srcObject.getTracks();
-        tracks.forEach(track => track.stop());
+      if (camera && typeof camera.stop === 'function') {
+        camera.stop();
       }
     };
   }, [exerciseType, targetCount, navigate]);
@@ -189,10 +184,8 @@ export default function Exercise() {
           </div>
         </div>
 
-        {/* Video ซ่อนสำหรับประมวลผลกล้อง */}
         <video ref={videoRef} style={{ display: 'none' }} playsInline muted />
         
-        {/* Canvas แสดงผล */}
         <canvas 
           ref={canvasRef} 
           width="640" 
