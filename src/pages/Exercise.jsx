@@ -1,14 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Pose } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
 import * as drawingUtils from '@mediapipe/drawing_utils';
 
 export default function Exercise() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
   const webcamRef = useRef(null);
   const canvasRef = useRef(null);
   const [repCount, setRepCount] = useState(0);
   const [exerciseStatus, setExerciseStatus] = useState('พร้อมเริ่ม');
-  const [currentExercise, setCurrentExercise] = useState('squat'); // เลือกท่าออกกำลังกาย ('squat' หรือ 'jumping_jack')
+
+  // รับค่าท่าที่ส่งมาจากหน้าเลือกท่า (ถ้าไม่มีให้ค่าเริ่มต้นเป็น squat)
+  const selectedExerciseType = location.state?.exerciseType || 'squat';
+  const selectedExerciseName = location.state?.exerciseName || 'Squat';
+  const selectedThaiName = location.state?.thaiName || 'สควอท';
+
+  const [currentExercise, setCurrentExercise] = useState(selectedExerciseType);
 
   // ฟังก์ชันคำนวณมุมระหว่างจุด 3 จุด (สำหรับ Squat)
   const calculateAngle = (p1, p2, p3) => {
@@ -59,7 +69,6 @@ export default function Exercise() {
 
         if (currentExercise === 'squat') {
           // --- ลอจิกท่า Squat (ลุกนั่ง) ---
-          // ใช้จุดสะโพก(23), เข่า(25), ข้อเท้า(27) ข้างซ้าย
           const hip = landmarks[23];
           const knee = landmarks[25];
           const ankle = landmarks[27];
@@ -79,7 +88,6 @@ export default function Exercise() {
           }
         } else if (currentExercise === 'jumping_jack') {
           // --- ลอจิกท่า Jumping Jack (กระโดดตบ) ---
-          // หัวไหล่ซ้าย (11), ข้อมือซ้าย (15), ข้อเท้าซ้าย (27), ข้อเท้าขวา (28)
           const leftWrist = landmarks[15];
           const rightWrist = landmarks[16];
           const leftShoulder = landmarks[11];
@@ -88,11 +96,9 @@ export default function Exercise() {
           const rightAnkle = landmarks[28];
 
           if (leftWrist && rightWrist && leftShoulder && rightShoulder && leftAnkle && rightAnkle) {
-            // เช็กจังหวะกางแขนและกางขาออก (OUT)
             const isHandsUp = leftWrist.y < leftShoulder.y && rightWrist.y < rightShoulder.y;
             const isFeetSpread = Math.abs(leftAnkle.x - rightAnkle.x) > 0.25;
 
-            // เช็กจังหวะหุบแขนและหุบขาเข้า (IN)
             const isHandsDown = leftWrist.y > leftShoulder.y && rightWrist.y > rightShoulder.y;
             const isFeetClose = Math.abs(leftAnkle.x - rightAnkle.x) < 0.15;
 
@@ -125,31 +131,34 @@ export default function Exercise() {
       camera.start();
     }
 
-    // Cleanup เมื่อเปลี่ยนท่าหรือปิดคอมโพเนนต์
     return () => {
       if (pose) {
         pose.close();
+      }
+      if (camera) {
+        // ป้องกันกล้องค้างตอนเปลี่ยนหน้า
       }
     };
   }, [currentExercise]);
 
   return (
     <div className="flex flex-col items-center justify-center p-6 bg-gray-900 min-h-screen text-white">
-      <h1 className="text-3xl font-bold mb-4">AI Exercise Tracker (MediaPipe)</h1>
+      <h1 className="text-3xl font-bold mb-2">AI Exercise Tracker</h1>
+      <p className="text-gray-400 mb-4">กำลังฝึกท่า: <span className="text-green-400 font-semibold">{selectedExerciseName} ({selectedThaiName})</span></p>
 
-      {/* เลือกท่าออกกำลังกาย */}
+      {/* ปุ่มสลับท่าในหน้าเล่น (ถ้าต้องการเปลี่ยนท่าระหว่างเล่น) */}
       <div className="mb-4 flex gap-4">
         <button 
           onClick={() => { setRepCount(0); setCurrentExercise('squat'); }}
           className={`px-4 py-2 rounded-lg font-semibold transition ${currentExercise === 'squat' ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}
         >
-          🏋️‍♂️ Squat (ลุกนั่ง)
+          🏋️‍♂️ Squat (สควอท)
         </button>
         <button 
           onClick={() => { setRepCount(0); setCurrentExercise('jumping_jack'); }}
           className={`px-4 py-2 rounded-lg font-semibold transition ${currentExercise === 'jumping_jack' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300'}`}
         >
-          ⭐ Jumping Jack (กระโดดตบ)
+          🤸 Jumping Jack (กระโดดตบ)
         </button>
       </div>
 
@@ -159,7 +168,7 @@ export default function Exercise() {
         <canvas ref={canvasRef} width={640} height={480} className="absolute top-0 left-0 w-full h-full" />
       </div>
 
-      {/* แผงแสดงผลสถิติการออกกำลังกายแบบ Real-time */}
+      {/* แผงแสดงผลสถิติการออกกำลังกาย */}
       <div className="mt-6 grid grid-cols-2 gap-6 w-full max-w-md text-center">
         <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 shadow">
           <p className="text-gray-400 text-sm">จำนวนครั้ง (Reps)</p>
@@ -170,6 +179,14 @@ export default function Exercise() {
           <p className="text-xl font-bold text-yellow-400 mt-2">{exerciseStatus}</p>
         </div>
       </div>
+
+      {/* ปุ่มกลับหน้าเลือกท่า */}
+      <button 
+        onClick={() => navigate('/exercises')} 
+        className="mt-6 px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition"
+      >
+        ← กลับไปเลือกท่าอื่น
+      </button>
     </div>
   );
 }
