@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose';
 import { Camera } from '@mediapipe/camera_utils';
-import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 
 export default function Exercise() {
   const [searchParams] = useSearchParams();
@@ -42,19 +41,41 @@ export default function Exercise() {
     pose.onResults((results) => {
       if (!canvasRef.current) return;
       const canvasCtx = canvasRef.current.getContext('2d');
+      const width = canvasRef.current.width;
+      const height = canvasRef.current.height;
       
       canvasCtx.save();
-      canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      canvasCtx.clearRect(0, 0, width, height);
       
       // วาดภาพจากกล้องลงบน Canvas
-      canvasCtx.drawImage(results.image, 0, 0, canvasRef.current.width, canvasRef.current.height);
+      canvasCtx.drawImage(results.image, 0, 0, width, height);
 
       if (results.poseLandmarks) {
-        // วาดเส้นโครงกระดูกและจุดข้อต่อ
-        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 4 });
-        drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#FF0000', lineWidth: 2 });
-
         const lm = results.poseLandmarks;
+
+        // วาดเส้นเชื่อมโครงกระดูก (Connectors) แบบใช้ MediaPipe Pose Connections
+        canvasCtx.strokeStyle = '#00FF00';
+        canvasCtx.lineWidth = 4;
+        POSE_CONNECTIONS.forEach(([i, j]) => {
+          const p1 = lm[i];
+          const p2 = lm[j];
+          if (p1 && p2) {
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(p1.x * width, p1.y * height);
+            canvasCtx.lineTo(p2.x * width, p2.y * height);
+            canvasCtx.stroke();
+          }
+        });
+
+        // วาดจุดข้อต่อ (Landmarks)
+        canvasCtx.fillStyle = '#FF0000';
+        lm.forEach((p) => {
+          if (p) {
+            canvasCtx.beginPath();
+            canvasCtx.arc(p.x * width, p.y * height, 4, 0, 2 * Math.PI);
+            canvasCtx.fill();
+          }
+        });
 
         // --- เงื่อนไขท่า SQUAT ---
         if (exerciseType === "squat") {
@@ -69,7 +90,6 @@ export default function Exercise() {
               stageRef.current = "down";
               setCounter((prev) => {
                 const nextCount = prev + 1;
-                // ถ้าครบเป้าหมายแล้ว สามารถพาไปหน้าผลลัพธ์ได้
                 if (nextCount >= targetCount) {
                   setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}`), 1000);
                 }
@@ -120,7 +140,7 @@ export default function Exercise() {
 
     return () => {
       if (camera) {
-        // ทำความสะอาดการทำงานเมื่อออกหน้าเว็บ
+        // ทำความสะอาดการทำงานเมื่อเปลี่ยนหน้า
       }
     };
   }, [exerciseType, targetCount, navigate]);
