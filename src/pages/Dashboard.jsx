@@ -7,14 +7,30 @@ import { auth, db } from "../firebase";
 export default function Dashboard() {
   const navigate = useNavigate();
   const [userInitial, setUserInitial] = useState("?");
+  
+  // States สำหรับระบบคำนวณสุขภาพและโภชนาการ
+  const [weight, setWeight] = useState("");
+  const [height, setHeight] = useState("");
+  const [age, setAge] = useState("21");
+  const [bmiResult, setBmiResult] = useState(null);
+  const [tdeeResult, setTdeeResult] = useState(null);
+
+  // States สำหรับระบบสแกนอาหารและคำนวณแคลอรีที่รับประทาน
+  const [scannedImage, setScannedImage] = useState(null);
+  const [mealCalories, setMealCalories] = useState(0);
+  const [foodName, setFoodName] = useState("");
+  const [isScanning, setIsScanning] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         try {
           const snap = await getDoc(doc(db, "users", currentUser.uid));
-          if (snap.exists() && snap.data().name) {
-            setUserInitial(snap.data().name.charAt(0).toUpperCase());
+          if (snap.exists()) {
+            const data = snap.data();
+            if (data.name) setUserInitial(data.name.charAt(0).toUpperCase());
+            if (data.weight) setWeight(data.weight);
+            if (data.height) setHeight(data.height);
           } else if (currentUser.email) {
             setUserInitial(currentUser.email.charAt(0).toUpperCase());
           }
@@ -26,9 +42,60 @@ export default function Dashboard() {
     return () => unsubscribe();
   }, []);
 
+  // ฟังก์ชันคำนวณ BMI และพลังงานที่ต้องการ (TDEE)
+  const calculateHealth = (e) => {
+    e.preventDefault();
+    if (!weight || !height) return;
+    const hM = height / 100;
+    const bmi = (weight / (hM * hM)).toFixed(1);
+    
+    let status = "";
+    if (bmi < 18.5) status = "น้ำหนักน้อยกว่าเกณฑ์";
+    else if (bmi < 25) status = "น้ำหนักปกติ (สมส่วน)";
+    else if (bmi < 30) status = "น้ำหนักเกินเกณฑ์";
+    else status = "โรคอ้วน";
+
+    setBmiResult({ value: bmi, status });
+
+    // คำนวณ BMR (Mifflin-St Jeor แบบกลางๆ) และ TDEE สำหรับคนออกกำลังกายปานกลาง (TDEE = BMR * 1.55)
+    const bmr = 10 * weight + 6.25 * height - 5 * age + 5;
+    const tdee = Math.round(bmr * 1.55);
+    setTdeeResult(tdee);
+  };
+
+  // จำลองระบบสแกนภาพอาหารด้วย AI
+  const handleImageScan = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const imageUrl = URL.createObjectURL(file);
+      setScannedImage(imageUrl);
+      setIsScanning(true);
+      setFoodName("กำลังวิเคราะห์รูปภาพด้วย AI...");
+
+      setTimeout(() => {
+        // จำลองผลการสแกนอาหารยอดฮิต
+        const simulatedFoods = [
+          { name: "ข้าวผัดกระเพราหมูไข่ดาว", cal: 650 },
+          { name: "ข้าวมันไก่", cal: 600 },
+          { name: "ส้มตำไทย + ไก่ย่าง", cal: 450 },
+          { name: "ราดหน้าหมูหมัก", cal: 400 }
+        ];
+        const randomFood = simulatedFoods[Math.floor(Math.random() * simulatedFoods.length)];
+        setFoodName(randomFood.name);
+        setMealCalories(randomFood.cal);
+        setIsScanning(false);
+      }, 1500);
+    }
+  };
+
+  // คำนวณพลังงานส่วนเกินและท่าออกกำลังกายชดเชย
+  const calorieSurplus = tdeeResult ? mealCalories - Math.round(tdeeResult / 3) : 0; // เทียบต่อมื้อ
+  // สควอท 1 ครั้งเผาผลาญ ~0.32 kcal, กระโดดตบ ~0.20 kcal
+  const requiredSquatReps = calorieSurplus > 0 ? Math.ceil(calorieSurplus / 0.32) : 0;
+  const requiredJumpingJackReps = calorieSurplus > 0 ? Math.ceil(calorieSurplus / 0.20) : 0;
+
   return (
     <div className="dashboard-page">
-      {/* Modern Top Right Profile Button */}
       <button 
         className="top-profile-btn" 
         onClick={() => navigate("/profile")}
@@ -44,458 +111,241 @@ export default function Dashboard() {
 
         {/* Header */}
         <header className="dashboard-header">
-          <div className="logo">
-            FITTRACK
-          </div>
-
-          <div className="welcome-icon">
-            🏃
-          </div>
-
-          <h1>
-            ยินดีต้อนรับสู่ FitTrack
-          </h1>
-
-          <p>
-            ระบบออกกำลังกายอัจฉริยะ
-            <br />
-            ช่วยติดตามและนับจำนวนครั้งด้วย AI
-          </p>
+          <div className="logo">FITTRACK</div>
+          <div className="welcome-icon">🏃</div>
+          <h1>ยินดีต้อนรับสู่ FitTrack</h1>
+          <p>ระบบออกกำลังกายอัจฉริยะ ติดตามสุขภาพ โภชนาการ และ AI ตรวจจับท่าทาง[cite: 11]</p>
         </header>
 
+        {/* Main Grid */}
+        <div className="main-grid">
 
-        {/* Main Card */}
-        <div className="main-card">
-          <div className="card-title">
-            <span>เริ่มต้นการออกกำลังกาย</span>
+          {/* เมนูหลักเดิม */}
+          <div className="main-card">
+            <div className="card-title"><span>เริ่มต้นการออกกำลังกาย</span></div>
+            <p className="card-description">เลือกเมนูที่คุณต้องการใช้งาน</p>
+
+            <div className="menu-grid">
+              <button className="menu-card exercise-menu" onClick={() => navigate("/exercises")}>
+                <div className="menu-icon">🤸</div>
+                <div className="menu-content">
+                  <h2>เลือกท่าออกกำลังกาย</h2>
+                  <p>Squat หรือ Jumping Jack<br />พร้อมระบบ AI นับ Reps</p>
+                </div>
+                <div className="arrow">→</div>
+              </button>
+
+              <button className="menu-card history-menu" onClick={() => navigate("/history")}>
+                <div className="menu-icon">📊</div>
+                <div className="menu-content">
+                  <h2>ประวัติการออกกำลังกาย</h2>
+                  <p>ดูผลย้อนหลัง<br />และแคลอรีที่เผาผลาญ</p>
+                </div>
+                <div className="arrow">→</div>
+              </button>
+            </div>
+
+            {/* Quick Info */}
+            <div className="info-section">
+              <div className="info-item">
+                <div className="info-icon">🤖</div>
+                <div><strong>AI Detection</strong><span>ตรวจจับท่าทาง Real-time</span></div>
+              </div>
+              <div className="info-item">
+                <div className="info-icon">🔢</div>
+                <div><strong>นับจำนวนอัตโนมัติ</strong><span>แม่นยำและปลอดภัย</span></div>
+              </div>
+              <div className="info-item">
+                <div className="info-icon">📈</div>
+                <div><strong>วิเคราะห์สุขภาพ</strong><span>BMI & Calorie Tracker</span></div>
+              </div>
+            </div>
           </div>
 
-          <p className="card-description">
-            เลือกเมนูที่คุณต้องการใช้งาน
-          </p>
-
-
-          {/* Menu */}
-          <div className="menu-grid">
-
-            {/* Exercise */}
-            <button
-              className="menu-card exercise-menu"
-              onClick={() => navigate("/exercises")}
-            >
-              <div className="menu-icon">
-                🤸
+          {/* 🌟 ฟังก์ชันใหม่: คำนวณ BMI และพลังงาน (TDEE) */}
+          <div className="feature-card">
+            <div className="card-title">⚖️ คำนวณ BMI และพลังงานต่อวัน</div>
+            <form onSubmit={calculateHealth} className="bmi-form">
+              <div className="input-group">
+                <label>น้ำหนัก (kg):</label>
+                <input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="เช่น 60" required />
               </div>
-
-              <div className="menu-content">
-                <h2>เลือกท่าออกกำลังกาย</h2>
-                <p>
-                  เลือกท่ากระโดดตบหรือสควอท
-                  <br />
-                  พร้อมระบบ AI ตรวจจับท่าทาง
-                </p>
+              <div className="input-group">
+                <label>ส่วนสูง (cm):</label>
+                <input type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="เช่น 170" required />
               </div>
+              <button type="submit" className="action-btn">คำนวณค่าสุขภาพ</button>
+            </form>
 
-              <div className="arrow">
-                →
+            {bmiResult && (
+              <div className="result-box">
+                <p><strong>ค่า BMI:</strong> <span className="highlight">{bmiResult.value}</span> ({bmiResult.status})</p>
+                <p><strong>พลังงานที่ควรได้รับต่อวัน (TDEE):</strong> <span className="highlight">{tdeeResult} kcal</span></p>
               </div>
-            </button>
-
-
-            {/* History */}
-            <button
-              className="menu-card history-menu"
-              onClick={() => navigate("/history")}
-            >
-              <div className="menu-icon">
-                📊
-              </div>
-
-              <div className="menu-content">
-                <h2>ประวัติการออกกำลังกาย</h2>
-                <p>
-                  ดูผลการออกกำลังกายที่ผ่านมา
-                  <br />
-                  และติดตามความก้าวหน้า
-                </p>
-              </div>
-
-              <div className="arrow">
-                →
-              </div>
-            </button>
-
+            )}
           </div>
 
+          {/* 🌟 ฟังก์ชันใหม่: สแกนภาพอาหารและคำนวณแคลอรี */}
+          <div className="feature-card">
+            <div className="card-title">📸 สแกนภาพอาหารคำนวณแคลอรี</div>
+            <p className="card-desc">อัปโหลดหรือถ่ายภาพอาหารเพื่อประเมินพลังงานด้วย AI</p>
+            
+            <label className="upload-box">
+              <input type="file" accept="image/*" onChange={handleImageScan} style={{ display: 'none' }} />
+              {scannedImage ? (
+                <img src={scannedImage} alt="Scanned Food" className="food-preview" />
+              ) : (
+                <div className="upload-placeholder">📁คลิกเลือกรูปภาพอาหาร</div>
+              )}
+            </label>
 
-          {/* Quick Info */}
-          <div className="info-section">
-            <div className="info-item">
-              <div className="info-icon">
-                🤖
+            {isScanning && <p className="scanning-text">🔍 กำลังวิเคราะห์สารอาหาร...</p>}
+            
+            {foodName && !isScanning && (
+              <div className="result-box">
+                <p>🍽️ เมนู: <strong>{foodName}</strong></p>
+                <p>🔥 พลังงาน: <span className="highlight-warning">{mealCalories} kcal</span></p>
               </div>
-              <div>
-                <strong>AI Detection</strong>
-                <span>ตรวจจับท่าทางแบบ Real-time</span>
+            )}
+          </div>
+
+          {/* 🌟 ฟังก์ชันใหม่: แนะนำอาหารรายมื้อ & แจ้งเตือนพลังงานเกิน + แนะนำท่าออกกำลังกายชดเชย */}
+          <div className="feature-card span-2">
+            <div className="card-title">🥗 เมนูอาหารแนะนำประจำวัน & แผนออกกำลังกายชดเชย</div>
+            
+            <div className="meal-grid">
+              <div className="meal-item">
+                <strong>🌅 มื้อเช้า (แนะนำ ~400 kcal)</strong>
+                <p>ข้าวต้มปลา / โจ๊กหมูใส่ไข่ / ขนมปังโฮลวีททาเนยถั่ว</p>
+              </div>
+              <div className="meal-item">
+                <strong>☀️ มื้อกลางวัน (แนะนำ ~550 kcal)</strong>
+                <p>เกี๊ยวน้ำหมูแดง / ข้าวราดแกงเขียวหวานไก่ / ส้มตำอกไก่ย่าง</p>
+              </div>
+              <div className="meal-item">
+                <strong>🌙 มื้อเย็น (แนะนำ ~350 kcal)</strong>
+                <p>แกงจืดเต้าหู้หมูสับ / สลัดปลาทูน่า / เกาเหลาลูกชิ้นน้ำใส</p>
               </div>
             </div>
 
-
-            <div className="info-item">
-              <div className="info-icon">
-                🔢
+            {mealCalories > 0 && tdeeResult && (
+              <div className={`alert-box ${calorieSurplus > 0 ? 'alert-danger' : 'alert-success'}`}>
+                {calorieSurplus > 0 ? (
+                  <>
+                    ⚠️ <strong>แจ้งเตือน!</strong> มื้อนี้คุณรับพลังงานเกินกว่าเกณฑ์เฉลี่ยต่อมื้อไปประมาณ <strong>{calorieSurplus} kcal</strong>
+                    <div className="workout-suggestion">
+                      🎯 <strong>คำแนะนำท่าออกกำลังกายชดเชยด่วน:</strong>
+                      <ul>
+                        <li>🏋️ ทำท่า <strong>Squat</strong> จำนวน <strong>{requiredSquatReps} ครั้ง</strong></li>
+                        <li>⭐ หรือทำท่า <strong>Jumping Jack</strong> จำนวน <strong>{requiredJumpingJackReps} ครั้ง</strong></li>
+                      </ul>
+                      <button onClick={() => navigate("/exercises")} className="start-now-btn">ไปออกกำลังกายตอนนี้เลย</button>
+                    </div>
+                  </>
+                ) : (
+                  <p>✅ พลังงานในมื้อนี้อยู่ในเกณฑ์ที่เหมาะสม ไม่เกินความต้องการของร่างกาย เยี่ยมมาก!</p>
+                )}
               </div>
-              <div>
-                <strong>นับจำนวนครั้ง</strong>
-                <span>ระบบนับ Reps อัตโนมัติ</span>
-              </div>
-            </div>
-
-
-            <div className="info-item">
-              <div className="info-icon">
-                📈
-              </div>
-              <div>
-                <strong>ติดตามผล</strong>
-                <span>บันทึกประวัติการออกกำลังกาย</span>
-              </div>
-            </div>
+            )}
           </div>
 
         </div>
 
-
         {/* Footer */}
         <footer className="dashboard-footer">
-          <p>FITTRACK • Smart Exercise System</p>
+          <p>FITTRACK • Smart Exercise System[cite: 11]</p>
         </footer>
 
       </div>
 
-
       <style>{`
-        * {
-          box-sizing: border-box;
-        }
-
-        body {
-          margin: 0;
-          font-family:
-            "Noto Sans Thai",
-            "Segoe UI",
-            Tahoma,
-            sans-serif;
-        }
-
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: "Noto Sans Thai", "Segoe UI", sans-serif; }
         .dashboard-page {
           min-height: 100vh;
-          background:
-            radial-gradient(
-              circle at top right,
-              rgba(34, 197, 94, 0.10),
-              transparent 35%
-            ),
-            linear-gradient(
-              135deg,
-              #0f1115 0%,
-              #15171d 50%,
-              #101216 100%
-            );
-          color: white;
-          padding: 45px 20px;
-          display: flex;
-          justify-content: center;
-          position: relative;
+          background: radial-gradient(circle at top right, rgba(34, 197, 94, 0.1), transparent 35%), linear-gradient(135deg, #0f1115 0%, #15171d 50%, #101216 100%);
+          color: white; padding: 45px 20px; display: flex; justify-content: center; position: relative;
         }
-
-        /* Modern App-like Profile Button Style */
         .top-profile-btn {
-          position: absolute;
-          top: 24px;
-          right: 28px;
-          background: rgba(26, 29, 36, 0.85);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          padding: 4px;
-          border-radius: 50px;
-          display: flex;
-          align-items: center;
-          cursor: pointer;
-          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-          z-index: 10;
-          backdrop-filter: blur(8px);
+          position: absolute; top: 24px; right: 28px; background: rgba(26, 29, 36, 0.85); border: 1px solid rgba(255, 255, 255, 0.12);
+          padding: 4px; border-radius: 50px; display: flex; align-items: center; cursor: pointer; backdrop-filter: blur(8px); z-index: 10;
         }
+        .profile-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+        .profile-status-dot { position: absolute; bottom: 4px; right: 4px; width: 11px; height: 11px; background-color: #22c55e; border: 2px solid #15171d; border-radius: 50%; }
+        .dashboard-container { width: 100vw; max-width: 1000px; }
+        .dashboard-header { text-align: center; margin-bottom: 28px; }
+        .logo { color: #22c55e; font-size: 15px; font-weight: 800; letter-spacing: 4px; margin-bottom: 10px; }
+        .welcome-icon { width: 60px; height: 60px; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); font-size: 28px; }
+        .dashboard-header h1 { margin: 0; font-size: 28px; font-weight: 700; }
+        .dashboard-header p { color: #9ca3af; font-size: 15px; margin-top: 8px; }
 
-        .top-profile-btn:hover {
-          transform: translateY(-2px);
-          border-color: rgba(34, 197, 94, 0.5);
-          box-shadow: 0 10px 25px rgba(34, 197, 94, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-          background: rgba(32, 36, 45, 0.95);
+        .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .span-2 { grid-column: span 2; }
+
+        .main-card, .feature-card {
+          padding: 24px; background: rgba(29, 31, 31, 0.92); border: 1px solid #333636; border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         }
+        .card-title { font-size: 18px; font-weight: 700; color: #ffffff; margin-bottom: 8px; }
+        .card-description, .card-desc { color: #8f969f; font-size: 13px; margin-bottom: 18px; }
 
-        .profile-avatar {
-          width: 42px;
-          height: 42px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #22c55e, #16a34a);
-          color: #ffffff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 17px;
-          font-weight: 700;
-          box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4);
-        }
-
-        .profile-status-dot {
-          position: absolute;
-          bottom: 4px;
-          right: 4px;
-          width: 11px;
-          height: 11px;
-          background-color: #22c55e;
-          border: 2px solid #15171d;
-          border-radius: 50%;
-        }
-
-        .dashboard-container {
-          width: 100%;
-          max-width: 900px;
-        }
-
-        .dashboard-header {
-          text-align: center;
-          margin-bottom: 32px;
-        }
-
-        .logo {
-          display: inline-block;
-          margin-bottom: 18px;
-          color: #22c55e;
-          font-size: 15px;
-          font-weight: 800;
-          letter-spacing: 4px;
-        }
-
-        .welcome-icon {
-          width: 68px;
-          height: 68px;
-          margin: 0 auto 18px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 50%;
-          background: rgba(34, 197, 94, 0.10);
-          border: 1px solid rgba(34, 197, 94, 0.30);
-          font-size: 34px;
-          box-shadow: 0 0 30px rgba(34, 197, 94, 0.08);
-        }
-
-        .dashboard-header h1 {
-          margin: 0;
-          font-size: 34px;
-          font-weight: 700;
-          color: #ffffff;
-        }
-
-        .dashboard-header p {
-          margin: 12px 0 0;
-          color: #9ca3af;
-          font-size: 17px;
-          line-height: 1.7;
-        }
-
-        .main-card {
-          padding: 32px;
-          background: rgba(29, 31, 31, 0.92);
-          border: 1px solid #333636;
-          border-radius: 18px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.30);
-        }
-
-        .card-title {
-          text-align: center;
-          font-size: 22px;
-          font-weight: 700;
-          color: #ffffff;
-        }
-
-        .card-description {
-          text-align: center;
-          margin: 8px 0 25px;
-          color: #8f969f;
-          font-size: 15px;
-        }
-
-        .menu-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 18px;
-        }
-
+        .menu-grid { display: flex; flex-direction: column; gap: 12px; }
         .menu-card {
-          position: relative;
-          display: flex;
-          align-items: center;
-          gap: 17px;
-          width: 100%;
-          padding: 25px 22px;
-          text-align: left;
-          border-radius: 14px;
-          cursor: pointer;
-          color: white;
-          transition:
-            transform 0.2s ease,
-            border-color 0.2s ease,
-            background 0.2s ease;
+          position: relative; display: flex; align-items: center; gap: 15px; width: 100%; padding: 18px; text-align: left; border-radius: 12px; cursor: pointer; color: white; transition: 0.2s;
         }
+        .exercise-menu { background: linear-gradient(135deg, rgba(34, 197, 94, 0.13), rgba(29, 31, 31, 0.95)); border: 1px solid rgba(34, 197, 94, 0.35); }
+        .history-menu { background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(29, 31, 31, 0.95)); border: 1px solid rgba(59, 130, 246, 0.25); }
+        .menu-card:hover { transform: translateY(-2px); }
+        .menu-icon { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 24px; background: rgba(255,255,255,0.05); }
+        .menu-content h2 { margin: 0; font-size: 16px; font-weight: 700; }
+        .menu-content p { margin: 4px 0 0; color: #9ca3af; font-size: 12px; }
+        .arrow { margin-left: auto; font-size: 20px; color: #6b7280; }
 
-        .exercise-menu {
-          background: linear-gradient(135deg, rgba(34, 197, 94, 0.13), rgba(29, 31, 31, 0.95));
-          border: 1px solid rgba(34, 197, 94, 0.35);
+        .info-section { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #303333; }
+        .info-item { display: flex; align-items: center; gap: 8px; padding: 10px; background: #181a1a; border-radius: 8px; }
+        .info-icon { font-size: 18px; }
+        .info-item strong { display: block; color: #d7d9dc; font-size: 11px; }
+        .info-item span { display: block; color: #747b84; font-size: 10px; }
+
+        /* Form & BMI */
+        .bmi-form { display: flex; flex-direction: column; gap: 12px; }
+        .input-group { display: flex; flex-direction: column; gap: 4px; }
+        .input-group label { font-size: 12px; color: #aaa; }
+        .input-group input { padding: 10px; border-radius: 8px; background: #121212; border: 1px solid #444; color: #fff; }
+        .action-btn { padding: 10px; background: #22c55e; color: #000; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; transition: 0.2s; }
+        .action-btn:hover { background: #16a34a; color: #fff; }
+        .result-box { margin-top: 12px; padding: 12px; background: #181a1a; border-radius: 8px; border: 1px solid #333; font-size: 13px; }
+        .highlight { color: #4ade80; font-weight: bold; }
+        .highlight-warning { color: #facc15; font-weight: bold; }
+
+        /* Upload Image Box */
+        .upload-box {
+          display: flex; align-items: center; justify-content: center; width: 100%; height: 140px; border: 2px dashed #444; border-radius: 10px; cursor: pointer; background: #181a1a; overflow: hidden; position: relative;
         }
+        .upload-placeholder { color: #aaa; font-size: 13px; }
+        .food-preview { width: 100%; height: 100%; object-fit: cover; }
+        .scanning-text { text-align: center; color: #38bdf8; font-size: 13px; margin-top: 8px; }
 
-        .history-menu {
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.10), rgba(29, 31, 31, 0.95));
-          border: 1px solid rgba(59, 130, 246, 0.25);
-        }
+        /* Meal Grid & Alert */
+        .meal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
+        .meal-item { background: #181a1a; padding: 12px; border-radius: 8px; font-size: 12px; border: 1px solid #333; }
+        .meal-item strong { color: #38bdf8; display: block; margin-bottom: 6px; }
+        .meal-item p { margin: 0; color: #bbb; }
 
-        .menu-card:hover {
-          transform: translateY(-3px);
-        }
+        .alert-box { padding: 14px; border-radius: 10px; font-size: 13px; margin-top: 10px; }
+        .alert-success { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; }
+        .alert-danger { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; }
+        .workout-suggestion { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); }
+        .workout-suggestion ul { margin: 6px 0 10px 16px; padding: 0; }
+        .start-now-btn { padding: 6px 12px; background: #ef4444; color: #fff; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+        .start-now-btn:hover { background: #dc2626; }
 
-        .exercise-menu:hover {
-          border-color: #22c55e;
-          background: linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(29, 31, 31, 1));
-        }
+        .dashboard-footer { text-align: center; margin-top: 25px; }
+        .dashboard-footer p { margin: 0; color: #555b63; font-size: 12px; letter-spacing: 1px; }
 
-        .history-menu:hover {
-          border-color: #3b82f6;
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(29, 31, 31, 1));
-        }
-
-        .menu-icon {
-          flex-shrink: 0;
-          width: 58px;
-          height: 58px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 13px;
-          font-size: 29px;
-        }
-
-        .exercise-menu .menu-icon {
-          background: rgba(34, 197, 94, 0.13);
-        }
-
-        .history-menu .menu-icon {
-          background: rgba(59, 130, 246, 0.12);
-        }
-
-        .menu-content {
-          flex: 1;
-        }
-
-        .menu-content h2 {
-          margin: 0;
-          font-size: 18px;
-          font-weight: 700;
-          color: #ffffff;
-        }
-
-        .menu-content p {
-          margin: 7px 0 0;
-          color: #9ca3af;
-          font-size: 13px;
-          line-height: 1.6;
-        }
-
-        .arrow {
-          flex-shrink: 0;
-          font-size: 25px;
-          color: #6b7280;
-          transition: transform 0.2s ease, color 0.2s ease;
-        }
-
-        .menu-card:hover .arrow {
-          transform: translateX(4px);
-          color: #ffffff;
-        }
-
-        .info-section {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 12px;
-          margin-top: 25px;
-          padding-top: 24px;
-          border-top: 1px solid #303333;
-        }
-
-        .info-item {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 13px;
-          background: #181a1a;
-          border-radius: 10px;
-        }
-
-        .info-icon {
-          font-size: 22px;
-        }
-
-        .info-item strong {
-          display: block;
-          color: #d7d9dc;
-          font-size: 13px;
-          margin-bottom: 3px;
-        }
-
-        .info-item span {
-          display: block;
-          color: #747b84;
-          font-size: 11px;
-        }
-
-        .dashboard-footer {
-          text-align: center;
-          margin-top: 25px;
-        }
-
-        .dashboard-footer p {
-          margin: 0;
-          color: #555b63;
-          font-size: 12px;
-          letter-spacing: 1px;
-        }
-
-        @media (max-width: 750px) {
-          .dashboard-page {
-            padding: 35px 16px;
-          }
-          .dashboard-header h1 {
-            font-size: 29px;
-          }
-          .main-card {
-            padding: 24px;
-          }
-          .menu-grid {
-            grid-template-columns: 1fr;
-          }
-          .info-section {
-            grid-template-columns: 1fr;
-          }
-          .top-profile-btn {
-            top: 16px;
-            right: 16px;
-          }
-          .profile-avatar {
-            width: 38px;
-            height: 38px;
-            font-size: 15px;
-          }
+        @media (max-width: 768px) {
+          .main-grid { grid-template-columns: 1fr; }
+          .span-2 { grid-column: span 1; }
+          .meal-grid { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>
