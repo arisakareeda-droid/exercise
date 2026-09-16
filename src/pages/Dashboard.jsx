@@ -8,18 +8,18 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [userInitial, setUserInitial] = useState("?");
   
-  // States สำหรับระบบคำนวณสุขภาพและโภชนาการ
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [age, setAge] = useState("21");
   const [bmiResult, setBmiResult] = useState(null);
   const [tdeeResult, setTdeeResult] = useState(null);
 
-  // States สำหรับระบบสแกนอาหารและคำนวณแคลอรีที่รับประทาน
-  const [scannedImage, setScannedImage] = useState(null);
-  const [mealCalories, setMealCalories] = useState(0);
-  const [foodName, setFoodName] = useState("");
-  const [isScanning, setIsScanning] = useState(false);
+  // States สำหรับเพิ่มรูปภาพ (อาหาร, เครื่องดื่ม, ขนม) และคำนวณแคลอรี
+  const [itemImage, setItemImage] = useState(null);
+  const [itemCalories, setItemCalories] = useState(0);
+  const [itemName, setItemName] = useState("");
+  const [itemCategory, setItemCategory] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -42,7 +42,6 @@ export default function Dashboard() {
     return () => unsubscribe();
   }, []);
 
-  // ฟังก์ชันคำนวณ BMI และพลังงานที่ต้องการ (TDEE)
   const calculateHealth = (e) => {
     e.preventDefault();
     if (!weight || !height) return;
@@ -56,60 +55,54 @@ export default function Dashboard() {
     else status = "โรคอ้วน";
 
     setBmiResult({ value: bmi, status });
-
-    // คำนวณ BMR (Mifflin-St Jeor แบบกลางๆ) และ TDEE สำหรับคนออกกำลังกายปานกลาง (TDEE = BMR * 1.55)
     const bmr = 10 * weight + 6.25 * height - 5 * age + 5;
     const tdee = Math.round(bmr * 1.55);
     setTdeeResult(tdee);
   };
 
-  // จำลองระบบสแกนภาพอาหารด้วย AI
-  const handleImageScan = (e) => {
+  // ฟังก์ชันเลือกรูปภาพ (อาหาร, เครื่องดื่ม, หรือขนม) เพื่อคำนวณแคลอรี
+  const handleImageSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
       const imageUrl = URL.createObjectURL(file);
-      setScannedImage(imageUrl);
-      setIsScanning(true);
-      setFoodName("กำลังวิเคราะห์รูปภาพด้วย AI...");
+      setItemImage(imageUrl);
+      setIsAnalyzing(true);
+      setItemName("กำลังวิเคราะห์รูปภาพอาหาร เครื่องดื่ม และขนม...");
 
       setTimeout(() => {
-        // จำลองผลการสแกนอาหารยอดฮิต
-        const simulatedFoods = [
-          { name: "ข้าวผัดกระเพราหมูไข่ดาว", cal: 650 },
-          { name: "ข้าวมันไก่", cal: 600 },
-          { name: "ส้มตำไทย + ไก่ย่าง", cal: 450 },
-          { name: "ราดหน้าหมูหมัก", cal: 400 }
+        // ฐานข้อมูลจำลองครอบคลุม อาหาร เครื่องดื่ม และขนม
+        const database = [
+          { name: "ข้าวผัดกะเพราหมูไข่ดาว", category: "อาหารคาว", cal: 650 },
+          { name: "ข้าวมันไก่ตอน", category: "อาหารคาว", cal: 600 },
+          { name: "ส้มตำไทยพร้อมไก่ย่าง", category: "อาหารคาว", cal: 450 },
+          { name: "ชานมไข่มุกหวานน้อย", category: "เครื่องดื่ม", cal: 240 },
+          { name: "กาแฟลาเต้เย็น", category: "เครื่องดื่ม", cal: 180 },
+          { name: "น้ำอัดลม (กระป๋อง)", category: "เครื่องดื่ม", cal: 140 },
+          { name: "เค้กช็อกโกแลตหน้านิ่ม", category: "ขนมหวาน", cal: 380 },
+          { name: "ฮันนี่โทสต์ไอศกรีม", category: "ขนมหวาน", cal: 550 },
+          { name: "บิงซูรสมะม่วง", category: "ขนมหวาน", cal: 420 }
         ];
-        const randomFood = simulatedFoods[Math.floor(Math.random() * simulatedFoods.length)];
-        setFoodName(randomFood.name);
-        setMealCalories(randomFood.cal);
-        setIsScanning(false);
-      }, 1500);
+        const selected = database[Math.floor(Math.random() * database.length)];
+        setItemName(selected.name);
+        setItemCategory(selected.category);
+        setItemCalories(selected.cal);
+        setIsAnalyzing(false);
+      }, 1200);
     }
   };
 
-  // คำนวณพลังงานส่วนเกินและท่าออกกำลังกายชดเชย
-  const calorieSurplus = tdeeResult ? mealCalories - Math.round(tdeeResult / 3) : 0; // เทียบต่อมื้อ
-  // สควอท 1 ครั้งเผาผลาญ ~0.32 kcal, กระโดดตบ ~0.20 kcal
+  const calorieSurplus = tdeeResult ? itemCalories - Math.round(tdeeResult / 3) : 0;
   const requiredSquatReps = calorieSurplus > 0 ? Math.ceil(calorieSurplus / 0.32) : 0;
   const requiredJumpingJackReps = calorieSurplus > 0 ? Math.ceil(calorieSurplus / 0.20) : 0;
 
   return (
     <div className="dashboard-page">
-      <button 
-        className="top-profile-btn" 
-        onClick={() => navigate("/profile")}
-        title="โปรไฟล์ของฉัน"
-      >
-        <div className="profile-avatar">
-          <span>{userInitial}</span>
-        </div>
+      <button className="top-profile-btn" onClick={() => navigate("/profile")} title="โปรไฟล์ของฉัน">
+        <div className="profile-avatar"><span>{userInitial}</span></div>
         <div className="profile-status-dot"></div>
       </button>
 
       <div className="dashboard-container">
-
-        {/* Header */}
         <header className="dashboard-header">
           <div className="logo">FITTRACK</div>
           <div className="welcome-icon">🏃</div>
@@ -117,10 +110,8 @@ export default function Dashboard() {
           <p>ระบบออกกำลังกายอัจฉริยะ ติดตามสุขภาพ โภชนาการ และ AI ตรวจจับท่าทาง[cite: 11]</p>
         </header>
 
-        {/* Main Grid */}
         <div className="main-grid">
-
-          {/* เมนูหลักเดิม */}
+          {/* เมนูหลัก */}
           <div className="main-card">
             <div className="card-title"><span>เริ่มต้นการออกกำลังกาย</span></div>
             <p className="card-description">เลือกเมนูที่คุณต้องการใช้งาน</p>
@@ -145,7 +136,6 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {/* Quick Info */}
             <div className="info-section">
               <div className="info-item">
                 <div className="info-icon">🤖</div>
@@ -162,7 +152,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* 🌟 ฟังก์ชันใหม่: คำนวณ BMI และพลังงาน (TDEE) */}
+          {/* คำนวณ BMI และพลังงาน (TDEE) */}
           <div className="feature-card">
             <div className="card-title">⚖️ คำนวณ BMI และพลังงานต่อวัน</div>
             <form onSubmit={calculateHealth} className="bmi-form">
@@ -185,56 +175,57 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* 🌟 ฟังก์ชันใหม่: สแกนภาพอาหารและคำนวณแคลอรี */}
+          {/* เพิ่มรูปอาหาร เครื่องดื่ม หรือขนมเพื่อคำนวณแคลอรี */}
           <div className="feature-card">
-            <div className="card-title">📸 สแกนภาพอาหารคำนวณแคลอรี</div>
-            <p className="card-desc">อัปโหลดหรือถ่ายภาพอาหารเพื่อประเมินพลังงานด้วย AI</p>
+            <div className="card-title">🍰🥤🍲 เพิ่มรูปอาหาร เครื่องดื่ม หรือขนม</div>
+            <p className="card-desc">อัปโหลดรูปภาพเพื่อประเมินพลังงานทุกหมวดหมู่</p>
             
             <label className="upload-box">
-              <input type="file" accept="image/*" onChange={handleImageScan} style={{ display: 'none' }} />
-              {scannedImage ? (
-                <img src={scannedImage} alt="Scanned Food" className="food-preview" />
+              <input type="file" accept="image/*" onChange={handleImageSelect} style={{ display: 'none' }} />
+              {itemImage ? (
+                <img src={itemImage} alt="Selected Item" className="food-preview" />
               ) : (
-                <div className="upload-placeholder">📁คลิกเลือกรูปภาพอาหาร</div>
+                <div className="upload-placeholder">📁 คลิกอัปโหลดรูป (อาหาร, เครื่องดื่ม, ขนม)</div>
               )}
             </label>
 
-            {isScanning && <p className="scanning-text">🔍 กำลังวิเคราะห์สารอาหาร...</p>}
+            {isAnalyzing && <p className="scanning-text">🔍 กำลังตรวจสอบและคำนวณแคลอรี...</p>}
             
-            {foodName && !isScanning && (
+            {itemName && !isAnalyzing && (
               <div className="result-box">
-                <p>🍽️ เมนู: <strong>{foodName}</strong></p>
-                <p>🔥 พลังงาน: <span className="highlight-warning">{mealCalories} kcal</span></p>
+                <p>🏷️ หมวดหมู่: <strong>{itemCategory}</strong></p>
+                <p>🍽️ รายการ: <strong>{itemName}</strong></p>
+                <p>🔥 พลังงาน: <span className="highlight-warning">{itemCalories} kcal</span></p>
               </div>
             )}
           </div>
 
-          {/* 🌟 ฟังก์ชันใหม่: แนะนำอาหารรายมื้อ & แจ้งเตือนพลังงานเกิน + แนะนำท่าออกกำลังกายชดเชย */}
+          {/* แนะนำอาหาร & แจ้งเตือนพลังงานเกิน */}
           <div className="feature-card span-2">
             <div className="card-title">🥗 เมนูอาหารแนะนำประจำวัน & แผนออกกำลังกายชดเชย</div>
             
             <div className="meal-grid">
               <div className="meal-item">
-                <strong>🌅 มื้อเช้า (แนะนำ ~400 kcal)</strong>
-                <p>ข้าวต้มปลา / โจ๊กหมูใส่ไข่ / ขนมปังโฮลวีททาเนยถั่ว</p>
+                <strong>🌅 มื้อเช้า (~400 kcal)</strong>
+                <p>ข้าวต้มปลา / โจ๊กหมูใส่ไข่ / ขนมปังโฮลวีท</p>
               </div>
               <div className="meal-item">
-                <strong>☀️ มื้อกลางวัน (แนะนำ ~550 kcal)</strong>
-                <p>เกี๊ยวน้ำหมูแดง / ข้าวราดแกงเขียวหวานไก่ / ส้มตำอกไก่ย่าง</p>
+                <strong>☀️ มื้อกลางวัน (~550 kcal)</strong>
+                <p>เกี๊ยวน้ำหมูแดง / ข้าวราดแกง / ส้มตำอกไก่</p>
               </div>
               <div className="meal-item">
-                <strong>🌙 มื้อเย็น (แนะนำ ~350 kcal)</strong>
-                <p>แกงจืดเต้าหู้หมูสับ / สลัดปลาทูน่า / เกาเหลาลูกชิ้นน้ำใส</p>
+                <strong>🌙 มื้อเย็น (~350 kcal)</strong>
+                <p>แกงจืดเต้าหู้หมูสับ / สลัดปลาทูน่า</p>
               </div>
             </div>
 
-            {mealCalories > 0 && tdeeResult && (
+            {itemCalories > 0 && tdeeResult && (
               <div className={`alert-box ${calorieSurplus > 0 ? 'alert-danger' : 'alert-success'}`}>
                 {calorieSurplus > 0 ? (
                   <>
-                    ⚠️ <strong>แจ้งเตือน!</strong> มื้อนี้คุณรับพลังงานเกินกว่าเกณฑ์เฉลี่ยต่อมื้อไปประมาณ <strong>{calorieSurplus} kcal</strong>
+                    ⚠️ <strong>แจ้งเตือน!</strong> พลังงานจากรายการนี้ (รวมเครื่องดื่ม/ขนม) เกินเกณฑ์เฉลี่ยไปประมาณ <strong>{calorieSurplus} kcal</strong>
                     <div className="workout-suggestion">
-                      🎯 <strong>คำแนะนำท่าออกกำลังกายชดเชยด่วน:</strong>
+                      🎯 <strong>คำแนะนำท่าออกกำลังกายชดเชย:</strong>
                       <ul>
                         <li>🏋️ ทำท่า <strong>Squat</strong> จำนวน <strong>{requiredSquatReps} ครั้ง</strong></li>
                         <li>⭐ หรือทำท่า <strong>Jumping Jack</strong> จำนวน <strong>{requiredJumpingJackReps} ครั้ง</strong></li>
@@ -243,7 +234,7 @@ export default function Dashboard() {
                     </div>
                   </>
                 ) : (
-                  <p>✅ พลังงานในมื้อนี้อยู่ในเกณฑ์ที่เหมาะสม ไม่เกินความต้องการของร่างกาย เยี่ยมมาก!</p>
+                  <p>✅ พลังงานจากรายการนี้อยู่ในเกณฑ์ที่เหมาะสม เยี่ยมมาก!</p>
                 )}
               </div>
             )}
@@ -251,19 +242,16 @@ export default function Dashboard() {
 
         </div>
 
-        {/* Footer */}
         <footer className="dashboard-footer">
           <p>FITTRACK • Smart Exercise System[cite: 11]</p>
         </footer>
-
       </div>
 
       <style>{`
         * { box-sizing: border-box; }
         body { margin: 0; font-family: "Noto Sans Thai", "Segoe UI", sans-serif; }
         .dashboard-page {
-          min-height: 100vh;
-          background: radial-gradient(circle at top right, rgba(34, 197, 94, 0.1), transparent 35%), linear-gradient(135deg, #0f1115 0%, #15171d 50%, #101216 100%);
+          min-height: 100vh; background: radial-gradient(circle at top right, rgba(34, 197, 94, 0.1), transparent 35%), linear-gradient(135deg, #0f1115 0%, #15171d 50%, #101216 100%);
           color: white; padding: 45px 20px; display: flex; justify-content: center; position: relative;
         }
         .top-profile-btn {
@@ -306,7 +294,6 @@ export default function Dashboard() {
         .info-item strong { display: block; color: #d7d9dc; font-size: 11px; }
         .info-item span { display: block; color: #747b84; font-size: 10px; }
 
-        /* Form & BMI */
         .bmi-form { display: flex; flex-direction: column; gap: 12px; }
         .input-group { display: flex; flex-direction: column; gap: 4px; }
         .input-group label { font-size: 12px; color: #aaa; }
@@ -317,15 +304,13 @@ export default function Dashboard() {
         .highlight { color: #4ade80; font-weight: bold; }
         .highlight-warning { color: #facc15; font-weight: bold; }
 
-        /* Upload Image Box */
         .upload-box {
           display: flex; align-items: center; justify-content: center; width: 100%; height: 140px; border: 2px dashed #444; border-radius: 10px; cursor: pointer; background: #181a1a; overflow: hidden; position: relative;
         }
-        .upload-placeholder { color: #aaa; font-size: 13px; }
+        .upload-placeholder { color: #aaa; font-size: 13px; text-align: center; padding: 0 10px; }
         .food-preview { width: 100%; height: 100%; object-fit: cover; }
         .scanning-text { text-align: center; color: #38bdf8; font-size: 13px; margin-top: 8px; }
 
-        /* Meal Grid & Alert */
         .meal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
         .meal-item { background: #181a1a; padding: 12px; border-radius: 8px; font-size: 12px; border: 1px solid #333; }
         .meal-item strong { color: #38bdf8; display: block; margin-bottom: 6px; }
