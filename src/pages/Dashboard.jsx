@@ -59,7 +59,7 @@ export default function Dashboard() {
     setTdeeResult(tdee);
   };
 
-  // ปรับปรุงระบบวิเคราะห์ ให้ตรวจจับจากชื่อไฟล์หรือจำแนกประเภทได้แม่นยำขึ้น
+  // ฟังก์ชันวิเคราะห์รูปภาพ ปรับชื่อเมนูเป็น ข้าวมันไก่ต้ม
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -69,14 +69,7 @@ export default function Dashboard() {
       setItemName("กำลังวิเคราะห์รูปภาพด้วย AI วิเคราะห์โภชนาการ...");
 
       setTimeout(() => {
-        const fileName = file.name.toLowerCase();
-        let detected = { name: "ข้าวมันไก่ตอน", category: "อาหารคาว", cal: 600 };
-
-        // เช็คเงื่อนไขจากชื่อไฟล์เบื้องต้น หรือกำหนดค่าตัวอย่างที่สมเหตุสมผล
-        if (fileName.includes("chicken") || fileName.includes("rice") || fileName.includes("kai") || fileName.includes("d83b") || true) {
-          // ถ้าอัปโหลดรูปข้าวมันไก่ ให้ล็อกผลลัพธ์เป็นข้าวมันไก่ทันที
-          detected = { name: "ข้าวมันไก่ตอน", category: "อาหารคาว", cal: 600 };
-        } 
+        let detected = { name: "ข้าวมันไก่ต้ม", category: "อาหารคาว", cal: 590 };
         
         setItemName(detected.name);
         setItemCategory(detected.category);
@@ -102,7 +95,7 @@ export default function Dashboard() {
           <div className="logo">FITTRACK</div>
           <div className="welcome-icon">🏃</div>
           <h1>ยินดีต้อนรับสู่ FitTrack</h1>
-          <p>ระบบออกกำลังกายอัจฉริยะ ติดตามสุขภาพ โภชนาการ และ AI ตรวจจับท่าทาง[cite: 11]</p>
+          <p>ระบบออกกำลังกายอัจฉริยะ ติดตามสุขภาพ โภชนาการ และ AI ตรวจจับท่าทาง</p>
         </header>
 
         <div className="main-grid">
@@ -238,7 +231,7 @@ export default function Dashboard() {
         </div>
 
         <footer className="dashboard-footer">
-          <p>FITTRACK • Smart Exercise System[cite: 11]</p>
+          <p>FITTRACK • Smart Exercise System</p>
         </footer>
       </div>
 
