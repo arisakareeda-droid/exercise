@@ -109,23 +109,47 @@ export default async function handler(req, res) {
 }
 `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
-      contents: [
-        {
-          inlineData: {
-            mimeType: image.mimeType,
-            data: base64Image,
-          },
-        },
-        {
-          text: prompt,
-        },
-      ],
-      config: {
-        responseMimeType: "application/json",
-      },
-    });
+    // เรียก Gemini พร้อม retry อัตโนมัติเมื่อเจอ error 503 (เซิร์ฟเวอร์คนใช้เยอะชั่วคราว)
+    async function generateWithRetry(maxRetries = 3, delayMs = 1500) {
+      let lastError;
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          return await ai.models.generateContent({
+            model: "gemini-flash-latest",
+            contents: [
+              {
+                inlineData: {
+                  mimeType: image.mimeType,
+                  data: base64Image,
+                },
+              },
+              {
+                text: prompt,
+              },
+            ],
+            config: {
+              responseMimeType: "application/json",
+            },
+          });
+        } catch (err) {
+          lastError = err;
+          const isOverloaded =
+            err?.status === 503 ||
+            err?.code === 503 ||
+            /UNAVAILABLE|high demand/i.test(err?.message || "");
+
+          if (isOverloaded && attempt < maxRetries) {
+            // รอสักครู่ก่อนลองใหม่ (เพิ่มเวลารอขึ้นเรื่อยๆ ทุกครั้งที่ retry)
+            await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
+            continue;
+          }
+          throw err;
+        }
+      }
+      throw lastError;
+    }
+
+    const response = await generateWithRetry();
 
     const text = response.text;
     let result;
@@ -148,6 +172,18 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error("Gemini food analysis error:", error);
+
+    const isOverloaded =
+      error?.status === 503 ||
+      error?.code === 503 ||
+      /UNAVAILABLE|high demand/i.test(error?.message || "");
+
+    if (isOverloaded) {
+      return res.status(503).json({
+        error: "ระบบ AI มีผู้ใช้งานหนาแน่นชั่วคราว กรุณาลองใหม่อีกครั้งในอีกสักครู่",
+      });
+    }
+
     // ส่งข้อความ Error จริงกลับไปแสดงที่หน้าเว็บเพื่อ Debug
     return res.status(500).json({
       error: `Server Error: ${error.message || error}`,
