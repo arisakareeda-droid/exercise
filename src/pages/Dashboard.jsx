@@ -60,42 +60,74 @@ export default function Dashboard() {
   };
 
   // ฟังก์ชันวิเคราะห์ภาพ: รับไฟล์ภาพจากเครื่องมาแสดง แล้วสุ่มวิเคราะห์เมนูโภชนาการจากฐานข้อมูล
-  const handleImageSelect = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // สร้าง URL ชั่วคราวสำหรับแสดงรูปภาพตัวอย่างที่อัปโหลดทันที
-      const imageUrl = URL.createObjectURL(file);
-      setItemImage(imageUrl);
-      setIsAnalyzing(true);
-      setItemName("กำลังประมวลผลภาพด้วย AI วิเคราะห์โภชนาการ...");
-      setItemCategory("");
-      setItemCalories(0);
+  const handleImageSelect = async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
 
-      // จำลองการประมวลผลวิเคราะห์ภาพผ่าน AI (สามารถเปลี่ยนส่วนนี้เป็นการfetch ไปยัง Vision API จริงได้ในอนาคต)
-      setTimeout(() => {
-        const foodDatabase = [
-          { name: "ข้าวยำปักษ์ใต้สมุนไพร", category: "อาหารคาว", cal: 350 },
-          { name: "ข้าวมันไก่ต้ม", category: "อาหารคาว", cal: 590 },
-          { name: "ข้าวผัดกะเพราหมูไข่ดาว", category: "อาหารคาว", cal: 650 },
-          { name: "ส้มตำไทยพร้อมไก่ย่าง", category: "อาหารคาว", cal: 450 },
-          { name: "ชานมไข่มุกหวานน้อย", category: "เครื่องดื่ม", cal: 240 },
-          { name: "กาแฟลาเต้เย็น", category: "เครื่องดื่ม", cal: 180 },
-          { name: "น้ำอัดลม (กระป๋อง)", category: "เครื่องดื่ม", cal: 140 },
-          { name: "เค้กช็อกโกแลตหน้านิ่ม", category: "ขนมหวาน", cal: 380 },
-          { name: "ฮันนี่โทสต์ไอศกรีม", category: "ขนมหวาน", cal: 550 },
-          { name: "บิงซูรสมะม่วง", category: "ขนมหวาน", cal: 420 }
-        ];
+  // ตรวจสอบว่าเป็นรูปภาพหรือไม่
+  if (!file.type.startsWith("image/")) {
+    setAnalysisError("กรุณาเลือกไฟล์รูปภาพเท่านั้น");
+    setItemImage(null);
+    setItemName("");
+    setItemCategory("");
+    setItemCalories(0);
+    setItemConfidence(null);
+    setItemNote("");
+    return;
+  }
 
-        // สุ่มเลือกผลลัพธ์จากฐานข้อมูลจำลองเพื่อให้ผลเปลี่ยนไปตามการอัปโหลดแต่ละครั้ง
-        const randomItem = foodDatabase[Math.floor(Math.random() * foodDatabase.length)];
-        
-        setItemName(randomItem.name);
-        setItemCategory(randomItem.category);
-        setItemCalories(randomItem.cal);
-        setIsAnalyzing(false);
-      }, 1500);
+  const maxSize = 10 * 1024 * 1024; // 10 MB
+  if (file.size > maxSize) {
+    setAnalysisError("ขนาดรูปภาพต้องไม่เกิน 10 MB");
+    return;
+  }
+
+  setAnalysisError("");
+  setItemName("");
+  setItemCategory("");
+  setItemCalories(0);
+  setItemConfidence(null);
+  setItemNote("");
+
+  // แสดงรูปภาพตัวอย่างทันที
+  const imageUrl = URL.createObjectURL(file);
+  setItemImage(imageUrl);
+  setIsAnalyzing(true);
+  setItemName("กำลังวิเคราะห์ภาพอาหารด้วย AI...");
+
+  try {
+    const formData = new FormData();
+    formData.append("image", file);
+
+    const response = await fetch("/api/analyze-food", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || "ไม่สามารถวิเคราะห์ภาพได้");
     }
-  };
+
+    setItemName(data.name || "ไม่สามารถระบุได้ชัดเจน");
+    setItemCategory(data.category || "ไม่สามารถระบุได้");
+    setItemCalories(Number.isFinite(Number(data.calories)) ? Number(data.calories) : 0);
+    setItemConfidence(Number.isFinite(Number(data.confidence)) ? Number(data.confidence) : null);
+    setItemNote(data.note || "");
+
+  } catch (error) {
+    console.error("Food analysis error:", error);
+    setItemName("");
+    setItemCategory("");
+    setItemCalories(0);
+    setItemConfidence(null);
+    setItemNote("");
+    setAnalysisError(error.message || "ไม่สามารถวิเคราะห์ภาพได้ กรุณาลองใหม่อีกครั้ง");
+  } finally {
+    setIsAnalyzing(false);
+  }
+};
 
   const calorieSurplus = tdeeResult ? itemCalories - Math.round(tdeeResult / 3) : 0;
   const requiredSquatReps = calorieSurplus > 0 ? Math.ceil(calorieSurplus / 0.32) : 0;
