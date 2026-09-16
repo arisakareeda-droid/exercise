@@ -1,11 +1,42 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { onAuthStateChanged } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import { auth, db } from "../firebase";
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [userInitial, setUserInitial] = useState("?");
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        try {
+          const snap = await getDoc(doc(db, "users", currentUser.uid));
+          if (snap.exists() && snap.data().name) {
+            setUserInitial(snap.data().name.charAt(0).toUpperCase());
+          } else if (currentUser.email) {
+            setUserInitial(currentUser.email.charAt(0).toUpperCase());
+          }
+        } catch (err) {
+          console.error("โหลดข้อมูลโปรไฟล์ไม่สำเร็จ:", err);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   return (
     <div className="dashboard-page">
+      {/* Top Right Profile Button */}
+      <button 
+        className="top-profile-btn" 
+        onClick={() => navigate("/profile")}
+        title="โปรไฟล์ของฉัน"
+      >
+        <span>{userInitial}</span>
+      </button>
+
       <div className="dashboard-container">
 
         {/* Header */}
@@ -83,30 +114,6 @@ export default function Dashboard() {
                   ดูผลการออกกำลังกายที่ผ่านมา
                   <br />
                   และติดตามความก้าวหน้า
-                </p>
-              </div>
-
-              <div className="arrow">
-                →
-              </div>
-            </button>
-
-
-            {/* Profile (Added without deleting anything) */}
-            <button
-              className="menu-card profile-menu"
-              onClick={() => navigate("/profile")}
-            >
-              <div className="menu-icon">
-                👤
-              </div>
-
-              <div className="menu-content">
-                <h2>โปรไฟล์ของฉัน</h2>
-                <p>
-                  จัดการข้อมูลส่วนตัว
-                  <br />
-                  และดูสถานะบัญชีของคุณ
                 </p>
               </div>
 
@@ -196,6 +203,34 @@ export default function Dashboard() {
           padding: 45px 20px;
           display: flex;
           justify-content: center;
+          position: relative;
+        }
+
+        /* Top Right Profile Button Style */
+        .top-profile-btn {
+          position: absolute;
+          top: 20px;
+          right: 25px;
+          width: 45px;
+          height: 45px;
+          border-radius: 50%;
+          background: #007bff;
+          color: white;
+          border: 2px solid rgba(255, 255, 255, 0.2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          font-weight: bold;
+          cursor: pointer;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+          transition: transform 0.2s ease, background 0.2s ease;
+          z-index: 10;
+        }
+
+        .top-profile-btn:hover {
+          transform: scale(1.08);
+          background: #0056b3;
         }
 
         .dashboard-container {
@@ -300,12 +335,6 @@ export default function Dashboard() {
           border: 1px solid rgba(59, 130, 246, 0.25);
         }
 
-        .profile-menu {
-          background: linear-gradient(135deg, rgba(168, 85, 247, 0.10), rgba(29, 31, 31, 0.95));
-          border: 1px solid rgba(168, 85, 247, 0.25);
-          grid-column: span 2;
-        }
-
         .menu-card:hover {
           transform: translateY(-3px);
         }
@@ -318,11 +347,6 @@ export default function Dashboard() {
         .history-menu:hover {
           border-color: #3b82f6;
           background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(29, 31, 31, 1));
-        }
-
-        .profile-menu:hover {
-          border-color: #a855f7;
-          background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(29, 31, 31, 1));
         }
 
         .menu-icon {
@@ -342,10 +366,6 @@ export default function Dashboard() {
 
         .history-menu .menu-icon {
           background: rgba(59, 130, 246, 0.12);
-        }
-
-        .profile-menu .menu-icon {
-          background: rgba(168, 85, 247, 0.12);
         }
 
         .menu-content {
@@ -438,11 +458,15 @@ export default function Dashboard() {
           .menu-grid {
             grid-template-columns: 1fr;
           }
-          .profile-menu {
-            grid-column: span 1;
-          }
           .info-section {
             grid-template-columns: 1fr;
+          }
+          .top-profile-btn {
+            top: 15px;
+            right: 15px;
+            width: 40px;
+            height: 40px;
+            font-size: 16px;
           }
         }
       `}</style>
