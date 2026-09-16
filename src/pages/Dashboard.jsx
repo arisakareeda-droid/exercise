@@ -59,17 +59,20 @@ export default function Dashboard() {
     setTdeeResult(tdee);
   };
 
-  // ฟังก์ชันสุ่มวิเคราะห์เมนูอาหาร เครื่องดื่ม และขนมจากฐานข้อมูลตัวอย่างที่หลากหลาย
+  // ฟังก์ชันวิเคราะห์ภาพ: รับไฟล์ภาพจากเครื่องมาแสดง แล้วสุ่มวิเคราะห์เมนูโภชนาการจากฐานข้อมูล
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
+      // สร้าง URL ชั่วคราวสำหรับแสดงรูปภาพตัวอย่างที่อัปโหลดทันที
       const imageUrl = URL.createObjectURL(file);
       setItemImage(imageUrl);
       setIsAnalyzing(true);
       setItemName("กำลังประมวลผลภาพด้วย AI วิเคราะห์โภชนาการ...");
+      setItemCategory("");
+      setItemCalories(0);
 
+      // จำลองการประมวลผลวิเคราะห์ภาพผ่าน AI (สามารถเปลี่ยนส่วนนี้เป็นการfetch ไปยัง Vision API จริงได้ในอนาคต)
       setTimeout(() => {
-        // ฐานข้อมูลตัวอย่างที่หลากหลาย ครอบคลุม อาหาร เครื่องดื่ม และขนมหวาน
         const foodDatabase = [
           { name: "ข้าวยำปักษ์ใต้สมุนไพร", category: "อาหารคาว", cal: 350 },
           { name: "ข้าวมันไก่ต้ม", category: "อาหารคาว", cal: 590 },
@@ -80,17 +83,17 @@ export default function Dashboard() {
           { name: "น้ำอัดลม (กระป๋อง)", category: "เครื่องดื่ม", cal: 140 },
           { name: "เค้กช็อกโกแลตหน้านิ่ม", category: "ขนมหวาน", cal: 380 },
           { name: "ฮันนี่โทสต์ไอศกรีม", category: "ขนมหวาน", cal: 550 },
-          { name: "บิงซืรสมะม่วง", category: "ขนมหวาน", cal: 420 }
+          { name: "บิงซูรสมะม่วง", category: "ขนมหวาน", cal: 420 }
         ];
 
-        // สุ่มเลือกเมนูจากฐานข้อมูล (เพื่อให้ทดสอบเปลี่ยนรูปแล้วผลลัพธ์เปลี่ยนตามได้)
+        // สุ่มเลือกผลลัพธ์จากฐานข้อมูลจำลองเพื่อให้ผลเปลี่ยนไปตามการอัปโหลดแต่ละครั้ง
         const randomItem = foodDatabase[Math.floor(Math.random() * foodDatabase.length)];
         
         setItemName(randomItem.name);
         setItemCategory(randomItem.category);
         setItemCalories(randomItem.cal);
         setIsAnalyzing(false);
-      }, 1200);
+      }, 1500);
     }
   };
 
@@ -192,7 +195,7 @@ export default function Dashboard() {
               )}
             </label>
 
-            {isAnalyzing && <p className="scanning-text">🔍 กำลังตรวจสอบและคำนวณแคลอรี...</p>}
+            {isAnalyzing && <p className="scanning-text">🔍 AI กำลังมองภาพและวิเคราะห์เมนู...</p>}
             
             {itemName && !isAnalyzing && (
               <div className="result-box">
