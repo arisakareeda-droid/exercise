@@ -12,6 +12,7 @@ export default function Exercise() {
   const canvasRef = useRef(null);
   const [counter, setCounter] = useState(0);
   const [feedback, setFeedback] = useState("กำลังโหลด AI...");
+  const [calories, setCalories] = useState(0); // เพิ่ม State สำหรับเก็บค่าแคลอรี
   const stageRef = useRef("up");
 
   const calculateAngle = (a, b, c) => {
@@ -35,13 +36,12 @@ export default function Exercise() {
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
       });
 
-      // ปรับแต่งค่าความเสถียรและการตรวจจับให้แม่นยำขึ้น
       pose.setOptions({
-        modelComplexity: 1, // ใช้โมเดลระดับปานกลางถึงสูง
-        smoothLandmarks: true, // เปิดระบบเกลี่ยความเนียนของจุดข้อต่อเพื่อลดอาการกระตุก
+        modelComplexity: 1,
+        smoothLandmarks: true,
         enableSegmentation: false,
-        minDetectionConfidence: 0.65, // เพิ่มความเข้มงวดในการเริ่มจับตัว (จาก 0.5 เป็น 0.65)
-        minTrackingConfidence: 0.65, // เพิ่มความเข้มงวดในการติดตามโครงกระดูกต่อเนื่อง
+        minDetectionConfidence: 0.65,
+        minTrackingConfidence: 0.65,
       });
 
       pose.onResults((results) => {
@@ -60,7 +60,6 @@ export default function Exercise() {
         if (results.poseLandmarks) {
           const lm = results.poseLandmarks;
 
-          // กรองเฉพาะจุดที่มีความชัดเจน (Visibility > 0.6) เพื่อป้องกันเส้นกระดูกพับผิดรูป
           if (window.POSE_CONNECTIONS) {
             canvasCtx.strokeStyle = '#00FF00';
             canvasCtx.lineWidth = 4;
@@ -76,7 +75,6 @@ export default function Exercise() {
             });
           }
 
-          // วาดจุดข้อต่อ
           canvasCtx.fillStyle = '#FF0000';
           lm.forEach((p) => {
             if (p && (p.visibility ?? 1) > 0.6) {
@@ -88,7 +86,7 @@ export default function Exercise() {
 
           setFeedback("จัดท่าทางให้เห็นเต็มตัว");
 
-          // --- เงื่อนไขท่า SQUAT (ปรับช่วงองศาให้ธรรมชาติและนับแม่นขึ้น) ---
+          // --- เงื่อนไขท่า SQUAT ---
           if (exerciseType === "squat") {
             const hip = lm[23], knee = lm[25], ankle = lm[27];
             if (hip && knee && ankle) {
@@ -98,13 +96,17 @@ export default function Exercise() {
                 stageRef.current = "up";
                 setFeedback("ยืนตัวตรง - พร้อมแล้วย่อตัวลง");
               }
-              // ปรับเกณฑ์ย่อลงให้น้อยกว่า 100 องศา และต้องมาจากสถานะ UP เท่านั้น
               if (angle < 100 && stageRef.current === "up") {
                 stageRef.current = "down";
                 setCounter((prev) => {
                   const nextCount = prev + 1;
+                  
+                  // คำนวณแคลอรีสำหรับ Squat (0.32 kcal ต่อครั้ง)
+                  const totalCal = Number((nextCount * 0.32).toFixed(2));
+                  setCalories(totalCal);
+
                   if (nextCount >= targetCount) {
-                    setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}`), 1000);
+                    setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}&calories=${totalCal}`), 1000);
                   }
                   return nextCount;
                 });
@@ -118,7 +120,6 @@ export default function Exercise() {
             const hipL = lm[23], ankleL = lm[27], ankleR = lm[28];
             
             if (shoulderL && wristL && hipL && ankleL && ankleR) {
-              // เช็คเงื่อนไขมือขึ้นเหนือไหล่ และขาแยกออกจากกัน
               const isHandsUp = wristL.y < shoulderL.y;
               
               if (!isHandsUp) {
@@ -129,8 +130,13 @@ export default function Exercise() {
                 stageRef.current = "up";
                 setCounter((prev) => {
                   const nextCount = prev + 1;
+                  
+                  // คำนวณแคลอรีสำหรับ Jumping Jack (0.20 kcal ต่อครั้ง)
+                  const totalCal = Number((nextCount * 0.20).toFixed(2));
+                  setCalories(totalCal);
+
                   if (nextCount >= targetCount) {
-                    setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}`), 1000);
+                    setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}&calories=${totalCal}`), 1000);
                   }
                   return nextCount;
                 });
@@ -181,10 +187,16 @@ export default function Exercise() {
       </div>
 
       <div style={{ background: '#1e1e1e', padding: '20px', borderRadius: '12px', border: '1px solid #444', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: '40px', marginBottom: '20px' }}>
+        
+        {/* แผงแสดงผล: ทำไปแล้ว / แคลอรี / สถานะท่าทาง */}
+        <div style={{ display: 'flex', gap: '30px', marginBottom: '20px', flexWrap: 'wrap', justifyContent: 'center' }}>
           <div>
             <p style={{ color: '#aaa', margin: '0 0 5px', fontSize: '14px' }}>ทำไปแล้ว</p>
             <span style={{ fontSize: '32px', fontWeight: 'bold', color: '#007bff' }}>{counter} / {targetCount}</span>
+          </div>
+          <div>
+            <p style={{ color: '#aaa', margin: '0 0 5px', fontSize: '14px' }}>แคลอรี</p>
+            <span style={{ fontSize: '32px', fontWeight: 'bold', color: '#ffc107' }}>{calories} kcal</span>
           </div>
           <div>
             <p style={{ color: '#aaa', margin: '0 0 5px', fontSize: '14px' }}>สถานะท่าทาง</p>
