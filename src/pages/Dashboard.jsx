@@ -28,13 +28,16 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-page">
-      {/* Top Right Profile Button */}
+      {/* Modern Top Right Profile Button */}
       <button 
         className="top-profile-btn" 
         onClick={() => navigate("/profile")}
         title="โปรไฟล์ของฉัน"
       >
-        <span>{userInitial}</span>
+        <div className="profile-avatar">
+          <span>{userInitial}</span>
+        </div>
+        <div className="profile-status-dot"></div>
       </button>
 
       <div className="dashboard-container">
@@ -206,31 +209,54 @@ export default function Dashboard() {
           position: relative;
         }
 
-        /* Top Right Profile Button Style */
+        /* Modern App-like Profile Button Style */
         .top-profile-btn {
           position: absolute;
-          top: 20px;
-          right: 25px;
-          width: 45px;
-          height: 45px;
-          border-radius: 50%;
-          background: #007bff;
-          color: white;
-          border: 2px solid rgba(255, 255, 255, 0.2);
+          top: 24px;
+          right: 28px;
+          background: rgba(26, 29, 36, 0.85);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          padding: 4px;
+          border-radius: 50px;
           display: flex;
           align-items: center;
-          justify-content: center;
-          font-size: 18px;
-          font-weight: bold;
           cursor: pointer;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-          transition: transform 0.2s ease, background 0.2s ease;
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
           z-index: 10;
+          backdrop-filter: blur(8px);
         }
 
         .top-profile-btn:hover {
-          transform: scale(1.08);
-          background: #0056b3;
+          transform: translateY(-2px);
+          border-color: rgba(34, 197, 94, 0.5);
+          box-shadow: 0 10px 25px rgba(34, 197, 94, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+          background: rgba(32, 36, 45, 0.95);
+        }
+
+        .profile-avatar {
+          width: 42px;
+          height: 42px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+          color: #ffffff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 17px;
+          font-weight: 700;
+          box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4);
+        }
+
+        .profile-status-dot {
+          position: absolute;
+          bottom: 4px;
+          right: 4px;
+          width: 11px;
+          height: 11px;
+          background-color: #22c55e;
+          border: 2px solid #15171d;
+          border-radius: 50%;
         }
 
         .dashboard-container {
@@ -462,11 +488,13 @@ export default function Dashboard() {
             grid-template-columns: 1fr;
           }
           .top-profile-btn {
-            top: 15px;
-            right: 15px;
-            width: 40px;
-            height: 40px;
-            font-size: 16px;
+            top: 16px;
+            right: 16px;
+          }
+          .profile-avatar {
+            width: 38px;
+            height: 38px;
+            font-size: 15px;
           }
         }
       `}</style>
