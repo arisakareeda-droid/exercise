@@ -5,8 +5,8 @@ import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 const EXERCISE_LABELS = {
-  squat: { name: 'Squat (ลุกนั่ง)', icon: '🏋️' },
-  jumping_jack: { name: 'Jumping Jack (กระโดดตบ)', icon: '⭐' },
+  squat: { name: 'Squat (ลุกนั่ง)', icon: '🏋️', calPerRep: 0.32 },
+  jumping_jack: { name: 'Jumping Jack (กระโดดตบ)', icon: '⭐', calPerRep: 0.20 },
 };
 
 export default function History() {
@@ -47,6 +47,13 @@ export default function History() {
   };
 
   const totalReps = workouts.reduce((sum, w) => sum + (w.count || 0), 0);
+  
+  // คำนวณแคลอรีรวมทั้งหมดจากทุกรายการในประวัติ (รองรับทั้งแบบที่เคยบันทึก field calories ไว้แล้ว หรือคำนวณเผื่อจาก count * ค่ากลางของท่า)
+  const totalCalories = workouts.reduce((sum, w) => {
+    if (w.calories !== undefined) return sum + w.calories;
+    const calPerRep = EXERCISE_LABELS[w.exercise]?.calPerRep || 0.32;
+    return sum + (w.count || 0) * calPerRep;
+  }, 0).toFixed(2);
 
   return (
     <div style={styles.page}>
@@ -65,6 +72,10 @@ export default function History() {
             <span style={styles.summaryNumber}>{totalReps}</span>
             <span style={styles.summaryLabel}>รวม Reps ทั้งหมด</span>
           </div>
+          <div style={styles.summaryCard}>
+            <span style={{ ...styles.summaryNumber, color: '#ffc107' }}>{totalCalories}</span>
+            <span style={styles.summaryLabel}>รวมแคลอรี (kcal)</span>
+          </div>
         </div>
       )}
 
@@ -81,7 +92,12 @@ export default function History() {
       {!loading && workouts.length > 0 && (
         <div style={styles.list}>
           {workouts.map((w) => {
-            const info = EXERCISE_LABELS[w.exercise] || { name: w.exercise, icon: '💪' };
+            const info = EXERCISE_LABELS[w.exercise] || { name: w.exercise, icon: '💪', calPerRep: 0.32 };
+            // ถ้าในฐานข้อมูลมีค่า w.calories บันทึกอยู่แล้วให้ใช้ค่านั้นได้เลย ถ้าไม่มีให้คำนวณจาก count คูณเรทของท่า
+            const sessionCalories = w.calories !== undefined 
+              ? w.calories 
+              : Number(((w.count || 0) * info.calPerRep).toFixed(2));
+
             return (
               <div key={w.id} style={styles.item}>
                 <div style={styles.itemIcon}>{info.icon}</div>
@@ -89,7 +105,10 @@ export default function History() {
                   <div style={styles.itemName}>{info.name}</div>
                   <div style={styles.itemDate}>{formatDate(w.completedAt)}</div>
                 </div>
-                <div style={styles.itemCount}>{w.count} ครั้ง</div>
+                <div style={styles.itemStats}>
+                  <div style={styles.itemCount}>{w.count} ครั้ง</div>
+                  <div style={styles.itemCal}>-{sessionCalories} kcal</div>
+                </div>
               </div>
             );
           })}
@@ -100,14 +119,14 @@ export default function History() {
 }
 
 const styles = {
-  page: { minHeight: '100vh', background: '#121212', color: '#fff', padding: '30px 20px', fontFamily: 'sans-serif', maxWidth: '700px', margin: '0 auto' },
+  page: { minHeight: '100vh', background: '#121212', color: '#fff', padding: '30px 20px', fontFamily: 'sans-serif', maxWidth: '750px', margin: '0 auto' },
   header: { display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '25px' },
   backButton: { padding: '8px 16px', background: '#333', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' },
   title: { margin: 0, fontSize: '22px' },
-  summaryRow: { display: 'flex', gap: '12px', marginBottom: '25px' },
-  summaryCard: { flex: 1, background: '#1e1e1e', border: '1px solid #444', borderRadius: '12px', padding: '18px', display: 'flex', flexDirection: 'column', alignItems: 'center' },
-  summaryNumber: { fontSize: '28px', fontWeight: 'bold', color: '#4ade80' },
-  summaryLabel: { fontSize: '13px', color: '#aaa', marginTop: '4px' },
+  summaryRow: { display: 'flex', gap: '10px', marginBottom: '25px', flexWrap: 'wrap' },
+  summaryCard: { flex: 1, minWidth: '120px', background: '#1e1e1e', border: '1px solid #444', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center' },
+  summaryNumber: { fontSize: '24px', fontWeight: 'bold', color: '#4ade80' },
+  summaryLabel: { fontSize: '12px', color: '#aaa', marginTop: '4px', textAlign: 'center' },
   message: { textAlign: 'center', color: '#aaa', margin: '40px 0' },
   emptyState: { textAlign: 'center', padding: '40px 0' },
   ctaButton: { marginTop: '10px', padding: '12px 24px', background: '#007bff', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' },
@@ -117,5 +136,7 @@ const styles = {
   itemInfo: { flex: 1, textAlign: 'left' },
   itemName: { fontWeight: 'bold', fontSize: '15px' },
   itemDate: { fontSize: '13px', color: '#aaa', marginTop: '2px' },
-  itemCount: { fontWeight: 'bold', color: '#007bff', fontSize: '16px', whiteSpace: 'nowrap' },
+  itemStats: { textAlign: 'right', whiteSpace: 'nowrap' },
+  itemCount: { fontWeight: 'bold', color: '#007bff', fontSize: '15px' },
+  itemCal: { fontSize: '13px', color: '#ffc107', marginTop: '2px' },
 };
