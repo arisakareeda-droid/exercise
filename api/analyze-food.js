@@ -115,7 +115,7 @@ export default async function handler(req, res) {
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           return await ai.models.generateContent({
-            model: "gemini-flash-latest",
+            model: "gemini-flash-lite-latest",
             contents: [
               {
                 inlineData: {
