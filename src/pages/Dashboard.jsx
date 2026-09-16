@@ -59,23 +59,38 @@ export default function Dashboard() {
     setTdeeResult(tdee);
   };
 
-  // ฟังก์ชันวิเคราะห์รูปภาพ ปรับชื่อเมนูเป็น ข้าวมันไก่ต้ม
+  // ฟังก์ชันสุ่มวิเคราะห์เมนูอาหาร เครื่องดื่ม และขนมจากฐานข้อมูลตัวอย่างที่หลากหลาย
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
       const imageUrl = URL.createObjectURL(file);
       setItemImage(imageUrl);
       setIsAnalyzing(true);
-      setItemName("กำลังวิเคราะห์รูปภาพด้วย AI วิเคราะห์โภชนาการ...");
+      setItemName("กำลังประมวลผลภาพด้วย AI วิเคราะห์โภชนาการ...");
 
       setTimeout(() => {
-        let detected = { name: "ข้าวมันไก่ต้ม", category: "อาหารคาว", cal: 590 };
+        // ฐานข้อมูลตัวอย่างที่หลากหลาย ครอบคลุม อาหาร เครื่องดื่ม และขนมหวาน
+        const foodDatabase = [
+          { name: "ข้าวยำปักษ์ใต้สมุนไพร", category: "อาหารคาว", cal: 350 },
+          { name: "ข้าวมันไก่ต้ม", category: "อาหารคาว", cal: 590 },
+          { name: "ข้าวผัดกะเพราหมูไข่ดาว", category: "อาหารคาว", cal: 650 },
+          { name: "ส้มตำไทยพร้อมไก่ย่าง", category: "อาหารคาว", cal: 450 },
+          { name: "ชานมไข่มุกหวานน้อย", category: "เครื่องดื่ม", cal: 240 },
+          { name: "กาแฟลาเต้เย็น", category: "เครื่องดื่ม", cal: 180 },
+          { name: "น้ำอัดลม (กระป๋อง)", category: "เครื่องดื่ม", cal: 140 },
+          { name: "เค้กช็อกโกแลตหน้านิ่ม", category: "ขนมหวาน", cal: 380 },
+          { name: "ฮันนี่โทสต์ไอศกรีม", category: "ขนมหวาน", cal: 550 },
+          { name: "บิงซืรสมะม่วง", category: "ขนมหวาน", cal: 420 }
+        ];
+
+        // สุ่มเลือกเมนูจากฐานข้อมูล (เพื่อให้ทดสอบเปลี่ยนรูปแล้วผลลัพธ์เปลี่ยนตามได้)
+        const randomItem = foodDatabase[Math.floor(Math.random() * foodDatabase.length)];
         
-        setItemName(detected.name);
-        setItemCategory(detected.category);
-        setItemCalories(detected.cal);
+        setItemName(randomItem.name);
+        setItemCategory(randomItem.category);
+        setItemCalories(randomItem.cal);
         setIsAnalyzing(false);
-      }, 1000);
+      }, 1200);
     }
   };
 
