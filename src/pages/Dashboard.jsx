@@ -14,11 +14,15 @@ export default function Dashboard() {
   const [bmiResult, setBmiResult] = useState(null);
   const [tdeeResult, setTdeeResult] = useState(null);
 
+  // Food Analysis States
   const [itemImage, setItemImage] = useState(null);
   const [itemCalories, setItemCalories] = useState(0);
   const [itemName, setItemName] = useState("");
   const [itemCategory, setItemCategory] = useState("");
+  const [itemConfidence, setItemConfidence] = useState(null);
+  const [itemNote, setItemNote] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -59,75 +63,74 @@ export default function Dashboard() {
     setTdeeResult(tdee);
   };
 
-  // ฟังก์ชันวิเคราะห์ภาพ: รับไฟล์ภาพจากเครื่องมาแสดง แล้วสุ่มวิเคราะห์เมนูโภชนาการจากฐานข้อมูล
+  // ฟังก์ชันวิเคราะห์ภาพผ่าน API หลังบ้าน
   const handleImageSelect = async (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  // ตรวจสอบว่าเป็นรูปภาพหรือไม่
-  if (!file.type.startsWith("image/")) {
-    setAnalysisError("กรุณาเลือกไฟล์รูปภาพเท่านั้น");
-    setItemImage(null);
-    setItemName("");
-    setItemCategory("");
-    setItemCalories(0);
-    setItemConfidence(null);
-    setItemNote("");
-    return;
-  }
-
-  const maxSize = 10 * 1024 * 1024; // 10 MB
-  if (file.size > maxSize) {
-    setAnalysisError("ขนาดรูปภาพต้องไม่เกิน 10 MB");
-    return;
-  }
-
-  setAnalysisError("");
-  setItemName("");
-  setItemCategory("");
-  setItemCalories(0);
-  setItemConfidence(null);
-  setItemNote("");
-
-  // แสดงรูปภาพตัวอย่างทันที
-  const imageUrl = URL.createObjectURL(file);
-  setItemImage(imageUrl);
-  setIsAnalyzing(true);
-  setItemName("กำลังวิเคราะห์ภาพอาหารด้วย AI...");
-
-  try {
-    const formData = new FormData();
-    formData.append("image", file);
-
-    const response = await fetch("/api/analyze-food", {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "ไม่สามารถวิเคราะห์ภาพได้");
+    if (!file.type.startsWith("image/")) {
+      setAnalysisError("กรุณาเลือกไฟล์รูปภาพเท่านั้น");
+      setItemImage(null);
+      setItemName("");
+      setItemCategory("");
+      setItemCalories(0);
+      setItemConfidence(null);
+      setItemNote("");
+      return;
     }
 
-    setItemName(data.name || "ไม่สามารถระบุได้ชัดเจน");
-    setItemCategory(data.category || "ไม่สามารถระบุได้");
-    setItemCalories(Number.isFinite(Number(data.calories)) ? Number(data.calories) : 0);
-    setItemConfidence(Number.isFinite(Number(data.confidence)) ? Number(data.confidence) : null);
-    setItemNote(data.note || "");
+    const maxSize = 10 * 1024 * 1024; // 10 MB
+    if (file.size > maxSize) {
+      setAnalysisError("ขนาดรูปภาพต้องไม่เกิน 10 MB");
+      return;
+    }
 
-  } catch (error) {
-    console.error("Food analysis error:", error);
+    setAnalysisError("");
     setItemName("");
     setItemCategory("");
     setItemCalories(0);
     setItemConfidence(null);
     setItemNote("");
-    setAnalysisError(error.message || "ไม่สามารถวิเคราะห์ภาพได้ กรุณาลองใหม่อีกครั้ง");
-  } finally {
-    setIsAnalyzing(false);
-  }
-};
+
+    // แสดงรูปภาพตัวอย่างทันที
+    const imageUrl = URL.createObjectURL(file);
+    setItemImage(imageUrl);
+    setIsAnalyzing(true);
+    setItemName("กำลังวิเคราะห์ภาพอาหารด้วย AI...");
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const response = await fetch("/api/analyze-food", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "ไม่สามารถวิเคราะห์ภาพได้");
+      }
+
+      setItemName(data.name || "ไม่สามารถระบุได้ชัดเจน");
+      setItemCategory(data.category || "ไม่สามารถระบุได้");
+      setItemCalories(Number.isFinite(Number(data.calories)) ? Number(data.calories) : 0);
+      setItemConfidence(Number.isFinite(Number(data.confidence)) ? Number(data.confidence) : null);
+      setItemNote(data.note || "");
+
+    } catch (error) {
+      console.error("Food analysis error:", error);
+      setItemName("");
+      setItemCategory("");
+      setItemCalories(0);
+      setItemConfidence(null);
+      setItemNote("");
+      setAnalysisError(error.message || "ไม่สามารถวิเคราะห์ภาพได้ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const calorieSurplus = tdeeResult ? itemCalories - Math.round(tdeeResult / 3) : 0;
   const requiredSquatReps = calorieSurplus > 0 ? Math.ceil(calorieSurplus / 0.32) : 0;
@@ -228,12 +231,14 @@ export default function Dashboard() {
             </label>
 
             {isAnalyzing && <p className="scanning-text">🔍 AI กำลังมองภาพและวิเคราะห์เมนู...</p>}
+            {analysisError && <p className="error-text" style={{ color: '#f87171', fontSize: '13px', marginTop: '8px' }}>⚠️ {analysisError}</p>}
             
             {itemName && !isAnalyzing && (
               <div className="result-box">
                 <p>🏷️ หมวดหมู่: <strong>{itemCategory}</strong></p>
                 <p>🍽️ รายการ: <strong>{itemName}</strong></p>
                 <p>🔥 พลังงาน: <span className="highlight-warning">{itemCalories} kcal</span></p>
+                {itemConfidence !== null && <p style={{ fontSize: '11px', color: '#38bdf8' }}>ความมั่นใจ: {itemConfidence}%</p>}
               </div>
             )}
           </div>
@@ -298,7 +303,7 @@ export default function Dashboard() {
         }
         .profile-avatar { width: 42px; height: 42px; border-radius: 50%; background: linear-gradient(135deg, #22c55e, #16a34a); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
         .profile-status-dot { position: absolute; bottom: 4px; right: 4px; width: 11px; height: 11px; background-color: #22c55e; border: 2px solid #15171d; border-radius: 50%; }
-        .dashboard-container { width: 100vw; max-width: 1000px; }
+        .dashboard-container { width: 100%; max-width: 1000px; }
         .dashboard-header { text-align: center; margin-bottom: 28px; }
         .logo { color: #22c55e; font-size: 15px; font-weight: 800; letter-spacing: 4px; margin-bottom: 10px; }
         .welcome-icon { width: 60px; height: 60px; margin: 0 auto 12px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); font-size: 28px; }
@@ -343,7 +348,7 @@ export default function Dashboard() {
         .highlight-warning { color: #facc15; font-weight: bold; }
 
         .upload-box {
-          display: flex; align-items: center; justify-content: center; width: 100%; height: 140px; border: 2px dashed #444; border-radius: 10px; cursor: pointer; background: #181a1a; overflow: hidden; position: relative;
+          display: flex; align-items: center; justify-content: center; width: 100%; height: 160px; border: 2px dashed #444; border-radius: 10px; cursor: pointer; background: #181a1a; overflow: hidden; position: relative;
         }
         .upload-placeholder { color: #aaa; font-size: 13px; text-align: center; padding: 0 10px; }
         .food-preview { width: 100%; height: 100%; object-fit: cover; }
