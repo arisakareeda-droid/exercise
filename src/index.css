@@ -1,22 +1,36 @@
 :root {
   --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --text-h: #08060d;
+
+  --bg: #fff;
+
+  --border: #e5e4e7;
+
+  --code-bg: #f4f3ec;
+
+  --accent: #aa3bff;
+
+  --accent-bg: rgba(170, 59, 255, 0.1);
+
+  --accent-border: rgba(170, 59, 255, 0.5);
+
+  --social-bg: rgba(244, 243, 236, 0.5);
+
+  --shadow:
+    rgba(0, 0, 0, 0.1) 0 10px 15px -3px,
+    rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+
+  /* เปลี่ยนเป็น Kanit */
+  --sans: "Kanit", sans-serif;
+  --heading: "Kanit", sans-serif;
+
+  /* ตัวเลข/โค้ดยังคงเป็น monospace */
   --mono: ui-monospace, Consolas, monospace;
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
+
   color-scheme: light dark;
   color: var(--text);
   background: var(--bg);
@@ -30,6 +44,9 @@
   }
 }
 
+/* โหลดฟอนต์ Kanit */
+@import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
+
 @media (prefers-color-scheme: dark) {
   :root {
     --text: #9ca3af;
@@ -41,8 +58,10 @@
     --accent-bg: rgba(192, 132, 252, 0.15);
     --accent-border: rgba(192, 132, 252, 0.5);
     --social-bg: rgba(47, 48, 58, 0.5);
+
     --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+      rgba(0, 0, 0, 0.4) 0 10px 15px -3px,
+      rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
 
   #social .button-icon {
@@ -52,6 +71,7 @@
 
 body {
   margin: 0;
+  font-family: "Kanit", sans-serif;
 }
 
 #root {
@@ -64,11 +84,12 @@ body {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  font-family: "Kanit", sans-serif;
 }
 
 h1,
 h2 {
-  font-family: var(--heading);
+  font-family: "Kanit", sans-serif;
   font-weight: 500;
   color: var(--text-h);
 }
@@ -77,22 +98,27 @@ h1 {
   font-size: 56px;
   letter-spacing: -1.68px;
   margin: 32px 0;
+
   @media (max-width: 1024px) {
     font-size: 36px;
     margin: 20px 0;
   }
 }
+
 h2 {
   font-size: 24px;
   line-height: 118%;
   letter-spacing: -0.24px;
   margin: 0 0 8px;
+
   @media (max-width: 1024px) {
     font-size: 20px;
   }
 }
+
 p {
   margin: 0;
+  font-family: "Kanit", sans-serif;
 }
 
 code,
