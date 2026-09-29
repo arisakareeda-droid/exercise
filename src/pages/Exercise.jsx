@@ -2,10 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 // --- ค่าคงที่สำหรับกรองสัญญาณรบกวน / กันนับผิด ---
-const SMOOTHING_WINDOW = 5;      // จำนวนเฟรมที่ใช้เฉลี่ยมุม (ลด noise)
-const STABLE_FRAMES_REQUIRED = 4; // ต้องอยู่ในท่านิ่งครบกี่เฟรมก่อนยืนยันว่าเปลี่ยน stage จริง
-const REP_COOLDOWN_MS = 600;      // เวลาขั้นต่ำระหว่างการนับแต่ละครั้ง (กันนับซ้ำ)
-const MIN_VISIBILITY = 0.65;      // ความเชื่อมั่นขั้นต่ำของจุดที่จะนำมาคำนวณ
+const SMOOTHING_WINDOW = 5;          // เฟรมที่ใช้เฉลี่ยมุมเข่า (squat เคลื่อนไหวช้า ใช้ window ยาวได้)
+const STABLE_FRAMES_SQUAT = 4;       // squat ต้องนิ่งครบกี่เฟรมก่อนยืนยันเปลี่ยนท่า
+const ARM_SMOOTHING_WINDOW = 3;      // jumping jack เคลื่อนไหวเร็ว ใช้ window สั้นกว่า ไม่ให้พลาดจังหวะ
+const ARM_UP_THRESHOLD = 0.10;       // ค่าความต่าง (shoulder.y - wrist.y) ที่ถือว่า "ยกมือขึ้นจริง"
+const ARM_DOWN_THRESHOLD = -0.05;    // ค่าที่ถือว่า "มือลงข้างตัวจริง"
+const REP_COOLDOWN_MS = 600;         // เวลาขั้นต่ำระหว่างการนับแต่ละครั้ง (กันนับซ้ำ)
+const MIN_VISIBILITY = 0.65;         // ความเชื่อมั่นขั้นต่ำของจุดที่จะนำมาคำนวณ
 
 export default function Exercise() {
   const [searchParams] = useSearchParams();
@@ -20,11 +23,13 @@ export default function Exercise() {
   const [feedback, setFeedback] = useState("กำลังโหลด AI...");
   const [calories, setCalories] = useState(0);
 
-  const stageRef = useRef("up");
-  const angleBufferRef = useRef([]);          // buffer สำหรับ smoothing มุม squat
-  const candidateStageRef = useRef(null);     // stage ที่กำลังจะเปลี่ยนไป (รอยืนยัน)
-  const stableFrameCountRef = useRef(0);      // นับจำนวนเฟรมที่ท่านิ่งต่อเนื่อง
-  const lastRepTimeRef = useRef(0);           // เวลาที่นับครั้งล่าสุด (สำหรับ cooldown)
+  const stageRef = useRef(null);              // เริ่มเป็น null รอกำหนดจากท่าจริงในเฟรมแรก
+  const hasInitializedStageRef = useRef(false); // กันไม่ให้นับก่อนรู้ท่าตั้งต้นจริง
+  const angleBufferRef = useRef([]);            // buffer smoothing มุมเข่า (squat)
+  const armBufferRef = useRef([]);              // buffer smoothing สัญญาณแขน (jumping jack)
+  const candidateStageRef = useRef(null);       // stage ที่กำลังรอยืนยัน (ใช้กับ squat)
+  const stableFrameCountRef = useRef(0);
+  const lastRepTimeRef = useRef(0);
 
   const calculateAngle = (a, b, c) => {
     const radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
@@ -35,45 +40,54 @@ export default function Exercise() {
 
   const isVisible = (p) => p && (p.visibility ?? 1) > MIN_VISIBILITY;
 
-  // เฉลี่ยมุมจากขาซ้าย+ขวา (ถ้ามองเห็นทั้งคู่) เพื่อความเสถียร มากกว่าใช้ขาเดียว
+  // เฉลี่ยมุมเข่าซ้าย+ขวา แล้ว smoothing ย้อนหลังหลายเฟรม
   const getSmoothedKneeAngle = (lm) => {
     const angles = [];
-
     const hipL = lm[23], kneeL = lm[25], ankleL = lm[27];
     if (isVisible(hipL) && isVisible(kneeL) && isVisible(ankleL)) {
       angles.push(calculateAngle(hipL, kneeL, ankleL));
     }
-
     const hipR = lm[24], kneeR = lm[26], ankleR = lm[28];
     if (isVisible(hipR) && isVisible(kneeR) && isVisible(ankleR)) {
       angles.push(calculateAngle(hipR, kneeR, ankleR));
     }
-
     if (angles.length === 0) return null;
-    const instantAngle = angles.reduce((a, b) => a + b, 0) / angles.length;
-
-    // เก็บลง buffer แล้วเฉลี่ยย้อนหลังเพื่อลดการแกว่งจาก noise เฟรมต่อเฟรม
+    const instant = angles.reduce((a, b) => a + b, 0) / angles.length;
     const buf = angleBufferRef.current;
-    buf.push(instantAngle);
+    buf.push(instant);
     if (buf.length > SMOOTHING_WINDOW) buf.shift();
     return buf.reduce((a, b) => a + b, 0) / buf.length;
   };
 
-  // ยืนยันการเปลี่ยน stage ก็ต่อเมื่อ "นิ่ง" อยู่ในเงื่อนไขนั้นครบจำนวนเฟรมที่กำหนด
-  // ป้องกันการขยับตัวแว้บเดียวแล้วโดนนับว่าเปลี่ยนท่า
-  const confirmStage = (candidate) => {
+  // ค่า "ยกแขนขึ้นแค่ไหน" เฉลี่ยซ้าย+ขวา บวก = มือสูงกว่าไหล่ (ยกขึ้น), ลบ = มือต่ำกว่าไหล่ (ปล่อยลง)
+  const getSmoothedArmRaise = (lm) => {
+    const vals = [];
+    const shoulderL = lm[11], wristL = lm[15];
+    if (isVisible(shoulderL) && isVisible(wristL)) vals.push(shoulderL.y - wristL.y);
+    const shoulderR = lm[12], wristR = lm[16];
+    if (isVisible(shoulderR) && isVisible(wristR)) vals.push(shoulderR.y - wristR.y);
+    if (vals.length === 0) return null;
+    const instant = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const buf = armBufferRef.current;
+    buf.push(instant);
+    if (buf.length > ARM_SMOOTHING_WINDOW) buf.shift();
+    return buf.reduce((a, b) => a + b, 0) / buf.length;
+  };
+
+  // ใช้เฉพาะ squat: ต้องนิ่งอยู่ในเงื่อนไขเดิมครบจำนวนเฟรมก่อนยืนยันว่าเปลี่ยนท่าจริง
+  const confirmStage = (candidate, framesRequired) => {
     if (candidateStageRef.current !== candidate) {
       candidateStageRef.current = candidate;
       stableFrameCountRef.current = 1;
       return false;
     }
     stableFrameCountRef.current += 1;
-    return stableFrameCountRef.current >= STABLE_FRAMES_REQUIRED;
+    return stableFrameCountRef.current >= framesRequired;
   };
 
   const tryCountRep = (nextCount) => {
     const now = Date.now();
-    if (now - lastRepTimeRef.current < REP_COOLDOWN_MS) return; // ยังอยู่ในช่วง cooldown ไม่นับซ้ำ
+    if (now - lastRepTimeRef.current < REP_COOLDOWN_MS) return;
     lastRepTimeRef.current = now;
 
     const caloriesPerRep = exerciseType === 'squat' ? 0.32 : 0.20;
@@ -94,8 +108,10 @@ export default function Exercise() {
     let camera = null;
 
     // รีเซ็ตสถานะทุกครั้งที่เปลี่ยนท่าออกกำลังกาย
-    stageRef.current = "up";
+    stageRef.current = null;
+    hasInitializedStageRef.current = false;
     angleBufferRef.current = [];
+    armBufferRef.current = [];
     candidateStageRef.current = null;
     stableFrameCountRef.current = 0;
     lastRepTimeRef.current = 0;
@@ -167,24 +183,26 @@ export default function Exercise() {
             const angle = getSmoothedKneeAngle(lm);
 
             if (angle !== null) {
-              // ยืนตัวตรง (มากกว่า 165 องศา) — ต้องนิ่งครบเฟรมก่อนยืนยัน
-              if (angle > 165) {
-                if (confirmStage("up")) {
+              // เฟรมแรกที่อ่านค่าได้: กำหนดท่าเริ่มต้นตามท่าจริง ไม่ใช่ hardcode
+              // ป้องกันบั๊ก "ยืนนิ่งแป๊บเดียวก็นับ 1 ครั้ง"
+              if (!hasInitializedStageRef.current) {
+                stageRef.current = angle > 130 ? "up" : "down";
+                hasInitializedStageRef.current = true;
+                setFeedback(stageRef.current === "up" ? "พร้อมแล้ว ย่อตัวลงได้เลย" : "อยู่ในท่าย่อ ยืนขึ้นเพื่อเริ่มนับ");
+              } else if (angle > 165) {
+                if (confirmStage("up", STABLE_FRAMES_SQUAT)) {
                   if (stageRef.current === "down") {
                     tryCountRep(counter + 1);
                   }
                   stageRef.current = "up";
                 }
                 setFeedback("ยืนตัวตรง - พร้อมแล้วย่อตัวลง");
-              }
-              // ย่อลงลึก (น้อยกว่า 95 องศา) — ต้องนิ่งครบเฟรมก่อนยืนยัน
-              else if (angle < 95) {
-                if (confirmStage("down") && stageRef.current === "up") {
+              } else if (angle < 95) {
+                if (confirmStage("down", STABLE_FRAMES_SQUAT) && stageRef.current === "up") {
                   stageRef.current = "down";
                 }
                 setFeedback("ยอดเยี่ยม! ดันตัวขึ้นตรงๆ");
               } else {
-                // อยู่ระหว่างกลาง ไม่ถือเป็นการยืนยัน stage ใหม่ แต่ไม่รีเซ็ต stage ปัจจุบัน
                 candidateStageRef.current = null;
                 stableFrameCountRef.current = 0;
               }
@@ -192,26 +210,29 @@ export default function Exercise() {
           }
           // --- เงื่อนไขท่า JUMPING JACK ---
           else if (exerciseType === "jumping_jack") {
-            const shoulderL = lm[11], wristL = lm[15];
-            const ankleL = lm[27], ankleR = lm[28];
+            const armRaise = getSmoothedArmRaise(lm);
 
-            if (isVisible(shoulderL) && isVisible(wristL) && isVisible(ankleL) && isVisible(ankleR)) {
-              const isHandsUp = wristL.y < shoulderL.y;
-
-              if (!isHandsUp) {
-                if (confirmStage("down")) {
-                  if (stageRef.current === "up") {
-                    tryCountRep(counter + 1);
-                  }
+            if (armRaise !== null) {
+              // เฟรมแรกที่อ่านค่าได้: กำหนดท่าเริ่มต้นตามท่าจริง (มือลง = down)
+              if (!hasInitializedStageRef.current) {
+                stageRef.current = armRaise > 0 ? "up" : "down";
+                hasInitializedStageRef.current = true;
+                setFeedback(stageRef.current === "down" ? "พร้อมแล้ว กระโดดยกแขนขึ้นได้เลย" : "ลดแขนลงก่อนเริ่มนับ");
+              }
+              // ใช้ threshold แบบ hysteresis ตรงๆ ไม่รอค้างนิ่งหลายเฟรม เพราะการกระโดดเร็วมาก
+              else if (armRaise > ARM_UP_THRESHOLD) {
+                if (stageRef.current === "down") {
+                  stageRef.current = "up";
+                  setFeedback("ยอดเยี่ยม! หุบแขนขาลง");
+                }
+              } else if (armRaise < ARM_DOWN_THRESHOLD) {
+                if (stageRef.current === "up") {
+                  tryCountRep(counter + 1);
                   stageRef.current = "down";
                 }
                 setFeedback("เตรียมตัว - กระโดดกางแขนขาออก");
-              } else {
-                if (confirmStage("up") && stageRef.current === "down") {
-                  stageRef.current = "up";
-                }
-                setFeedback("ยอดเยี่ยม! หุบแขนขาลง");
               }
+              // ค่ากลางระหว่าง threshold ทั้งสอง: ยังไม่เปลี่ยนอะไร รอจนกว่าจะขยับชัดเจน
             }
           }
         }
