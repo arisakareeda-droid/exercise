@@ -12,7 +12,7 @@ export default function Exercise() {
   const canvasRef = useRef(null);
   const [counter, setCounter] = useState(0);
   const [feedback, setFeedback] = useState("กำลังโหลด AI...");
-  const [calories, setCalories] = useState(0); // เพิ่ม State สำหรับเก็บค่าแคลอรี
+  const [calories, setCalories] = useState(0);
   const stageRef = useRef("up");
 
   const calculateAngle = (a, b, c) => {
@@ -86,61 +86,65 @@ export default function Exercise() {
 
           setFeedback("จัดท่าทางให้เห็นเต็มตัว");
 
-          // --- เงื่อนไขท่า SQUAT ---
+          // --- เงื่อนไขท่า SQUAT (ปรับปรุงความเสถียร ไม่ให้นับไวเกินไป) ---
           if (exerciseType === "squat") {
             const hip = lm[23], knee = lm[25], ankle = lm[27];
             if (hip && knee && ankle) {
               const angle = calculateAngle(hip, knee, ankle);
               
-              if (angle > 160) {
+              // ยืนตัวตรง (มากกว่า 165 องศา)
+              if (angle > 165) {
+                if (stageRef.current === "down") {
+                  setCounter((prev) => {
+                    const nextCount = prev + 1;
+                    const totalCal = Number((nextCount * 0.32).toFixed(2));
+                    setCalories(totalCal);
+
+                    if (nextCount >= targetCount) {
+                      setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}&calories=${totalCal}`), 1000);
+                    }
+                    return nextCount;
+                  });
+                }
                 stageRef.current = "up";
                 setFeedback("ยืนตัวตรง - พร้อมแล้วย่อตัวลง");
               }
-              if (angle < 100 && stageRef.current === "up") {
+              
+              // ย่อลงลึก (น้อยกว่า 95 องศา)
+              if (angle < 95 && stageRef.current === "up") {
                 stageRef.current = "down";
-                setCounter((prev) => {
-                  const nextCount = prev + 1;
-                  
-                  // คำนวณแคลอรีสำหรับ Squat (0.32 kcal ต่อครั้ง)
-                  const totalCal = Number((nextCount * 0.32).toFixed(2));
-                  setCalories(totalCal);
-
-                  if (nextCount >= targetCount) {
-                    setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}&calories=${totalCal}`), 1000);
-                  }
-                  return nextCount;
-                });
-                setFeedback("ยอดเยี่ยม! ดันตัวขึ้น");
+                setFeedback("ยอดเยี่ยม! ดันตัวขึ้นตรงๆ");
               }
             }
           } 
-          // --- เงื่อนไขท่า JUMPING JACK ---
+          // --- เงื่อนไขท่า JUMPING JACK (ปรับปรุงความเสถียร) ---
           else if (exerciseType === "jumping_jack") {
             const shoulderL = lm[11], wristL = lm[15];
-            const hipL = lm[23], ankleL = lm[27], ankleR = lm[28];
+            const ankleL = lm[27], ankleR = lm[28];
             
-            if (shoulderL && wristL && hipL && ankleL && ankleR) {
+            if (shoulderL && wristL && ankleL && ankleR) {
               const isHandsUp = wristL.y < shoulderL.y;
               
               if (!isHandsUp) {
+                if (stageRef.current === "up") {
+                  setCounter((prev) => {
+                    const nextCount = prev + 1;
+                    const totalCal = Number((nextCount * 0.20).toFixed(2));
+                    setCalories(totalCal);
+
+                    if (nextCount >= targetCount) {
+                      setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}&calories=${totalCal}`), 1000);
+                    }
+                    return nextCount;
+                  });
+                }
                 stageRef.current = "down";
-                setFeedback("เตรียมตัว - กระโดดตบ");
+                setFeedback("เตรียมตัว - กระโดดกางแขนขาออก");
               }
+              
               if (isHandsUp && stageRef.current === "down") {
                 stageRef.current = "up";
-                setCounter((prev) => {
-                  const nextCount = prev + 1;
-                  
-                  // คำนวณแคลอรีสำหรับ Jumping Jack (0.20 kcal ต่อครั้ง)
-                  const totalCal = Number((nextCount * 0.20).toFixed(2));
-                  setCalories(totalCal);
-
-                  if (nextCount >= targetCount) {
-                    setTimeout(() => navigate(`/result?exercise=${exerciseType}&count=${nextCount}&calories=${totalCal}`), 1000);
-                  }
-                  return nextCount;
-                });
-                setFeedback("ยอดเยี่ยม!");
+                setFeedback("ยอดเยี่ยม! หุบแขนขาลง");
               }
             }
           }
@@ -188,7 +192,6 @@ export default function Exercise() {
 
       <div style={{ background: '#1e1e1e', padding: '20px', borderRadius: '12px', border: '1px solid #444', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         
-        {/* แผงแสดงผล: ทำไปแล้ว / แคลอรี / สถานะท่าทาง */}
         <div style={{ display: 'flex', gap: '30px', marginBottom: '20px', flexWrap: 'wrap', justifyContent: 'center' }}>
           <div>
             <p style={{ color: '#aaa', margin: '0 0 5px', fontSize: '14px' }}>ทำไปแล้ว</p>
