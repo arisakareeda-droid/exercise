@@ -229,7 +229,7 @@ const styles = {
       'radial-gradient(circle at top left, #14251d 0%, #080b0f 40%, #080b0f 100%)',
     color: '#fff',
     fontFamily:
-      'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Kanit", sans-serif',
     position: 'relative',
     overflow: 'hidden',
   },
