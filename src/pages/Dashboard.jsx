@@ -153,162 +153,155 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard-page">
-      <button
-        className="top-profile-btn"
-        onClick={() => navigate("/profile")}
-        title="โปรไฟล์ของฉัน"
-      >
-        <div className="profile-avatar">
-          <span>{userInitial}</span>
+      <aside className="dashboard-sidebar">
+        <div className="brand-block">
+          <div className="brand-mark">✦</div>
+          <div>
+            <div className="brand-name">FitTrack</div>
+            <div className="brand-tagline">Healthy Today</div>
+          </div>
         </div>
-        <div className="profile-status-dot"></div>
-      </button>
 
-      <div className="dashboard-container">
+        <nav className="sidebar-nav">
+          <button className="side-nav active" onClick={() => navigate("/")}>
+            <span>⌂</span><b>หน้าหลัก</b>
+          </button>
+          <button className="side-nav" onClick={() => navigate("/exercises")}>
+            <span>✦</span><b>ออกกำลังกาย</b>
+          </button>
+          <button className="side-nav" onClick={() => navigate("/history")}>
+            <span>◷</span><b>ประวัติการใช้งาน</b>
+          </button>
+        </nav>
+
+        <button className="side-logout" type="button">
+          <span>↪</span> ออกจากระบบ
+        </button>
+      </aside>
+
+      <main className="dashboard-main">
         <header className="dashboard-header">
-          <div className="logo">FITTRACK</div>
-          <div className="welcome-icon">🏃</div>
-          <h1>ยินดีต้อนรับสู่ FitTrack</h1>
-          <p>
-            ระบบออกกำลังกายอัจฉริยะ ติดตามสุขภาพ โภชนาการ และ AI ตรวจจับท่าทาง
-          </p>
+          <div className="header-copy">
+            <div className="logo">FITTRACK</div>
+            <h1>ระบบออกกำลังกายอัจฉริยะ</h1>
+            <p>ดูแลสุขภาพ · โภชนาการ · AI ตรวจจับท่าทาง</p>
+          </div>
+
+          <div className="header-actions">
+            <button className="notify-btn" type="button" aria-label="การแจ้งเตือน">
+              ♟
+              <i></i>
+            </button>
+
+            <button
+              className="profile-pill"
+              onClick={() => navigate("/profile")}
+              title="โปรไฟล์ของฉัน"
+            >
+              <div className="profile-avatar">
+                <span>{userInitial}</span>
+              </div>
+              <span className="profile-name">โปรไฟล์</span>
+              <span className="profile-chevron">›</span>
+            </button>
+          </div>
         </header>
 
-        <div className="main-grid">
-          {/* เมนูหลัก */}
-          <div className="main-card">
-            <div className="card-title">
-              <span>เริ่มต้นการออกกำลังกาย</span>
+        <div className="dashboard-content">
+          {/* สุขภาพ */}
+          <section className="panel health-panel">
+            <div className="panel-heading">
+              <div className="panel-icon blue">♡</div>
+              <div>
+                <h2>สุขภาพของคุณ</h2>
+                <span>ข้อมูลล่าสุด</span>
+              </div>
+              <span className="heading-badge">เช็กได้ทุกวัน ↗</span>
             </div>
 
-            <p className="card-description">
-              เลือกเมนูที่คุณต้องการใช้งาน
-            </p>
-
-            <div className="menu-grid">
-              <button
-                className="menu-card exercise-menu"
-                onClick={() => navigate("/exercises")}
-              >
-                <div className="menu-icon">🤸</div>
-
-                <div className="menu-content">
-                  <h2>เลือกท่าออกกำลังกาย</h2>
-                  <p>
-                    Squat หรือ Jumping Jack
-                    <br />
-                    พร้อมระบบ AI นับ Reps
-                  </p>
+            <div className="health-grid">
+              <div className="metric-card">
+                <div className="metric-top">
+                  <span className="metric-icon">▣</span>
+                  <span>BMI</span>
                 </div>
 
-              </button>
-
-              <button
-                className="menu-card history-menu"
-                onClick={() => navigate("/history")}
-              >
-                <div className="menu-icon">📊</div>
-
-                <div className="menu-content">
-                  <h2>ประวัติการออกกำลังกาย</h2>
-                  <p>
-                    ดูผลย้อนหลัง
-                    <br />
-                    และแคลอรีที่เผาผลาญ
-                  </p>
-                </div>
-
-              </button>
-            </div>
-
-            <div className="info-section">
-              <div className="info-item">
-                <div className="info-icon">🤖</div>
-                <div>
-                  <strong>AI Detection</strong>
-                  <span>ตรวจจับท่าทาง Real-time</span>
-                </div>
+                {bmiResult ? (
+                  <>
+                    <div className="metric-value">
+                      {bmiResult.value}
+                      <em>{bmiResult.status.includes("ปกติ") ? "ปกติ" : "ดูผล"}</em>
+                    </div>
+                    <div className="bmi-scale">
+                      <span className="scale-line"></span>
+                      <span className="scale-dot"></span>
+                    </div>
+                    <div className="scale-labels">
+                      <span>&lt;18.5 ผอม</span>
+                      <span>18.5–25 ปกติ</span>
+                      <span>25–30 เกิน</span>
+                      <span>&gt;30 อ้วน</span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="metric-value placeholder-value">—<em>รอข้อมูล</em></div>
+                    <div className="metric-helper">กรอกน้ำหนักและส่วนสูงเพื่อดู BMI</div>
+                  </>
+                )}
               </div>
 
-              <div className="info-item">
-                <div className="info-icon">🔢</div>
-                <div>
-                  <strong>นับจำนวนอัตโนมัติ</strong>
-                  <span>แม่นยำและปลอดภัย</span>
+              <div className="metric-card">
+                <div className="metric-top">
+                  <span className="metric-icon fire">♨</span>
+                  <span>TDEE</span>
                 </div>
-              </div>
 
-              <div className="info-item">
-                <div className="info-icon">📈</div>
-                <div>
-                  <strong>วิเคราะห์สุขภาพ</strong>
-                  <span>BMI & Calorie Tracker</span>
-                </div>
+                {tdeeResult ? (
+                  <>
+                    <div className="metric-value tdee-value">
+                      {tdeeResult}<small> kcal/วัน</small>
+                    </div>
+                    <div className="energy-pill">◉ พลังงานที่ควรได้รับ</div>
+                  </>
+                ) : (
+                  <>
+                    <div className="metric-value placeholder-value">—<em>รอข้อมูล</em></div>
+                    <div className="metric-helper">คำนวณพลังงานต่อวันพร้อม BMI</div>
+                  </>
+                )}
               </div>
             </div>
-          </div>
 
-          {/* คำนวณ BMI และพลังงาน (TDEE) */}
-          <div className="feature-card">
-            <div className="card-title">
-              ⚖️ คำนวณ BMI และพลังงานต่อวัน
-            </div>
-
-            <form onSubmit={calculateHealth} className="bmi-form">
-              <div className="input-group">
-                <label>น้ำหนัก (kg):</label>
-                <input
-                  type="number"
-                  value={weight}
-                  onChange={(e) => setWeight(e.target.value)}
-                  placeholder="เช่น 60"
-                  required
-                />
+            <form onSubmit={calculateHealth} className="health-form">
+              <div className="compact-field">
+                <label>น้ำหนัก</label>
+                <div><input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="60" required /><small>kg</small></div>
               </div>
-
-              <div className="input-group">
-                <label>ส่วนสูง (cm):</label>
-                <input
-                  type="number"
-                  value={height}
-                  onChange={(e) => setHeight(e.target.value)}
-                  placeholder="เช่น 170"
-                  required
-                />
+              <div className="compact-field">
+                <label>ส่วนสูง</label>
+                <div><input type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="170" required /><small>cm</small></div>
               </div>
-
-              <button type="submit" className="action-btn">
-                คำนวณค่าสุขภาพ
-              </button>
+              <div className="compact-field age-field">
+                <label>อายุ</label>
+                <div><input type="number" value={age} onChange={(e) => setAge(e.target.value)} /><small>ปี</small></div>
+              </div>
+              <button type="submit" className="primary-btn">คำนวณสุขภาพ</button>
             </form>
+          </section>
 
-            {bmiResult && (
-              <div className="result-box">
-                <p>
-                  <strong>ค่า BMI:</strong>{" "}
-                  <span className="highlight">{bmiResult.value}</span>{" "}
-                  ({bmiResult.status})
-                </p>
-
-                <p>
-                  <strong>พลังงานที่ควรได้รับต่อวัน (TDEE):</strong>{" "}
-                  <span className="highlight">{tdeeResult} kcal</span>
-                </p>
+          {/* AI อาหาร */}
+          <section className="panel food-panel">
+            <div className="panel-heading">
+              <div className="panel-icon blue">♜</div>
+              <div>
+                <h2>AI วิเคราะห์อาหาร</h2>
+                <span>สแกนเมนูได้ทันที</span>
               </div>
-            )}
-          </div>
-
-          {/* เพิ่มรูปอาหาร เครื่องดื่ม หรือขนม */}
-          <div className="feature-card">
-            <div className="card-title">
-            เพิ่มรูปอาหาร เครื่องดื่ม หรือขนม
+              <span className="heading-badge">แนะนำ ✓</span>
             </div>
 
-            <p className="card-desc">
-              อัปโหลดรูปภาพเพื่อประเมินพลังงานทุกหมวดหมู่
-            </p>
-
-            <label className="upload-box">
+            <label className="food-scan-box">
               <input
                 type="file"
                 accept="image/*"
@@ -317,924 +310,1046 @@ export default function Dashboard() {
               />
 
               {itemImage ? (
-                <img
-                  src={itemImage}
-                  alt="Selected Item"
-                  className="food-preview"
-                />
+                <img src={itemImage} alt="Selected Item" className="food-preview" />
               ) : (
-                <div className="upload-placeholder">
-                  <span className="camera-icon">📷</span>
-                  <strong>คลิกเพื่ออัปโหลดรูป</strong>
-                  <small>อาหาร • เครื่องดื่ม • ขนม</small>
+                <div className="food-empty">
+                  <div className="camera-orb">●</div>
+                  <strong>คลิกอัปโหลดรูป</strong>
+                  <span>สแกนแคล · ไขมัน · สารอาหาร</span>
+                  <div className="food-tags">
+                    <i>อาหาร</i><i>เครื่องดื่ม</i><i>ขนม</i>
+                  </div>
                 </div>
               )}
             </label>
 
-            {isAnalyzing && (
-              <p className="scanning-text">
-                🔍 AI กำลังมองภาพและวิเคราะห์เมนู...
-              </p>
-            )}
-
-            {analysisError && (
-              <p
-                className="error-text"
-                style={{
-                  color: "#f87171",
-                  fontSize: "13px",
-                  marginTop: "8px",
-                }}
-              >
-                ⚠️ {analysisError}
-              </p>
-            )}
+            {isAnalyzing && <p className="scanning-text">AI กำลังวิเคราะห์...</p>}
+            {analysisError && <p className="error-text">⚠️ {analysisError}</p>}
 
             {itemName && !isAnalyzing && (
-              <div className="result-box">
-                <p>
-                  🏷️ หมวดหมู่: <strong>{itemCategory}</strong>
-                </p>
-
-                <p>
-                  🍽️ รายการ: <strong>{itemName}</strong>
-                </p>
-
-                <p>
-                  🔥 พลังงาน:{" "}
-                  <span className="highlight-warning">
-                    {itemCalories} kcal
-                  </span>
-                </p>
-
-                {itemConfidence !== null && (
-                  <p style={{ fontSize: "11px", color: "#38bdf8" }}>
-                    ความมั่นใจ: {itemConfidence}%
-                  </p>
-                )}
+              <div className="result-box food-result">
+                <span>{itemCategory || "อาหาร"}</span>
+                <strong>{itemName}</strong>
+                <b>{itemCalories} kcal</b>
               </div>
             )}
-          </div>
+          </section>
 
-          {/* แนะนำอาหาร & แจ้งเตือนพลังงานเกิน */}
-          <div className="feature-card span-2">
-            <div className="card-title">
-              🥗 เมนูอาหารแนะนำประจำวัน & แผนออกกำลังกายชดเชย
+          {/* ออกกำลังกาย */}
+          <section className="panel workout-panel">
+            <div className="section-heading">
+              <div className="panel-icon blue">✚</div>
+              <div>
+                <h2>เลือกออกกำลังกาย</h2>
+                <span>ฟิตได้ทุกวัน</span>
+              </div>
+              <button className="text-btn" type="button" onClick={() => navigate("/exercises")}>ดูทั้งหมด</button>
+            </div>
+
+            <div className="workout-grid">
+              <button className="workout-card" onClick={() => navigate("/exercises")}>
+                <div className="workout-art person-art">🏃</div>
+                <div className="workout-copy">
+                  <span className="mini-label">SMART AI</span>
+                  <h3>ออกกำลังกาย</h3>
+                  <p>สร้างหุ่น · เผาผลาญ · แข็งแรง</p>
+                  <span className="card-action">เริ่มเลย</span>
+                </div>
+                <div className="workout-glow"></div>
+              </button>
+
+              <button className="workout-card history-card" onClick={() => navigate("/history")}>
+                <div className="workout-art chart-art">▥</div>
+                <div className="workout-copy">
+                  <span className="mini-label">TRACKER</span>
+                  <h3>ประวัติการใช้งาน</h3>
+                  <p>ดูสถิติ · ความคืบหน้า · เป้าหมาย</p>
+                  <span className="card-action">เริ่มเลย</span>
+                </div>
+                <div className="workout-glow"></div>
+              </button>
+            </div>
+
+            <div className="info-strip">
+              <div><span>🤖</span><b>AI Detection</b><small>ตรวจจับท่าทาง</small></div>
+              <div><span>123</span><b>นับอัตโนมัติ</b><small>แม่นยำและปลอดภัย</small></div>
+              <div><span>↗</span><b>วิเคราะห์สุขภาพ</b><small>BMI · Calories</small></div>
+            </div>
+          </section>
+
+          {/* อาหาร */}
+          <section className="panel meals-panel">
+            <div className="section-heading">
+              <div className="panel-icon blue">♨</div>
+              <div>
+                <h2>เมนูอาหารแนะนำ</h2>
+                <span>อร่อย · มีประโยชน์</span>
+              </div>
+              <button className="text-btn" type="button">ดูทั้งหมด</button>
             </div>
 
             <div className="meal-grid">
-              <div className="meal-item">
-                <strong>🌅 มื้อเช้า (~400 kcal)</strong>
-                <p>ข้าวต้มปลา / โจ๊กหมูใส่ไข่ / ขนมปังโฮลวีท</p>
+              <div className="meal-item breakfast">
+                <div className="meal-emoji">🍓</div>
+                <div><strong>มื้อเช้า</strong><span>~400 kcal</span><p>ข้าวโอ๊ต · ไข่ต้ม · ผลไม้</p></div>
+                <b>›</b>
               </div>
-
-              <div className="meal-item">
-                <strong>☀️ มื้อกลางวัน (~550 kcal)</strong>
-                <p>เกี๊ยวน้ำหมูแดง / ข้าวราดแกง / ส้มตำอกไก่</p>
+              <div className="meal-item lunch">
+                <div className="meal-emoji">🥗</div>
+                <div><strong>มื้อกลางวัน</strong><span>~550 kcal</span><p>อกไก่ · ข้าวกล้อง · ผัก</p></div>
+                <b>›</b>
               </div>
-
-              <div className="meal-item">
-                <strong>🌙 มื้อเย็น (~350 kcal)</strong>
-                <p>แกงจืดเต้าหู้หมูสับ / สลัดปลาทูน่า</p>
+              <div className="meal-item dinner">
+                <div className="meal-emoji">🐟</div>
+                <div><strong>มื้อเย็น</strong><span>~350 kcal</span><p>ปลาแซลมอน · ผักต้ม · คีนัว</p></div>
+                <b>›</b>
               </div>
             </div>
 
             {itemCalories > 0 && tdeeResult && (
-              <div
-                className={`alert-box ${
-                  calorieSurplus > 0
-                    ? "alert-danger"
-                    : "alert-success"
-                }`}
-              >
+              <div className={`alert-box ${calorieSurplus > 0 ? "alert-danger" : "alert-success"}`}>
                 {calorieSurplus > 0 ? (
                   <>
-                    ⚠️ <strong>แจ้งเตือน!</strong> พลังงานจากรายการนี้
-                    (รวมเครื่องดื่ม/ขนม) เกินเกณฑ์เฉลี่ยไปประมาณ{" "}
-                    <strong>{calorieSurplus} kcal</strong>
-
-                    <div className="workout-suggestion">
-                      🎯 <strong>คำแนะนำท่าออกกำลังกายชดเชย:</strong>
-
-                      <ul>
-                        <li>
-                          🏋️ ทำท่า <strong>Squat</strong> จำนวน{" "}
-                          <strong>{requiredSquatReps} ครั้ง</strong>
-                        </li>
-
-                        <li>
-                          ⭐ หรือทำท่า <strong>Jumping Jack</strong> จำนวน{" "}
-                          <strong>{requiredJumpingJackReps} ครั้ง</strong>
-                        </li>
-                      </ul>
-
-                      <button
-                        onClick={() => navigate("/exercises")}
-                        className="start-now-btn"
-                      >
-                        ไปออกกำลังกายตอนนี้เลย
-                      </button>
-                    </div>
+                    <strong>⚠️ เกินประมาณ {calorieSurplus} kcal</strong>
+                    <span>แนะนำ Squat {requiredSquatReps} ครั้ง หรือ Jumping Jack {requiredJumpingJackReps} ครั้ง</span>
+                    <button onClick={() => navigate("/exercises")} className="start-now-btn">ไปออกกำลังกาย</button>
                   </>
                 ) : (
-                  <p>
-                    ✅ พลังงานจากรายการนี้อยู่ในเกณฑ์ที่เหมาะสม เยี่ยมมาก!
-                  </p>
+                  <p>✅ พลังงานอยู่ในเกณฑ์เหมาะสม</p>
                 )}
               </div>
             )}
-          </div>
+          </section>
         </div>
 
-        <footer className="dashboard-footer">
-          <p>FITTRACK • Smart Exercise System</p>
-        </footer>
-      </div>
+        <footer className="dashboard-footer">Small Steps · Big Changes · FITTRACK</footer>
+      </main>
+    </div>
+  );
 
-      <style>{`\n        @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
 
         * { box-sizing: border-box; }
-
-        html {
-          scroll-behavior: smooth;
-        }
+        html { scroll-behavior: smooth; }
 
         body {
           margin: 0;
-          background: #f0f4f8;
-          color: #172b4d;
+          background: #eef4fb;
+          color: #173b73;
           font-family: "Noto Sans Thai", sans-serif;
         }
 
-        button,
-        input {
-          font-family: inherit;
-        }
-
-        /* =========================================================
-           FITTRACK V5 — CLEAN BLUE SYSTEM
-           โครงสร้างใหม่: Header → Health row → Workout → Daily plan
-           เปลี่ยนเฉพาะ CSS / layout / visual design
-           ========================================================= */
+        button, input { font-family: inherit; }
 
         .dashboard-page {
           min-height: 100vh;
-          padding: 32px 30px 44px;
-          position: relative;
-          overflow: hidden;
+          display: flex;
           background:
-            linear-gradient(180deg, #f8fbff 0%, #f2f6fa 48%, #eef3f8 100%);
+            radial-gradient(circle at 70% 10%, rgba(87,153,255,.12), transparent 27%),
+            linear-gradient(135deg, #f9fcff 0%, #eef5ff 48%, #f7fbff 100%);
         }
 
-        .dashboard-page::before {
-          content: "";
-          position: absolute;
-          width: 520px;
-          height: 520px;
-          left: -300px;
-          top: 120px;
-          border-radius: 50%;
-          background: rgba(24,119,242,.035);
-          pointer-events: none;
-        }
+        /* ---------- SIDEBAR ---------- */
 
-        .dashboard-page::after {
-          content: "";
-          position: absolute;
-          width: 420px;
-          height: 420px;
-          right: -250px;
-          bottom: 70px;
-          border-radius: 50%;
-          background: rgba(24,119,242,.025);
-          pointer-events: none;
-        }
-
-        .dashboard-container {
-          width: 100%;
-          max-width: 1180px;
-          margin: 0 auto;
-          position: relative;
-          z-index: 1;
-        }
-
-        /* ---------- PROFILE ---------- */
-
-        .top-profile-btn {
+        .dashboard-sidebar {
           position: fixed;
-          top: 19px;
-          right: 24px;
-          z-index: 50;
-          width: 46px;
-          height: 46px;
-          padding: 3px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: 1px solid #d5e0eb;
-          border-radius: 50%;
-          cursor: pointer;
-          background: #fff;
-          box-shadow: 0 7px 22px rgba(23,43,77,.12);
-          transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
-        }
-
-        .top-profile-btn:hover {
-          transform: translateY(-2px);
-          border-color: #1877f2;
-          box-shadow: 0 11px 28px rgba(24,119,242,.16);
-        }
-
-        .profile-avatar {
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 50%;
-          color: #fff;
-          font-size: 15px;
-          font-weight: 700;
-          background: #1877f2;
-        }
-
-        .profile-status-dot {
-          position: absolute;
-          right: 0;
-          bottom: 1px;
-          width: 10px;
-          height: 10px;
-          border: 2px solid #fff;
-          border-radius: 50%;
-          background: #31a24c;
-        }
-
-        /* ---------- HEADER ---------- */
-
-        .dashboard-header {
-          position: relative;
-          min-height: 158px;
-          margin: 0 0 22px;
-          padding: 20px 90px 22px;
+          inset: 0 auto 0 0;
+          width: 232px;
+          padding: 31px 18px 24px;
           display: flex;
           flex-direction: column;
+          z-index: 20;
+          background: rgba(255,255,255,.93);
+          border-right: 1px solid #dbe7f4;
+          box-shadow: 8px 0 30px rgba(35,82,137,.045);
+          backdrop-filter: blur(18px);
+        }
+
+        .brand-block {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 0 10px 30px;
+        }
+
+        .brand-mark {
+          width: 42px;
+          height: 42px;
+          display: grid;
+          place-items: center;
+          border-radius: 13px;
+          color: #fff;
+          font-size: 21px;
+          background: linear-gradient(145deg, #5b9cf6, #1769dc);
+          box-shadow: 0 9px 20px rgba(24,119,242,.22);
+        }
+
+        .brand-name {
+          color: #123c78;
+          font-family: "Mitr", sans-serif;
+          font-size: 21px;
+          font-weight: 600;
+          line-height: 1.1;
+        }
+
+        .brand-tagline {
+          margin-top: 3px;
+          color: #8aa0b9;
+          font-size: 9px;
+          letter-spacing: .5px;
+        }
+
+        .sidebar-nav {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .side-nav {
+          width: 100%;
+          min-height: 51px;
+          padding: 0 14px;
+          display: flex;
+          align-items: center;
+          gap: 13px;
+          border: 0;
+          border-radius: 15px;
+          cursor: pointer;
+          color: #5c7594;
+          background: transparent;
+          font-size: 13px;
+          text-align: left;
+          transition: .22s ease;
+        }
+
+        .side-nav span {
+          width: 31px;
+          height: 31px;
+          display: grid;
+          place-items: center;
+          border-radius: 10px;
+          color: #4376b8;
+          background: #edf5ff;
+          font-size: 16px;
+        }
+
+        .side-nav:hover,
+        .side-nav.active {
+          color: #1558a9;
+          background: #e7f1ff;
+          transform: translateX(2px);
+        }
+
+        .side-nav.active span {
+          color: #fff;
+          background: linear-gradient(145deg, #4d97f5, #1769dc);
+          box-shadow: 0 5px 12px rgba(24,119,242,.2);
+        }
+
+        .side-logout {
+          margin-top: auto;
+          padding: 12px 14px;
+          border: 0;
+          color: #69809a;
+          background: transparent;
+          cursor: pointer;
+          text-align: left;
+          font-size: 11px;
+        }
+
+        .side-logout span {
+          margin-right: 9px;
+          color: #3b79c5;
+          font-size: 17px;
+        }
+
+        /* ---------- MAIN ---------- */
+
+        .dashboard-main {
+          width: calc(100% - 232px);
+          margin-left: 232px;
+          min-width: 0;
+          padding: 0 31px 36px;
+        }
+
+        .dashboard-header {
+          min-height: 122px;
+          padding: 25px 10px 20px;
+          display: flex;
           align-items: center;
           justify-content: center;
+          position: relative;
+          border-bottom: 1px solid #dfe9f4;
+        }
+
+        .header-copy {
           text-align: center;
-          border-bottom: 1px solid #dfe7ef;
         }
 
         .logo {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 7px;
-          margin: 0 0 8px;
-          color: #1877f2;
-          font-size: 13px;
+          margin-bottom: 2px;
+          color: #2b7eea;
+          font-size: 9px;
           font-weight: 700;
-          letter-spacing: 1.7px;
-        }
-
-        .logo::before {
-          content: "FITTRACK";
-        }
-
-        .logo::after {
-          display: none;
+          letter-spacing: 2px;
         }
 
         .dashboard-header h1 {
-          max-width: 850px;
           margin: 0;
-          color: #162b49;
+          color: #11396f;
           font-family: "Mitr", sans-serif;
-          font-size: clamp(27px, 4vw, 37px);
+          font-size: clamp(27px, 3.2vw, 39px);
           font-weight: 600;
-          line-height: 1.35;
-          letter-spacing: -.2px;
+          line-height: 1.25;
         }
 
         .dashboard-header p {
-          max-width: 720px;
-          margin: 8px auto 0;
-          color: #6d7f93;
+          margin: 5px 0 0;
+          color: #68809f;
           font-size: 13px;
-          line-height: 1.75;
-        }
-
-        .welcome-icon {
-          position: absolute;
-          right: 3px;
-          top: 17px;
-          width: 58px;
-          height: 58px;
-          margin: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: 1px solid #d5e3f0;
-          border-radius: 16px;
-          background: #fff;
-          box-shadow: 0 8px 22px rgba(23,43,77,.08);
-          font-size: 25px;
-        }
-
-        /* ---------- MAIN LAYOUT ---------- */
-
-        .main-grid {
-          display: grid;
-          grid-template-columns: minmax(0, 1.6fr) minmax(300px, .8fr);
-          grid-template-areas:
-            "health food"
-            "workout workout"
-            "daily daily";
-          gap: 18px;
-          align-items: stretch;
-        }
-
-        .main-grid > .main-card {
-          grid-area: workout;
-        }
-
-        .main-grid > .feature-card:not(.span-2):nth-child(2) {
-          grid-area: health;
-        }
-
-        .main-grid > .feature-card:not(.span-2):nth-child(3) {
-          grid-area: food;
-        }
-
-        .main-grid > .feature-card.span-2 {
-          grid-area: daily;
-        }
-
-        /* ---------- UNIVERSAL CARD ---------- */
-
-        .main-card,
-        .feature-card {
-          position: relative;
-          min-width: 0;
-          overflow: hidden;
-          padding: 24px;
-          border: 1px solid #dbe4ed;
-          border-radius: 18px;
-          background: #fff;
-          box-shadow: 0 8px 26px rgba(23,43,77,.065);
-          transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
-        }
-
-        .main-card::before,
-        .feature-card::before {
-          content: "";
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
-          height: 3px;
-          background: #1877f2;
-        }
-
-        .main-card:hover,
-        .feature-card:hover {
-          transform: translateY(-2px);
-          border-color: #cbd9e8;
-          box-shadow: 0 12px 32px rgba(23,43,77,.09);
-        }
-
-        .card-title {
-          display: flex;
-          align-items: center;
-          gap: 9px;
-          margin: 0 0 7px;
-          color: #172b4d;
-          font-family: "Mitr", sans-serif;
-          font-size: 18px;
-          font-weight: 600;
           line-height: 1.5;
         }
 
-        .card-description,
-        .card-desc {
-          margin: 0 0 17px;
-          color: #718096;
-          font-size: 12px;
-          line-height: 1.8;
-        }
-
-        /* ---------- BMI / HEALTH ---------- */
-
-        .main-grid > .feature-card:not(.span-2):nth-child(2) {
-          min-height: 295px;
-        }
-
-        .bmi-form {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr;
-          gap: 11px;
-          align-items: end;
-        }
-
-        .input-group {
+        .header-actions {
+          position: absolute;
+          right: 0;
+          top: 33px;
           display: flex;
-          flex-direction: column;
-          gap: 6px;
+          align-items: center;
+          gap: 12px;
         }
 
-        .input-group label {
-          color: #52667d;
+        .notify-btn {
+          position: relative;
+          width: 43px;
+          height: 43px;
+          border: 0;
+          border-radius: 50%;
+          color: #55749a;
+          background: #fff;
+          box-shadow: 0 8px 20px rgba(28,75,125,.08);
+          cursor: pointer;
+          font-size: 18px;
+        }
+
+        .notify-btn i {
+          position: absolute;
+          top: 8px;
+          right: 9px;
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #ff5b5b;
+        }
+
+        .profile-pill {
+          min-height: 43px;
+          padding: 4px 12px 4px 4px;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          border: 1px solid #dce8f5;
+          border-radius: 24px;
+          color: #315b8f;
+          background: #fff;
+          box-shadow: 0 8px 20px rgba(28,75,125,.07);
+          cursor: pointer;
+          transition: .2s ease;
+        }
+
+        .profile-pill:hover {
+          transform: translateY(-2px);
+          border-color: #a9c9ee;
+          box-shadow: 0 11px 24px rgba(24,119,242,.13);
+        }
+
+        .profile-avatar {
+          width: 35px;
+          height: 35px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          color: #fff;
+          background: linear-gradient(145deg, #4f99f6, #1769dc);
+          font-weight: 700;
+        }
+
+        .profile-name {
           font-size: 11px;
           font-weight: 600;
         }
 
-        .input-group input {
-          width: 100%;
-          min-height: 42px;
-          padding: 9px 12px;
-          outline: none;
-          border: 1px solid #d5e0eb;
-          border-radius: 9px;
-          color: #172b4d;
-          background: #f8fafc;
-          font-size: 12px;
-          transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+        .profile-chevron {
+          color: #6d8aab;
+          font-size: 19px;
         }
 
-        .input-group input::placeholder {
-          color: #9aa9b9;
+        .dashboard-content {
+          max-width: 1230px;
+          margin: 0 auto;
+          padding-top: 20px;
+          display: grid;
+          grid-template-columns: minmax(0, 1.7fr) minmax(330px, .9fr);
+          grid-template-areas:
+            "health food"
+            "workout workout"
+            "meals meals";
+          gap: 18px;
         }
 
-        .input-group input:focus {
-          border-color: #1877f2;
-          background: #fff;
-          box-shadow: 0 0 0 3px rgba(24,119,242,.10);
-        }
+        /* ---------- PANELS ---------- */
 
-        .action-btn {
-          width: 100%;
-          min-height: 42px;
-          padding: 9px 13px;
-          border: 0;
-          border-radius: 9px;
-          cursor: pointer;
-          color: #fff;
-          background: #172b4d;
-          font-size: 12px;
-          font-weight: 600;
-          box-shadow: 0 6px 14px rgba(23,43,77,.15);
-          transition: transform .2s ease, background .2s ease, box-shadow .2s ease;
-        }
-
-        .action-btn:hover {
-          transform: translateY(-2px);
-          background: #0f203a;
-          box-shadow: 0 10px 20px rgba(23,43,77,.20);
-        }
-
-        .action-btn:active {
-          transform: translateY(0);
-        }
-
-        .result-box {
-          margin-top: 13px;
-          padding: 13px 14px;
-          border: 1px solid #dbe6f0;
-          border-radius: 11px;
-          color: #52667d;
-          background: #f7faff;
-          font-size: 11.5px;
-          line-height: 1.75;
-        }
-
-        .result-box p {
-          margin: 0;
-        }
-
-        .result-box p + p {
-          margin-top: 5px;
-        }
-
-        .highlight {
-          color: #1877f2;
-          font-weight: 700;
-        }
-
-        .highlight-warning {
-          color: #d97706;
-          font-weight: 700;
-        }
-
-        /* ---------- FOOD SCAN / REDESIGNED ---------- */
-
-        .main-grid > .feature-card:not(.span-2):nth-child(3) {
-          min-height: 322px;
-          padding: 24px;
-          display: flex;
-          flex-direction: column;
-          background:
-            linear-gradient(145deg, #ffffff 0%, #f8fbff 100%);
-          border: 1px solid #d7e3ef;
-          box-shadow: 0 10px 30px rgba(23,43,77,.07);
-        }
-
-        .main-grid > .feature-card:not(.span-2):nth-child(3)::before {
-          height: 4px;
-          background: linear-gradient(90deg, #1877f2 0%, #64a8f7 100%);
-        }
-
-        .main-grid > .feature-card:not(.span-2):nth-child(3) .card-title {
+        .panel {
           position: relative;
-          display: flex;
-          align-items: center;
-          gap: 11px;
-          margin: 0 0 5px;
-          padding-left: 0;
-          color: #152d4c;
-          font-family: "Mitr", sans-serif;
-          font-size: 18px;
-          font-weight: 600;
-          line-height: 1.45;
-        }
-
-        .main-grid > .feature-card:not(.span-2):nth-child(3) .card-title::before {
-          content: "📷";
-          width: 38px;
-          height: 38px;
-          flex: 0 0 38px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 11px;
-          background: #eaf3ff;
-          border: 1px solid #d5e6fa;
-          font-size: 17px;
-        }
-
-        .main-grid > .feature-card:not(.span-2):nth-child(3) .card-description,
-        .main-grid > .feature-card:not(.span-2):nth-child(3) .card-desc {
-          margin: 0 0 16px 49px;
-          color: #75869a;
-          font-size: 11.5px;
-          line-height: 1.7;
-        }
-
-        .upload-box {
-          position: relative;
-          width: 100%;
-          min-height: 183px;
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+          min-width: 0;
+          padding: 20px;
           overflow: hidden;
-          cursor: pointer;
-          border: 1.5px dashed #9fc6ee;
-          border-radius: 16px;
-          background:
-            radial-gradient(circle at 50% 46%, rgba(24,119,242,.07), transparent 31%),
-            #f7faff;
-          transition:
-            border-color .22s ease,
-            background .22s ease,
-            box-shadow .22s ease,
-            transform .22s ease;
-        }
-
-        .upload-box::before {
-          content: "AI FOOD SCAN";
-          position: absolute;
-          top: 14px;
-          left: 16px;
-          color: #7b91a8;
-          font-size: 8px;
-          font-weight: 700;
-          letter-spacing: 1.7px;
-        }
-
-        .upload-box::after {
-          content: "";
-          position: absolute;
-          width: 92px;
-          height: 92px;
-          right: -45px;
-          bottom: -47px;
-          border-radius: 50%;
-          border: 1px solid rgba(24,119,242,.12);
-          box-shadow: 0 0 0 14px rgba(24,119,242,.025);
-          pointer-events: none;
-        }
-
-        .upload-box:hover {
-          transform: translateY(-2px);
-          border-color: #1877f2;
-          background:
-            radial-gradient(circle at 50% 46%, rgba(24,119,242,.10), transparent 33%),
-            #f3f8ff;
-          box-shadow:
-            0 10px 24px rgba(24,119,242,.09),
-            inset 0 0 24px rgba(24,119,242,.025);
-        }
-
-        .upload-placeholder {
-          position: relative;
-          z-index: 2;
-          width: 100%;
-          padding: 30px 20px 17px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 7px;
-          color: #63768c;
-          text-align: center;
-        }
-
-        .camera-icon {
-          width: 58px;
-          height: 58px;
-          margin-bottom: 3px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: 1px solid #d4e5f8;
-          border-radius: 16px;
-          background: #ffffff;
-          box-shadow:
-            0 8px 18px rgba(24,119,242,.10),
-            0 2px 5px rgba(23,43,77,.05);
-          font-size: 25px;
-          line-height: 1;
+          border: 1px solid #dbe8f5;
+          border-radius: 19px;
+          background: rgba(255,255,255,.94);
+          box-shadow: 0 10px 28px rgba(35,82,137,.065);
           transition: transform .22s ease, box-shadow .22s ease;
         }
 
-        .upload-box:hover .camera-icon {
-          transform: translateY(-3px) scale(1.04);
-          box-shadow:
-            0 11px 23px rgba(24,119,242,.15),
-            0 2px 6px rgba(23,43,77,.06);
+        .panel::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 3px;
+          background: linear-gradient(90deg, #1877f2, #74b3ff, transparent);
         }
 
-        .upload-placeholder strong {
-          color: #172b4d;
-          font-family: "Mitr", sans-serif;
-          font-size: 15px;
-          font-weight: 500;
-          line-height: 1.55;
+        .panel:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 15px 35px rgba(35,82,137,.09);
         }
 
-        .upload-placeholder small {
-          display: inline-flex;
+        .health-panel { grid-area: health; }
+        .food-panel { grid-area: food; }
+        .workout-panel { grid-area: workout; }
+        .meals-panel { grid-area: meals; }
+
+        .panel-heading,
+        .section-heading {
+          display: flex;
           align-items: center;
-          justify-content: center;
-          margin-top: 1px;
-          padding: 5px 10px;
-          border-radius: 999px;
-          color: #71859b;
-          background: #edf4fb;
-          border: 1px solid #dce9f6;
+          gap: 10px;
+          min-width: 0;
+          margin-bottom: 16px;
+        }
+
+        .panel-icon {
+          width: 42px;
+          height: 42px;
+          flex: 0 0 42px;
+          display: grid;
+          place-items: center;
+          border-radius: 13px;
+          color: #fff;
+          font-size: 18px;
+          background: linear-gradient(145deg, #4e98f6, #1769dc);
+          box-shadow: 0 8px 17px rgba(24,119,242,.19);
+        }
+
+        .panel-heading h2,
+        .section-heading h2 {
+          margin: 0;
+          color: #153d78;
+          font-family: "Mitr", sans-serif;
+          font-size: 18px;
+          font-weight: 600;
+          line-height: 1.3;
+          white-space: nowrap;
+        }
+
+        .panel-heading span:not(.heading-badge),
+        .section-heading span:not(.text-btn) {
+          display: block;
+          margin-top: 2px;
+          color: #8095ad;
           font-size: 9.5px;
           line-height: 1.4;
         }
 
-        .food-preview {
+        .heading-badge {
+          margin-left: auto;
+          padding: 6px 10px;
+          border-radius: 999px;
+          color: #3175c5;
+          background: #eaf3ff;
+          border: 1px solid #d8e9fb;
+          font-size: 9px;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+
+        /* ---------- HEALTH ---------- */
+
+        .health-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 11px;
+        }
+
+        .metric-card {
           position: relative;
-          z-index: 2;
+          min-height: 151px;
+          padding: 15px;
+          border: 1px solid #e2ebf5;
+          border-radius: 15px;
+          background: linear-gradient(145deg, #f9fcff, #f3f8fd);
+          overflow: hidden;
+          transition: .2s ease;
+        }
+
+        .metric-card:hover {
+          transform: translateY(-2px);
+          border-color: #c9ddef;
+          box-shadow: 0 8px 20px rgba(24,119,242,.07);
+        }
+
+        .metric-top {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: #315a8f;
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .metric-icon {
+          width: 27px;
+          height: 27px;
+          display: grid;
+          place-items: center;
+          border-radius: 8px;
+          color: #2f7ee8;
+          background: #e6f1ff;
+        }
+
+        .metric-icon.fire {
+          color: #ff9d31;
+          background: #fff0db;
+        }
+
+        .metric-value {
+          display: flex;
+          align-items: baseline;
+          gap: 9px;
+          margin-top: 7px;
+          color: #123c78;
+          font-family: "Mitr", sans-serif;
+          font-size: 34px;
+          font-weight: 600;
+          line-height: 1.1;
+        }
+
+        .metric-value em {
+          padding: 4px 9px;
+          border-radius: 999px;
+          color: #27a36a;
+          background: #dcf7ea;
+          font-family: "Noto Sans Thai", sans-serif;
+          font-size: 9px;
+          font-style: normal;
+          font-weight: 700;
+        }
+
+        .placeholder-value {
+          color: #a8b7c7;
+        }
+
+        .tdee-value small {
+          color: #66809e;
+          font-family: "Noto Sans Thai", sans-serif;
+          font-size: 10px;
+          font-weight: 500;
+        }
+
+        .metric-helper {
+          margin-top: 11px;
+          color: #8295aa;
+          font-size: 9.5px;
+        }
+
+        .bmi-scale {
+          position: relative;
+          height: 10px;
+          margin-top: 12px;
+        }
+
+        .scale-line {
+          position: absolute;
+          inset: 0;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #74b9ff 0 25%, #63d3a1 25% 55%, #ffc45e 55% 78%, #ff6e6e 78%);
+        }
+
+        .scale-dot {
+          position: absolute;
+          left: 47%;
+          top: -3px;
+          width: 16px;
+          height: 16px;
+          border: 3px solid #fff;
+          border-radius: 50%;
+          background: #45bb87;
+          box-shadow: 0 3px 7px rgba(34,100,72,.2);
+        }
+
+        .scale-labels {
+          display: flex;
+          justify-content: space-between;
+          gap: 5px;
+          margin-top: 6px;
+          color: #8799ad;
+          font-size: 7.5px;
+        }
+
+        .energy-pill {
+          width: fit-content;
+          margin-top: 13px;
+          padding: 6px 10px;
+          border-radius: 999px;
+          color: #3174bf;
+          background: #e8f2ff;
+          font-size: 9px;
+        }
+
+        .health-form {
+          margin-top: 12px;
+          padding-top: 12px;
+          display: grid;
+          grid-template-columns: 1fr 1fr .75fr 1.2fr;
+          gap: 8px;
+          border-top: 1px solid #e4ecf5;
+        }
+
+        .compact-field label {
+          display: block;
+          margin-bottom: 4px;
+          color: #6d8199;
+          font-size: 8.5px;
+          font-weight: 600;
+        }
+
+        .compact-field > div {
+          position: relative;
+        }
+
+        .compact-field input {
+          width: 100%;
+          height: 35px;
+          padding: 7px 30px 7px 10px;
+          outline: none;
+          border: 1px solid #d6e2ee;
+          border-radius: 9px;
+          color: #173b73;
+          background: #fff;
+          font-size: 10px;
+        }
+
+        .compact-field input:focus {
+          border-color: #1877f2;
+          box-shadow: 0 0 0 3px rgba(24,119,242,.08);
+        }
+
+        .compact-field small {
+          position: absolute;
+          right: 8px;
+          top: 10px;
+          color: #91a2b5;
+          font-size: 8px;
+        }
+
+        .primary-btn,
+        .start-now-btn {
+          height: 35px;
+          align-self: end;
+          border: 0;
+          border-radius: 9px;
+          color: #fff;
+          background: linear-gradient(135deg, #1877f2, #0d5dcc);
+          box-shadow: 0 7px 15px rgba(24,119,242,.18);
+          cursor: pointer;
+          font-size: 10px;
+          font-weight: 700;
+          transition: .2s ease;
+        }
+
+        .primary-btn:hover,
+        .start-now-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 20px rgba(24,119,242,.25);
+        }
+
+        /* ---------- FOOD ---------- */
+
+        .food-panel {
+          padding-bottom: 18px;
+        }
+
+        .food-scan-box {
+          position: relative;
+          min-height: 222px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+          cursor: pointer;
+          border: 1.5px dashed #a9c8ed;
+          border-radius: 18px;
+          background:
+            radial-gradient(circle at 50% 42%, rgba(24,119,242,.11), transparent 28%),
+            #f7faff;
+          transition: .22s ease;
+        }
+
+        .food-scan-box::before {
+          content: "AI FOOD SCAN";
+          position: absolute;
+          top: 14px;
+          left: 15px;
+          color: #7c91aa;
+          font-size: 7.5px;
+          font-weight: 700;
+          letter-spacing: 1.7px;
+        }
+
+        .food-scan-box:hover {
+          transform: translateY(-2px);
+          border-color: #1877f2;
+          box-shadow: inset 0 0 35px rgba(24,119,242,.05), 0 8px 20px rgba(24,119,242,.07);
+        }
+
+        .food-empty {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          gap: 5px;
+        }
+
+        .camera-orb {
+          width: 58px;
+          height: 58px;
+          display: grid;
+          place-items: center;
+          border: 8px solid #e7f1ff;
+          border-radius: 17px;
+          color: #fff;
+          background: #3d8ef2;
+          box-shadow: 0 9px 20px rgba(24,119,242,.2);
+          font-size: 0;
+          transition: .2s ease;
+        }
+
+        .camera-orb::after {
+          content: "●";
+          width: 22px;
+          height: 15px;
+          display: grid;
+          place-items: center;
+          border: 3px solid #fff;
+          border-radius: 5px;
+          color: transparent;
+          box-shadow: inset 0 0 0 4px #fff;
+        }
+
+        .food-scan-box:hover .camera-orb {
+          transform: translateY(-3px) scale(1.05);
+        }
+
+        .food-empty strong {
+          margin-top: 3px;
+          color: #163e78;
+          font-family: "Mitr", sans-serif;
+          font-size: 15px;
+          font-weight: 600;
+        }
+
+        .food-empty > span {
+          color: #758ba4;
+          font-size: 9.5px;
+        }
+
+        .food-tags {
+          display: flex;
+          gap: 7px;
+          margin-top: 6px;
+        }
+
+        .food-tags i {
+          padding: 5px 10px;
+          border-radius: 999px;
+          color: #3174bf;
+          background: #e6f1ff;
+          border: 1px solid #d5e7fb;
+          font-size: 8px;
+          font-style: normal;
+          font-weight: 600;
+        }
+
+        .food-preview {
           width: 100%;
           height: 100%;
+          min-height: 222px;
           object-fit: cover;
-          border-radius: 14px;
+          border-radius: 16px;
         }
 
-        .scanning-text {
-          margin: 8px 0 0;
-          color: #1877f2;
-          font-size: 11px;
-          line-height: 1.5;
-          text-align: center;
-          animation: scanPulse 1.3s ease-in-out infinite;
-        }
-
+        .scanning-text,
         .error-text {
-          margin: 8px 0 0 !important;
-          color: #c24141 !important;
-          font-size: 11px !important;
-          line-height: 1.5;
+          margin: 8px 0 0;
+          text-align: center;
+          font-size: 10px;
         }
 
-        .main-grid > .feature-card:not(.span-2):nth-child(3) .result-box {
-          margin-top: 12px;
-          border-color: #d7e5f4;
-          background: #f6f9fd;
+        .scanning-text { color: #1877f2; }
+        .error-text { color: #d44747; }
+
+        .food-result {
+          margin-top: 9px;
+          display: grid;
+          grid-template-columns: 1fr auto auto;
+          gap: 8px;
+          align-items: center;
         }
 
-        @media (max-width: 680px) {
-          .main-grid > .feature-card:not(.span-2):nth-child(3) {
-            min-height: 300px;
-          }
+        .food-result span {
+          color: #6e839d;
+          font-size: 9px;
+        }
 
-          .main-grid > .feature-card:not(.span-2):nth-child(3) .card-description,
-          .main-grid > .feature-card:not(.span-2):nth-child(3) .card-desc {
-            margin-left: 0;
-          }
+        .food-result strong {
+          color: #173b73;
+          font-size: 10px;
+        }
 
-          .upload-box {
-            min-height: 175px;
-          }
+        .food-result b {
+          color: #f08b26;
+          font-size: 10px;
         }
 
         /* ---------- WORKOUT ---------- */
 
-        .main-grid > .main-card {
-          padding: 25px;
+        .section-heading .text-btn {
+          margin-left: auto;
         }
 
-        .main-grid > .main-card .card-title {
-          margin-bottom: 3px;
+        .text-btn {
+          padding: 7px 13px;
+          border: 1px solid #d8e7f8;
+          border-radius: 999px;
+          color: #3775ba;
+          background: #f3f8ff;
+          cursor: pointer;
+          font-size: 9px;
+          transition: .2s ease;
         }
 
-        .menu-grid {
+        .text-btn:hover {
+          color: #fff;
+          background: #1877f2;
+          border-color: #1877f2;
+        }
+
+        .workout-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 14px;
+          gap: 12px;
         }
 
-        .menu-card {
+        .workout-card {
           position: relative;
-          min-height: 185px;
-          display: flex;
-          flex-direction: column;
-          justify-content: flex-end;
-          align-items: flex-start;
-          width: 100%;
-          padding: 21px;
+          min-height: 190px;
+          padding: 22px;
           overflow: hidden;
-          border: 1px solid #263c55;
-          border-radius: 15px;
-          cursor: pointer;
-          color: #fff;
-          text-align: left;
-          font-family: inherit;
-          background: #172b4d;
-          box-shadow: 0 10px 24px rgba(23,43,77,.16);
-          transition: transform .22s ease, box-shadow .22s ease, background .22s ease;
-        }
-
-        .menu-card::before {
-          content: "";
-          position: absolute;
-          width: 150px;
-          height: 150px;
-          right: -72px;
-          bottom: -78px;
-          border-radius: 50%;
-          background: rgba(24,119,242,.20);
-          transition: transform .3s ease;
-        }
-
-        .menu-card::after {
-          content: "";
-          position: absolute;
-          top: 18px;
-          right: 20px;
-          width: 9px;
-          height: 9px;
-          border-radius: 50%;
-          background: #4594f5;
-          box-shadow: 0 0 0 6px rgba(69,148,245,.10);
-        }
-
-        .menu-card:hover {
-          transform: translateY(-4px);
-          background: #10223c;
-          box-shadow: 0 16px 30px rgba(23,43,77,.23);
-        }
-
-        .menu-card:hover::before {
-          transform: scale(1.25);
-        }
-
-        .exercise-menu,
-        .history-menu {
-          background: #172b4d;
-          border-color: #263c55;
-        }
-
-        .menu-icon {
-          position: absolute;
-          top: 20px;
-          left: 21px;
-          width: 47px;
-          height: 47px;
           display: flex;
           align-items: center;
-          justify-content: center;
-          border: 1px solid rgba(255,255,255,.12);
-          border-radius: 13px;
-          background: rgba(255,255,255,.08);
-          font-size: 20px;
+          gap: 18px;
+          border: 1px solid #1b4b88;
+          border-radius: 17px;
+          color: #fff;
+          background: linear-gradient(135deg, #245da4, #102f5c);
+          box-shadow: 0 11px 25px rgba(18,61,115,.18);
+          cursor: pointer;
+          text-align: left;
+          transition: .24s ease;
         }
 
-        .menu-content {
+        .workout-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 17px 34px rgba(18,61,115,.25);
+          background: linear-gradient(135deg, #2d6fc1, #0d2b54);
+        }
+
+        .workout-card::before {
+          content: "";
+          position: absolute;
+          width: 180px;
+          height: 180px;
+          right: -75px;
+          bottom: -95px;
+          border-radius: 50%;
+          background: rgba(85,159,250,.22);
+        }
+
+        .workout-card::after {
+          content: "";
+          position: absolute;
+          width: 90px;
+          height: 90px;
+          right: 30px;
+          top: -45px;
+          border-radius: 50%;
+          border: 1px solid rgba(255,255,255,.12);
+        }
+
+        .workout-art {
           position: relative;
           z-index: 2;
-          min-width: 0;
-          padding-top: 52px;
+          width: 74px;
+          height: 74px;
+          flex: 0 0 74px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          color: #fff;
+          background: rgba(116,178,255,.24);
+          border: 1px solid rgba(255,255,255,.15);
+          font-size: 35px;
+          box-shadow: inset 0 0 20px rgba(255,255,255,.05);
         }
 
-        .menu-content h2 {
-          margin: 0;
+        .chart-art {
+          font-size: 42px;
+        }
+
+        .workout-copy {
+          position: relative;
+          z-index: 3;
+          min-width: 0;
+        }
+
+        .mini-label {
+          color: #9bc8ff;
+          font-size: 8px;
+          font-weight: 700;
+          letter-spacing: 1.4px;
+        }
+
+        .workout-copy h3 {
+          margin: 4px 0 4px;
           color: #fff;
           font-family: "Mitr", sans-serif;
-          font-size: 17px;
-          font-weight: 500;
-          line-height: 1.55;
+          font-size: 19px;
+          font-weight: 600;
+          line-height: 1.35;
         }
 
-        .menu-content p {
-          max-width: 300px;
-          margin: 6px 0 0;
-          color: #c9d8ea;
-          font-size: 11.5px;
-          line-height: 1.75;
+        .workout-copy p {
+          margin: 0 0 12px;
+          color: #cbdcf2;
+          font-size: 10px;
         }
 
-        /* ลูกศรถูกตัดออกจากหน้าตา */
-        .arrow {
-          display: none !important;
+        .card-action {
+          display: inline-flex;
+          padding: 7px 20px;
+          border: 1px solid rgba(123,187,255,.75);
+          border-radius: 999px;
+          color: #fff;
+          background: rgba(255,255,255,.08);
+          font-size: 9px;
+          font-weight: 700;
+          transition: .2s ease;
         }
 
-        /* ---------- INFO STRIP ---------- */
+        .workout-card:hover .card-action {
+          background: #1877f2;
+          border-color: #1877f2;
+        }
 
-        .info-section {
+        .info-strip {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 9px;
-          margin-top: 17px;
-          padding-top: 15px;
-          border-top: 1px solid #e0e7ef;
+          margin-top: 12px;
         }
 
-        .info-item {
-          display: flex;
-          align-items: center;
-          gap: 9px;
+        .info-strip > div {
           min-width: 0;
           padding: 10px 11px;
-          border: 1px solid #e0e7ef;
-          border-radius: 10px;
-          background: #f8fafc;
+          display: grid;
+          grid-template-columns: 30px 1fr;
+          grid-template-rows: auto auto;
+          column-gap: 8px;
+          border: 1px solid #dfe9f3;
+          border-radius: 11px;
+          background: #f9fbfd;
+          transition: .2s ease;
         }
 
-        .info-icon {
-          width: 31px;
-          height: 31px;
-          flex: 0 0 auto;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 8px;
-          background: #eaf3ff;
-          font-size: 14px;
+        .info-strip > div:hover {
+          border-color: #bdd7f3;
+          background: #f3f8ff;
+          transform: translateY(-2px);
         }
 
-        .info-item strong {
-          display: block;
-          color: #38516d;
-          font-size: 10px;
-          line-height: 1.45;
-          font-weight: 600;
+        .info-strip span {
+          grid-row: 1 / span 2;
+          width: 30px;
+          height: 30px;
+          display: grid;
+          place-items: center;
+          border-radius: 9px;
+          color: #2877d5;
+          background: #e7f1ff;
+          font-size: 12px;
         }
 
-        .info-item span {
-          display: block;
-          margin-top: 2px;
-          color: #8292a4;
-          font-size: 8.5px;
-          line-height: 1.45;
+        .info-strip b {
+          align-self: end;
+          color: #36597e;
+          font-size: 9px;
         }
 
-        /* ---------- DAILY FOOD ---------- */
-
-        .main-grid > .feature-card.span-2 {
-          padding: 23px 24px;
+        .info-strip small {
+          align-self: start;
+          color: #899bb0;
+          font-size: 7.5px;
         }
+
+        /* ---------- MEALS ---------- */
 
         .meal-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 11px;
-          margin-bottom: 13px;
         }
 
         .meal-item {
           position: relative;
           min-width: 0;
-          padding: 15px 15px 15px 18px;
-          border: 1px solid #dce5ee;
-          border-radius: 12px;
+          min-height: 103px;
+          padding: 13px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          border: 1px solid #dfe8f2;
+          border-radius: 13px;
           background: #fff;
           overflow: hidden;
-          transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+          transition: .2s ease;
+        }
+
+        .meal-item:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 9px 21px rgba(35,82,137,.08);
         }
 
         .meal-item::before {
@@ -1242,204 +1357,248 @@ export default function Dashboard() {
           position: absolute;
           left: 0;
           top: 0;
+          bottom: 0;
           width: 3px;
-          height: 100%;
-          background: #1877f2;
         }
 
-        .meal-item:hover {
-          transform: translateY(-2px);
-          border-color: #c5d5e6;
-          box-shadow: 0 8px 20px rgba(23,43,77,.07);
+        .breakfast::before { background: #ffb83f; }
+        .lunch::before { background: #42c49a; }
+        .dinner::before { background: #367ff1; }
+
+        .meal-emoji {
+          width: 62px;
+          height: 62px;
+          flex: 0 0 62px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          background: #f2f7fc;
+          font-size: 28px;
+        }
+
+        .meal-item > div:nth-child(2) {
+          min-width: 0;
         }
 
         .meal-item strong {
-          display: block;
-          margin-bottom: 6px;
-          color: #245f9f;
+          color: #214c83;
           font-size: 11px;
-          line-height: 1.5;
+          font-weight: 700;
+        }
+
+        .meal-item span {
+          margin-left: 7px;
+          padding: 4px 7px;
+          border-radius: 999px;
+          color: #3977ba;
+          background: #eaf3ff;
+          font-size: 7.5px;
           font-weight: 700;
         }
 
         .meal-item p {
-          margin: 0;
-          color: #708297;
-          font-size: 10.5px;
-          line-height: 1.75;
+          margin: 6px 0 0;
+          color: #778ca3;
+          font-size: 8.5px;
+          white-space: nowrap;
+        }
+
+        .meal-item > b {
+          margin-left: auto;
+          width: 27px;
+          height: 27px;
+          flex: 0 0 27px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          color: #2777d8;
+          background: #eaf3ff;
+          font-size: 17px;
         }
 
         .alert-box {
-          margin-top: 10px;
-          padding: 13px 14px;
+          margin-top: 11px;
+          padding: 11px 13px;
+          display: flex;
+          align-items: center;
+          gap: 9px;
           border-radius: 11px;
-          font-size: 11px;
-          line-height: 1.75;
-        }
-
-        .alert-success {
-          color: #246b3d;
-          border: 1px solid #cde6d4;
-          background: #f1faf3;
+          font-size: 9px;
         }
 
         .alert-danger {
-          color: #a43e3e;
-          border: 1px solid #efd0d0;
+          color: #a84444;
           background: #fff5f5;
+          border: 1px solid #f0d2d2;
         }
 
-        .workout-suggestion {
-          margin-top: 9px;
-          padding-top: 9px;
-          border-top: 1px solid #e5ebf1;
+        .alert-success {
+          color: #26704a;
+          background: #f0faf5;
+          border: 1px solid #cfeadb;
         }
 
-        .workout-suggestion ul {
-          margin: 7px 0 10px 18px;
-          padding: 0;
-        }
-
-        .workout-suggestion li + li {
-          margin-top: 4px;
+        .alert-box > span {
+          color: #71859b;
         }
 
         .start-now-btn {
-          padding: 8px 14px;
-          border: 0;
-          border-radius: 8px;
-          cursor: pointer;
-          color: #fff;
-          background: #1877f2;
-          font-size: 11px;
-          font-weight: 600;
-          box-shadow: 0 6px 15px rgba(24,119,242,.18);
-          transition: transform .2s ease, background .2s ease, box-shadow .2s ease;
-        }
-
-        .start-now-btn:hover {
-          transform: translateY(-2px);
-          background: #166fe5;
-          box-shadow: 0 9px 20px rgba(24,119,242,.24);
+          margin-left: auto;
+          padding: 7px 12px;
         }
 
         .dashboard-footer {
-          margin-top: 20px;
-          padding: 0 4px;
+          padding: 19px 0 0;
+          color: #9aacbf;
           text-align: center;
+          font-size: 8px;
+          letter-spacing: .8px;
         }
 
-        .dashboard-footer p {
-          margin: 0;
-          color: #91a0b0;
-          font-size: 9px;
-          line-height: 1.5;
-          letter-spacing: .7px;
-        }
-
-        @keyframes scanPulse {
-          0%, 100% { opacity: .55; }
-          50% { opacity: 1; }
-        }
-
-        /* ---------- RESPONSIVE ---------- */
-
-        @media (max-width: 900px) {
-          .dashboard-page {
-            padding-left: 18px;
-            padding-right: 18px;
+        @media (max-width: 1050px) {
+          .dashboard-sidebar {
+            width: 200px;
           }
 
-          .main-grid {
+          .dashboard-main {
+            width: calc(100% - 200px);
+            margin-left: 200px;
+            padding: 0 20px 30px;
+          }
+
+          .dashboard-content {
             grid-template-columns: 1fr;
             grid-template-areas:
               "health"
               "food"
               "workout"
-              "daily";
-          }
-
-          .bmi-form {
-            grid-template-columns: 1fr 1fr 1fr;
+              "meals";
           }
         }
 
-        @media (max-width: 680px) {
+        @media (max-width: 760px) {
           .dashboard-page {
-            padding: 18px 12px 28px;
+            display: block;
           }
 
-          .dashboard-header {
-            min-height: 145px;
-            margin-top: 32px;
-            padding: 14px 10px 20px;
+          .dashboard-sidebar {
+            position: static;
+            width: 100%;
+            height: auto;
+            padding: 12px;
+            display: block;
           }
 
-          .welcome-icon {
+          .brand-block {
+            padding: 4px 8px 12px;
+          }
+
+          .sidebar-nav {
+            flex-direction: row;
+          }
+
+          .side-nav {
+            justify-content: center;
+            min-height: 43px;
+            padding: 0 8px;
+          }
+
+          .side-nav span {
             display: none;
           }
 
-          .dashboard-header h1 {
-            max-width: 100%;
-            font-size: 25px;
+          .side-logout {
+            display: none;
           }
 
-          .dashboard-header p {
-            font-size: 11.5px;
+          .dashboard-main {
+            width: 100%;
+            margin-left: 0;
+            padding: 0 12px 25px;
           }
 
-          .bmi-form {
-            grid-template-columns: 1fr 1fr;
+          .dashboard-header {
+            min-height: 125px;
+            padding: 17px 65px 17px 8px;
           }
 
-          .action-btn {
-            grid-column: 1 / -1;
+          .header-actions {
+            right: 0;
+            top: 21px;
           }
 
-          .menu-grid {
-            grid-template-columns: 1fr;
+          .profile-name,
+          .profile-chevron {
+            display: none;
           }
 
+          .profile-pill {
+            padding: 4px;
+          }
+
+          .notify-btn {
+            display: none;
+          }
+
+          .health-grid,
+          .workout-grid,
           .meal-grid {
             grid-template-columns: 1fr;
           }
 
-          .info-section {
+          .health-form {
+            grid-template-columns: 1fr 1fr;
+          }
+
+          .primary-btn {
+            grid-column: 1 / -1;
+          }
+
+          .info-strip {
             grid-template-columns: 1fr;
           }
         }
 
         @media (max-width: 460px) {
-          .top-profile-btn {
-            top: 10px;
-            right: 10px;
-            width: 43px;
-            height: 43px;
+          .dashboard-header h1 {
+            font-size: 24px;
           }
 
-          .main-card,
-          .feature-card {
-            padding: 18px;
+          .dashboard-header p {
+            font-size: 10px;
+          }
+
+          .panel {
+            padding: 16px;
             border-radius: 15px;
           }
 
-          .bmi-form {
-            grid-template-columns: 1fr;
-          }
-
-          .action-btn {
-            grid-column: auto;
-          }
-
-          .card-title {
+          .panel-heading h2,
+          .section-heading h2 {
             font-size: 16px;
           }
 
-          .dashboard-header h1 {
-            font-size: 22px;
+          .heading-badge {
+            display: none;
+          }
+
+          .health-form {
+            grid-template-columns: 1fr;
+          }
+
+          .primary-btn {
+            grid-column: auto;
+          }
+
+          .workout-card {
+            min-height: 165px;
+            padding: 17px;
+          }
+
+          .meal-item p {
+            white-space: normal;
           }
         }
       `}</style>
-    </div>
-  );
+
 }
