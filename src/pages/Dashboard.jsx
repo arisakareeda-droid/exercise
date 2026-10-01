@@ -452,89 +452,85 @@ export default function Dashboard() {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Anuphan:wght@300;400;500;600;700&family=Kanit:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
 
         * { box-sizing: border-box; }
         html { scroll-behavior: smooth; }
 
         body {
           margin: 0;
-          font-family: "Anuphan", "Kanit", sans-serif;
-          background: #f6f8f7;
+          background: #f5f8fc;
+          font-family: "Mitr", "Noto Sans Thai", sans-serif;
         }
 
         button, input { font-family: inherit; }
 
         /* =========================================================
-           FITTRACK — CLEAN PREMIUM / WHITE EDITION
-           ปรับเฉพาะการตกแต่งและการจัดวาง
+           FITTRACK — FACEBOOK BLUE / WHITE REDESIGN
+           เปลี่ยนเฉพาะการจัดวางและการตกแต่ง
+           Logic / Firebase / API / navigate / state เดิมไม่ถูกแตะ
            ========================================================= */
 
         .dashboard-page {
           min-height: 100vh;
-          padding: 30px 34px 42px;
-          color: #17251f;
+          padding: 28px 34px 42px;
+          color: #172b4d;
           position: relative;
           overflow: hidden;
           background:
-            radial-gradient(circle at 8% 0%, rgba(184,232,207,.38), transparent 25%),
-            radial-gradient(circle at 94% 12%, rgba(214,238,226,.55), transparent 27%),
-            linear-gradient(135deg, #ffffff 0%, #fbfcfb 55%, #f3f7f5 100%);
+            radial-gradient(circle at 8% 0%, rgba(24,119,242,.055), transparent 24%),
+            linear-gradient(180deg, #ffffff 0%, #f7f9fc 58%, #f2f6fb 100%);
         }
 
         .dashboard-page::before {
           content: "";
           position: absolute;
-          width: 560px;
-          height: 560px;
-          left: -360px;
-          bottom: -300px;
-          border-radius: 50%;
-          border: 1px solid rgba(48,125,91,.08);
-          box-shadow:
-            0 0 0 35px rgba(48,125,91,.025),
-            0 0 0 70px rgba(48,125,91,.018);
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 4px;
+          background: linear-gradient(90deg, #1877f2 0%, #69aaf8 32%, transparent 62%);
           pointer-events: none;
         }
 
         .dashboard-page::after {
           content: "";
           position: absolute;
-          width: 330px;
-          height: 330px;
-          right: -175px;
-          top: 330px;
+          width: 310px;
+          height: 310px;
+          right: -170px;
+          top: 120px;
           border-radius: 50%;
-          background: rgba(199,231,214,.24);
-          filter: blur(8px);
+          background: rgba(24,119,242,.025);
+          border: 1px solid rgba(24,119,242,.045);
           pointer-events: none;
         }
 
-        /* ---------- PROFILE: คงการกดไป /profile ---------- */
+        /* ---------- PROFILE: คงปุ่มและ navigate /profile ---------- */
 
         .top-profile-btn {
           position: fixed;
           top: 19px;
           right: 24px;
           z-index: 60;
-          width: 50px;
-          height: 50px;
+          width: 48px;
+          height: 48px;
           padding: 3px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 16px;
+          border-radius: 50%;
           cursor: pointer;
-          background: #17231e;
-          border: 1px solid #263a31;
-          box-shadow: 0 12px 28px rgba(20,35,29,.18);
-          transition: transform .25s ease, box-shadow .25s ease, background .25s ease;
+          background: #ffffff;
+          border: 1px solid #d9e3ef;
+          box-shadow: 0 8px 24px rgba(23,55,91,.12);
+          transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
         }
 
         .top-profile-btn:hover {
-          transform: translateY(-3px) rotate(2deg);
-          background: #20332b;
-          box-shadow: 0 16px 35px rgba(20,35,29,.24);
+          transform: translateY(-2px) scale(1.04);
+          border-color: #9fc6f4;
+          box-shadow: 0 12px 30px rgba(24,119,242,.16);
         }
 
         .profile-avatar {
@@ -543,146 +539,119 @@ export default function Dashboard() {
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 13px;
-          color: #17231e;
+          border-radius: 50%;
+          color: #ffffff;
           font-size: 16px;
-          font-weight: 700;
-          background: linear-gradient(145deg, #dff7e9, #8ed4ac);
+          font-weight: 600;
+          background: linear-gradient(145deg, #4b93ed, #1877f2);
         }
 
         .profile-status-dot {
           position: absolute;
+          right: 0;
+          bottom: 1px;
           width: 10px;
           height: 10px;
-          right: -2px;
-          bottom: -2px;
           border-radius: 50%;
-          background: #49d48b;
-          border: 2px solid #17231e;
-          box-shadow: 0 0 0 3px rgba(73,212,139,.13);
+          background: #31a24c;
+          border: 2px solid #ffffff;
         }
 
         .dashboard-container {
           width: 100%;
-          max-width: 1180px;
+          max-width: 1220px;
           margin: 0 auto;
           position: relative;
           z-index: 1;
         }
 
-        /* ---------- HEADER / CENTER ---------- */
+        /* ---------- HEADER ---------- */
 
         .dashboard-header {
-          position: relative;
-          min-height: 180px;
-          margin: 5px 0 24px;
-          padding: 25px 100px 20px;
+          min-height: 150px;
+          margin: 10px 0 22px;
+          padding: 10px 70px;
           display: flex;
           align-items: center;
-          flex-direction: column;
           justify-content: center;
           text-align: center;
         }
 
         .logo {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          margin-bottom: 10px;
-          color: #267b59;
-          font-size: 12px;
-          font-weight: 700;
-          letter-spacing: 3px;
+          width: fit-content;
+          margin: 0 auto 8px;
+          color: #1877f2;
+          font-size: 13px;
+          line-height: 1.4;
+          font-weight: 600;
+          letter-spacing: 1.7px;
         }
 
-        .logo::before {
-          content: "✦";
-          font-size: 15px;
-          letter-spacing: 0;
+        .logo::before,
+        .logo::after {
+          display: none;
         }
-
-        .logo::after { display: none; }
 
         .welcome-icon {
-          position: absolute;
-          right: 8%;
-          top: 36px;
-          width: 66px;
-          height: 66px;
-          margin: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 21px;
-          font-size: 28px;
-          background: #ffffff;
-          border: 1px solid #dfeae4;
-          box-shadow: 0 14px 34px rgba(33,70,56,.10);
-          transform: rotate(5deg);
+          display: none;
         }
 
         .dashboard-header h1 {
           margin: 0;
-          color: #172f27;
+          color: #172b4d;
           font-size: clamp(27px, 4vw, 38px);
-          line-height: 1.25;
-          font-weight: 700;
-          letter-spacing: -.7px;
+          line-height: 1.3;
+          font-weight: 600;
+          letter-spacing: -.35px;
         }
 
         .dashboard-header p {
           max-width: 760px;
           margin: 9px auto 0;
-          color: #71857d;
-          font-size: 12.5px;
-          line-height: 1.8;
+          color: #6b7c93;
+          font-size: 15px;
+          line-height: 1.85;
           font-weight: 400;
-          text-align: center;
+          letter-spacing: .1px;
         }
 
-        /* ---------- LAYOUT ---------- */
+        /* ---------- LAYOUT ----------
+           BMI = top left
+           FOOD = top right
+           WORKOUT = full width below
+           DAILY = full width last
+        */
 
         .main-grid {
           display: grid;
-          grid-template-columns: minmax(0, 1.62fr) minmax(280px, .78fr);
+          grid-template-columns: minmax(0, 1.65fr) minmax(310px, .78fr);
           grid-template-areas:
             "health food"
             "workout workout"
             "daily daily";
-          gap: 18px;
+          gap: 20px;
           align-items: stretch;
         }
 
-        .main-grid > .main-card {
-          grid-area: workout;
-        }
+        .main-grid > .main-card { grid-area: workout; }
+        .main-grid > .feature-card:not(.span-2):nth-child(2) { grid-area: health; }
+        .main-grid > .feature-card:not(.span-2):nth-child(3) { grid-area: food; }
+        .main-grid > .feature-card.span-2 { grid-area: daily; }
 
-        .main-grid > .feature-card:not(.span-2):nth-child(2) {
-          grid-area: health;
-        }
-
-        .main-grid > .feature-card:not(.span-2):nth-child(3) {
-          grid-area: food;
-        }
-
-        .main-grid > .feature-card.span-2 {
-          grid-area: daily;
-        }
-
-        /* ---------- ALL BOXES ---------- */
+        /* ---------- CARD BASE ---------- */
 
         .main-card,
         .feature-card {
           position: relative;
           overflow: hidden;
-          padding: 23px;
-          border-radius: 24px;
-          background: rgba(255,255,255,.96);
-          border: 1px solid #e1ebe6;
+          padding: 25px;
+          border-radius: 18px;
+          background: rgba(255,255,255,.98);
+          border: 1px solid #dfe7f0;
           box-shadow:
-            0 16px 42px rgba(35,70,56,.065),
-            0 2px 8px rgba(35,70,56,.035);
-          transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+            0 9px 28px rgba(23,55,91,.065),
+            0 1px 3px rgba(23,55,91,.035);
+          transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
         }
 
         .main-card::before,
@@ -691,171 +660,156 @@ export default function Dashboard() {
           position: absolute;
           top: 0;
           left: 0;
-          width: 105px;
-          height: 4px;
-          border-radius: 0 0 9px 0;
-          background: linear-gradient(90deg, #245b46, #78c99e, transparent);
+          width: 74px;
+          height: 3px;
+          border-radius: 0 0 8px 0;
+          background: #1877f2;
         }
 
         .main-card::after,
         .feature-card::after {
-          content: "";
-          position: absolute;
-          width: 145px;
-          height: 145px;
-          right: -78px;
-          top: -78px;
-          border-radius: 50%;
-          border: 1px solid rgba(47,124,91,.08);
-          box-shadow: 0 0 0 20px rgba(47,124,91,.022);
-          pointer-events: none;
+          display: none;
         }
 
         .main-card:hover,
         .feature-card:hover {
           transform: translateY(-2px);
-          border-color: #cfe1d8;
+          border-color: #c9d8e8;
           box-shadow:
-            0 20px 46px rgba(35,70,56,.09),
-            0 3px 10px rgba(35,70,56,.04);
+            0 14px 34px rgba(23,55,91,.09),
+            0 2px 5px rgba(23,55,91,.04);
         }
 
         .card-title {
           display: flex;
           align-items: center;
-          gap: 9px;
-          margin: 0 0 7px;
-          color: #183b30;
-          font-size: 16px;
+          gap: 8px;
+          margin: 0 0 8px;
+          color: #172b4d;
+          font-size: 18px;
           line-height: 1.55;
-          font-weight: 700;
+          font-weight: 600;
+          letter-spacing: .05px;
         }
 
         .card-description,
         .card-desc {
-          margin: 0 0 18px;
-          color: #7b9087;
-          font-size: 11.5px;
-          line-height: 1.7;
+          margin: 0 0 19px;
+          color: #6b7c93;
+          font-size: 13px;
+          line-height: 1.8;
+          font-weight: 400;
         }
 
         /* ---------- BMI ---------- */
 
         .main-grid > .feature-card:not(.span-2):nth-child(2) {
-          min-height: 286px;
-          background:
-            linear-gradient(145deg, #ffffff 0%, #f7fbf9 100%);
+          min-height: 300px;
         }
 
         .bmi-form {
           display: grid;
-          grid-template-columns: 1fr 1fr .9fr;
-          gap: 10px;
+          grid-template-columns: 1fr 1fr .95fr;
+          gap: 12px;
           align-items: end;
         }
 
         .input-group {
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap: 7px;
         }
 
         .input-group label {
-          color: #58736a;
-          font-size: 10.5px;
-          font-weight: 600;
+          color: #506784;
+          font-size: 12px;
+          line-height: 1.5;
+          font-weight: 500;
         }
 
         .input-group input {
           width: 100%;
-          padding: 11px 12px;
-          border-radius: 12px;
+          padding: 12px 13px;
+          border-radius: 10px;
           outline: none;
-          color: #233f35;
-          font-size: 12px;
-          background: #ffffff;
-          border: 1px solid #dce9e3;
-          box-shadow: inset 0 1px 2px rgba(30,65,52,.025);
-          transition: .22s ease;
+          color: #172b4d;
+          font-size: 13px;
+          background: #f7f9fc;
+          border: 1px solid #d8e2ed;
+          transition: .2s ease;
         }
 
-        .input-group input::placeholder { color: #a3b3ad; }
+        .input-group input::placeholder {
+          color: #9aa9bb;
+        }
 
         .input-group input:focus {
-          border-color: #5ba77f;
-          box-shadow: 0 0 0 4px rgba(91,167,127,.10);
-        }
-
-        /* dark CTA */
-        .action-btn,
-        .start-now-btn {
-          border: 1px solid #2d4037;
-          cursor: pointer;
-          color: #f7fffb;
-          background: linear-gradient(135deg, #1d2c26, #0d1713);
-          box-shadow:
-            0 9px 20px rgba(18,34,27,.16),
-            inset 0 1px 0 rgba(255,255,255,.08);
-          transition: transform .22s ease, box-shadow .22s ease, background .22s ease;
+          background: #ffffff;
+          border-color: #1877f2;
+          box-shadow: 0 0 0 3px rgba(24,119,242,.10);
         }
 
         .action-btn {
           width: 100%;
-          min-height: 40px;
-          padding: 9px 12px;
-          border-radius: 12px;
-          font-size: 11.5px;
-          font-weight: 600;
+          min-height: 43px;
+          padding: 9px 14px;
+          border: 0;
+          border-radius: 10px;
+          cursor: pointer;
+          color: #ffffff;
+          font-size: 13px;
+          line-height: 1.4;
+          font-weight: 500;
+          background: #1877f2;
+          box-shadow: 0 7px 16px rgba(24,119,242,.18);
+          transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
         }
 
-        .action-btn:hover,
-        .start-now-btn:hover {
-          transform: translateY(-3px);
-          background: linear-gradient(135deg, #263b31, #101c17);
-          box-shadow:
-            0 14px 28px rgba(18,34,27,.23),
-            0 0 0 4px rgba(71,130,101,.08);
+        .action-btn:hover {
+          transform: translateY(-2px);
+          background: #166fe5;
+          box-shadow: 0 11px 23px rgba(24,119,242,.24);
         }
 
-        .action-btn:active,
-        .start-now-btn:active {
-          transform: translateY(-1px) scale(.99);
+        .action-btn:active {
+          transform: translateY(0);
+          box-shadow: 0 5px 12px rgba(24,119,242,.16);
         }
 
         .result-box {
-          margin-top: 12px;
-          padding: 13px 14px;
-          border-radius: 14px;
-          color: #506a60;
-          font-size: 11px;
-          line-height: 1.75;
-          background: linear-gradient(135deg, #f1f8f4, #fbfdfc);
-          border: 1px solid #dcebe4;
+          margin-top: 14px;
+          padding: 13px 15px;
+          border-radius: 11px;
+          color: #4d6480;
+          font-size: 12.5px;
+          line-height: 1.8;
+          background: #f4f8fd;
+          border: 1px solid #dce7f2;
         }
 
         .result-box p { margin: 0; }
         .result-box p + p { margin-top: 5px; }
 
         .highlight {
-          color: #277a57;
-          font-weight: 700;
+          color: #1877f2;
+          font-weight: 600;
         }
 
         .highlight-warning {
-          color: #c77c16;
-          font-weight: 700;
+          color: #c77b00;
+          font-weight: 600;
         }
 
         /* ---------- FOOD AI ---------- */
 
         .main-grid > .feature-card:not(.span-2):nth-child(3) {
-          min-height: 286px;
-          padding: 21px;
-          background: linear-gradient(145deg, #ffffff, #f5faf7);
+          min-height: 300px;
+          padding: 22px;
+          background: linear-gradient(145deg, #ffffff, #f8fbff);
         }
 
         .main-grid > .feature-card:not(.span-2):nth-child(3) .card-title {
-          font-size: 14px;
+          font-size: 16px;
         }
 
         .upload-box {
@@ -865,62 +819,70 @@ export default function Dashboard() {
           align-items: center;
           justify-content: center;
           width: 100%;
-          height: 150px;
+          height: 155px;
           overflow: hidden;
           cursor: pointer;
-          border-radius: 18px;
-          border: 1.5px dashed #a8cdb9;
-          background:
-            radial-gradient(circle at 50% 45%, rgba(173,224,196,.30), transparent 55%),
-            #f8fcfa;
-          transition: transform .24s ease, border-color .24s ease, box-shadow .24s ease;
+          border-radius: 14px;
+          border: 1.5px dashed #a9c6e7;
+          background: #f6f9fd;
+          transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease;
         }
 
         .upload-box::before {
           content: "AI FOOD SCAN";
           position: absolute;
-          left: 13px;
-          top: 10px;
-          color: #82988f;
-          font-size: 7.5px;
-          font-weight: 700;
-          letter-spacing: 1.5px;
+          left: 14px;
+          top: 11px;
+          color: #8a9bb0;
+          font-size: 8px;
+          line-height: 1.3;
+          font-weight: 600;
+          letter-spacing: 1.4px;
         }
 
         .upload-box:hover {
           transform: translateY(-2px);
-          border-color: #4d9a72;
-          box-shadow:
-            inset 0 0 30px rgba(63,143,101,.06),
-            0 10px 22px rgba(38,91,68,.07);
+          border-color: #1877f2;
+          background: #f1f6fd;
+          box-shadow: 0 10px 24px rgba(24,119,242,.08);
         }
 
         .camera-icon {
-          width: 47px;
-          height: 47px;
+          width: 50px;
+          height: 50px;
           margin-bottom: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 15px;
+          border-radius: 13px;
+          color: #ffffff;
           font-size: 23px;
-          background: #ffffff;
-          border: 1px solid #dcebe4;
-          box-shadow: 0 8px 17px rgba(39,92,69,.09);
+          background: #1877f2;
+          box-shadow: 0 8px 18px rgba(24,119,242,.20);
+          transition: transform .2s ease, box-shadow .2s ease;
+        }
+
+        .upload-box:hover .camera-icon {
+          transform: translateY(-2px) scale(1.04);
+          box-shadow: 0 11px 24px rgba(24,119,242,.26);
+        }
+
+        .upload-placeholder {
+          position: relative;
+          z-index: 1;
+          padding: 0 15px;
+          color: #506784;
+          font-size: 12.5px;
+          line-height: 1.7;
+          text-align: center;
         }
 
         .upload-placeholder strong {
           display: block;
-          color: #36594c;
-          font-size: 11.5px;
-          font-weight: 700;
-        }
-
-        .upload-placeholder small {
-          display: block;
-          margin-top: 2px;
-          color: #91a49c;
-          font-size: 9px;
+          margin-bottom: 2px;
+          color: #172b4d;
+          font-size: 14px;
+          font-weight: 600;
         }
 
         .food-preview {
@@ -932,23 +894,34 @@ export default function Dashboard() {
         }
 
         .scanning-text {
-          margin: 7px 0 0;
-          color: #3a88a3;
-          font-size: 10.5px;
+          margin: 8px 0 0;
+          color: #1877f2;
+          font-size: 11px;
+          line-height: 1.5;
           text-align: center;
           animation: pulseText 1.4s ease-in-out infinite;
         }
 
         .error-text {
           margin: 7px 0 0 !important;
-          color: #c95858 !important;
-          font-size: 10.5px !important;
+          color: #d04d4d !important;
+          font-size: 11px !important;
         }
 
         /* ---------- WORKOUT ---------- */
 
         .main-grid > .main-card {
-          padding: 23px;
+          padding: 25px;
+        }
+
+        .main-grid > .main-card .card-title {
+          justify-content: center;
+          font-size: 19px;
+        }
+
+        .main-grid > .main-card .card-description {
+          text-align: center;
+          margin-bottom: 19px;
         }
 
         .menu-grid {
@@ -957,10 +930,9 @@ export default function Dashboard() {
           gap: 14px;
         }
 
-        /* dark interactive cards — ไม่มีลูกศร */
         .menu-card {
           position: relative;
-          min-height: 174px;
+          min-height: 172px;
           display: flex;
           flex-direction: column;
           align-items: flex-start;
@@ -971,122 +943,109 @@ export default function Dashboard() {
           overflow: hidden;
           text-align: left;
           color: #ffffff;
-          border-radius: 19px;
+          border-radius: 15px;
           cursor: pointer;
           font-family: inherit;
-          border: 1px solid #31463c;
-          background: linear-gradient(145deg, #263b32, #111c17);
-          box-shadow:
-            0 14px 28px rgba(22,42,33,.16),
-            inset 0 1px 0 rgba(255,255,255,.08);
-          transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+          background: #173b5e;
+          border: 1px solid #244f77;
+          box-shadow: 0 10px 24px rgba(18,57,91,.15);
+          transition: transform .22s ease, box-shadow .22s ease, background .22s ease, border-color .22s ease;
         }
 
         .menu-card::before {
           content: "";
           position: absolute;
-          width: 175px;
-          height: 175px;
-          right: -85px;
-          bottom: -95px;
-          border-radius: 50%;
-          background: rgba(112,211,157,.10);
-          border: 1px solid rgba(150,232,185,.10);
-          transition: transform .35s ease;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 3px;
+          background: #4597ed;
         }
 
         .menu-card::after {
           position: absolute;
-          right: 19px;
+          right: 18px;
           top: 17px;
-          font-size: 32px;
+          font-size: 28px;
           opacity: .14;
-          transition: transform .3s ease, opacity .3s ease;
+          pointer-events: none;
         }
 
         .exercise-menu::after { content: "✦"; }
         .history-menu::after { content: "◌"; }
 
         .menu-card:hover {
-          transform: translateY(-5px);
-          border-color: #5b8f76;
+          transform: translateY(-4px);
+          background: #1b456c;
+          border-color: #4d96dc;
           box-shadow:
-            0 19px 34px rgba(22,42,33,.22),
-            0 0 0 4px rgba(76,143,107,.07);
+            0 15px 30px rgba(18,57,91,.20),
+            0 0 0 3px rgba(24,119,242,.06);
         }
 
-        .menu-card:hover::before {
-          transform: scale(1.18);
-        }
-
-        .menu-card:hover::after {
-          opacity: .26;
-          transform: rotate(15deg) scale(1.12);
+        .menu-card:active {
+          transform: translateY(-1px);
         }
 
         .menu-icon {
-          position: relative;
-          z-index: 2;
-          width: 48px;
-          height: 48px;
+          width: 46px;
+          height: 46px;
           flex: 0 0 auto;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 15px;
-          font-size: 21px;
-          background: rgba(255,255,255,.09);
-          border: 1px solid rgba(255,255,255,.11);
+          border-radius: 12px;
+          font-size: 20px;
+          background: rgba(255,255,255,.11);
+          border: 1px solid rgba(255,255,255,.15);
           box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
         }
 
         .menu-content {
+          min-width: 0;
           position: relative;
           z-index: 2;
-          min-width: 0;
         }
 
         .menu-content h2 {
           margin: 0;
           color: #ffffff;
-          font-size: 15px;
-          line-height: 1.5;
-          font-weight: 700;
+          font-size: 17px;
+          line-height: 1.55;
+          font-weight: 500;
+          letter-spacing: .05px;
         }
 
         .menu-content p {
-          margin: 4px 0 0;
-          color: #b8c9c1;
-          font-size: 10.5px;
-          line-height: 1.65;
+          margin: 5px 0 0;
+          color: #c5d9ec;
+          font-size: 12px;
+          line-height: 1.75;
+          font-weight: 300;
         }
 
-        /* ---------- INFO ---------- */
+        /* ลูกศรถูกเอาออกจากหน้าตาแล้ว */
+
+        /* ---------- INFO STRIP ---------- */
 
         .info-section {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 9px;
-          margin-top: 16px;
+          margin-top: 18px;
           padding-top: 15px;
-          border-top: 1px solid #e7eee9;
+          border-top: 1px solid #e1e8f0;
         }
 
         .info-item {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 9px;
           min-width: 0;
           padding: 10px;
-          border-radius: 13px;
-          background: #f9fbfa;
-          border: 1px solid #e5eee9;
-          transition: transform .2s ease, border-color .2s ease;
-        }
-
-        .info-item:hover {
-          transform: translateY(-2px);
-          border-color: #cddfd5;
+          border-radius: 11px;
+          background: #f8fafc;
+          border: 1px solid #e2e9f1;
         }
 
         .info-icon {
@@ -1098,46 +1057,48 @@ export default function Dashboard() {
           justify-content: center;
           border-radius: 9px;
           font-size: 14px;
-          background: #edf7f1;
+          background: #eaf3fc;
         }
 
         .info-item strong {
           display: block;
-          color: #4a675d;
-          font-size: 9.5px;
-          line-height: 1.4;
-          font-weight: 700;
+          color: #425b76;
+          font-size: 10.5px;
+          line-height: 1.5;
+          font-weight: 600;
         }
 
         .info-item span {
           display: block;
           margin-top: 2px;
-          color: #91a19a;
-          font-size: 8px;
-          line-height: 1.4;
+          color: #8192a7;
+          font-size: 9px;
+          line-height: 1.5;
+          font-weight: 400;
         }
 
         /* ---------- DAILY FOOD ---------- */
 
         .main-grid > .feature-card.span-2 {
-          background: linear-gradient(145deg, #ffffff, #fbfcfb);
+          background: #ffffff;
         }
 
         .meal-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 10px;
-          margin-bottom: 13px;
+          gap: 11px;
+          margin-bottom: 14px;
         }
 
         .meal-item {
           position: relative;
-          padding: 14px;
-          border-radius: 14px;
-          background: #f8fbf9;
-          border: 1px solid #e3ece7;
+          min-height: 96px;
+          padding: 14px 15px 14px 18px;
+          border-radius: 12px;
+          background: #f8fafc;
+          border: 1px solid #e1e8f0;
           overflow: hidden;
-          transition: .22s ease;
+          transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
         }
 
         .meal-item::before {
@@ -1147,54 +1108,56 @@ export default function Dashboard() {
           top: 0;
           width: 3px;
           height: 100%;
-          background: linear-gradient(#3e8e68, #a8ddbf);
+          background: #1877f2;
         }
 
         .meal-item:hover {
           transform: translateY(-2px);
-          border-color: #cbded5;
-          box-shadow: 0 9px 20px rgba(40,87,67,.06);
+          border-color: #c7d7e8;
+          box-shadow: 0 8px 20px rgba(23,55,91,.07);
         }
 
         .meal-item strong {
           display: block;
-          margin-bottom: 5px;
-          color: #39785b;
-          font-size: 10.5px;
-          font-weight: 700;
+          margin-bottom: 6px;
+          color: #285f91;
+          font-size: 12px;
+          line-height: 1.55;
+          font-weight: 600;
         }
 
         .meal-item p {
           margin: 0;
-          color: #7e9189;
-          font-size: 10px;
-          line-height: 1.7;
+          color: #708299;
+          font-size: 11px;
+          line-height: 1.75;
+          font-weight: 400;
         }
 
         .alert-box {
           margin-top: 10px;
-          padding: 13px;
-          border-radius: 13px;
-          font-size: 11px;
-          line-height: 1.7;
+          padding: 13px 14px;
+          border-radius: 11px;
+          font-size: 12px;
+          line-height: 1.75;
         }
 
         .alert-success {
-          color: #267653;
-          background: #eef9f3;
-          border: 1px solid #cce9d8;
+          color: #2d7b45;
+          background: #f0f9f3;
+          border: 1px solid #d2ebd8;
         }
 
         .alert-danger {
-          color: #ad4c4c;
-          background: #fff3f1;
-          border: 1px solid #f0d1cc;
+          color: #b24d4d;
+          background: #fff5f4;
+          border: 1px solid #f1d4d1;
         }
 
         .workout-suggestion {
           margin-top: 9px;
           padding-top: 9px;
-          border-top: 1px solid rgba(90,120,105,.15);
+          border-top: 1px solid #e3e9f0;
         }
 
         .workout-suggestion ul {
@@ -1202,13 +1165,27 @@ export default function Dashboard() {
           padding: 0;
         }
 
-        .workout-suggestion li + li { margin-top: 4px; }
+        .workout-suggestion li + li {
+          margin-top: 4px;
+        }
 
         .start-now-btn {
-          padding: 8px 14px;
-          border-radius: 10px;
-          font-size: 10.5px;
-          font-weight: 600;
+          padding: 9px 14px;
+          border: 0;
+          border-radius: 9px;
+          cursor: pointer;
+          color: #ffffff;
+          font-size: 11.5px;
+          font-weight: 500;
+          background: #173b5e;
+          box-shadow: 0 7px 16px rgba(23,59,94,.16);
+          transition: transform .2s ease, background .2s ease, box-shadow .2s ease;
+        }
+
+        .start-now-btn:hover {
+          transform: translateY(-2px);
+          background: #1b456c;
+          box-shadow: 0 10px 22px rgba(23,59,94,.21);
         }
 
         .dashboard-footer {
@@ -1219,14 +1196,15 @@ export default function Dashboard() {
 
         .dashboard-footer p {
           margin: 0;
-          color: #9aa9a2;
-          font-size: 8.5px;
-          letter-spacing: 1px;
-          font-weight: 500;
+          color: #93a1b2;
+          font-size: 9px;
+          line-height: 1.5;
+          letter-spacing: .6px;
+          font-weight: 400;
         }
 
         @keyframes pulseText {
-          0%,100% { opacity: .52; }
+          0%, 100% { opacity: .55; }
           50% { opacity: 1; }
         }
 
@@ -1234,8 +1212,8 @@ export default function Dashboard() {
 
         @media (max-width: 900px) {
           .dashboard-page {
-            padding-left: 18px;
-            padding-right: 18px;
+            padding-left: 20px;
+            padding-right: 20px;
           }
 
           .main-grid {
@@ -1246,35 +1224,35 @@ export default function Dashboard() {
               "workout workout"
               "daily daily";
           }
+
+          .bmi-form {
+            grid-template-columns: 1fr 1fr 1fr;
+          }
         }
 
         @media (max-width: 700px) {
           .dashboard-page {
-            padding: 16px 12px 25px;
+            padding: 22px 13px 30px;
           }
 
           .dashboard-header {
-            min-height: 170px;
-            margin-top: 30px;
-            padding: 20px 8px 15px;
-          }
-
-          .welcome-icon {
-            right: 6px;
-            top: 5px;
-            width: 51px;
-            height: 51px;
-            border-radius: 16px;
-            font-size: 22px;
+            min-height: 145px;
+            margin-top: 26px;
+            padding: 10px 8px;
           }
 
           .dashboard-header h1 {
-            max-width: 100%;
-            font-size: 25px;
+            font-size: 26px;
           }
 
           .dashboard-header p {
-            font-size: 11.5px;
+            font-size: 13px;
+          }
+
+          .main-card,
+          .feature-card {
+            padding: 19px;
+            border-radius: 16px;
           }
 
           .bmi-form {
@@ -1285,7 +1263,10 @@ export default function Dashboard() {
             grid-column: 1 / -1;
           }
 
-          .menu-grid,
+          .menu-grid {
+            grid-template-columns: 1fr;
+          }
+
           .meal-grid {
             grid-template-columns: 1fr;
           }
@@ -1301,13 +1282,26 @@ export default function Dashboard() {
             right: 10px;
             width: 44px;
             height: 44px;
-            border-radius: 14px;
+          }
+
+          .dashboard-header {
+            margin-top: 30px;
+            min-height: 130px;
+          }
+
+          .dashboard-header h1 {
+            font-size: 23px;
+            line-height: 1.4;
+          }
+
+          .dashboard-header p {
+            font-size: 12px;
+            line-height: 1.75;
           }
 
           .main-card,
           .feature-card {
-            padding: 17px;
-            border-radius: 19px;
+            padding: 16px;
           }
 
           .bmi-form {
@@ -1318,12 +1312,12 @@ export default function Dashboard() {
             grid-column: auto;
           }
 
-          .dashboard-header h1 {
-            font-size: 23px;
+          .menu-card {
+            min-height: 155px;
           }
 
-          .welcome-icon {
-            display: none;
+          .card-title {
+            font-size: 16px;
           }
         }
       `}</style>
