@@ -426,7 +426,7 @@ export default function Dashboard() {
       </main>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Anuphan:wght@400;500;600;700&display=swap');
 
         * { box-sizing: border-box; }
         html { scroll-behavior: smooth; }
@@ -435,7 +435,7 @@ export default function Dashboard() {
           margin: 0;
           background: #eef4fb;
           color: #173b73;
-          font-family: "Noto Sans Thai", sans-serif;
+          font-family: "Anuphan", sans-serif;
         }
 
         button, input { font-family: inherit; }
@@ -485,7 +485,7 @@ export default function Dashboard() {
 
         .brand-name {
           color: #123c78;
-          font-family: "Mitr", sans-serif;
+          font-family: "Kanit", sans-serif;
           font-size: 21px;
           font-weight: 600;
           line-height: 1.1;
@@ -596,7 +596,7 @@ export default function Dashboard() {
         .dashboard-header h1 {
           margin: 0;
           color: #11396f;
-          font-family: "Mitr", sans-serif;
+          font-family: "Kanit", sans-serif;
           font-size: clamp(27px, 3.2vw, 39px);
           font-weight: 600;
           line-height: 1.25;
@@ -756,7 +756,7 @@ export default function Dashboard() {
         .section-heading h2 {
           margin: 0;
           color: #153d78;
-          font-family: "Mitr", sans-serif;
+          font-family: "Kanit", sans-serif;
           font-size: 18px;
           font-weight: 600;
           line-height: 1.3;
@@ -839,7 +839,7 @@ export default function Dashboard() {
           gap: 9px;
           margin-top: 7px;
           color: #123c78;
-          font-family: "Mitr", sans-serif;
+          font-family: "Kanit", sans-serif;
           font-size: 34px;
           font-weight: 600;
           line-height: 1.1;
@@ -850,7 +850,7 @@ export default function Dashboard() {
           border-radius: 999px;
           color: #27a36a;
           background: #dcf7ea;
-          font-family: "Noto Sans Thai", sans-serif;
+          font-family: "Anuphan", sans-serif;
           font-size: 9px;
           font-style: normal;
           font-weight: 700;
@@ -862,7 +862,7 @@ export default function Dashboard() {
 
         .tdee-value small {
           color: #66809e;
-          font-family: "Noto Sans Thai", sans-serif;
+          font-family: "Anuphan", sans-serif;
           font-size: 10px;
           font-weight: 500;
         }
@@ -1064,7 +1064,7 @@ export default function Dashboard() {
         .food-empty strong {
           margin-top: 3px;
           color: #163e78;
-          font-family: "Mitr", sans-serif;
+          font-family: "Kanit", sans-serif;
           font-size: 15px;
           font-weight: 600;
         }
@@ -1243,7 +1243,7 @@ export default function Dashboard() {
         .workout-copy h3 {
           margin: 4px 0 4px;
           color: #fff;
-          font-family: "Mitr", sans-serif;
+          font-family: "Kanit", sans-serif;
           font-size: 19px;
           font-weight: 600;
           line-height: 1.35;
@@ -1451,6 +1451,188 @@ export default function Dashboard() {
           text-align: center;
           font-size: 8px;
           letter-spacing: .8px;
+        }
+
+
+        /* ---------- TYPOGRAPHY / MICRO EFFECTS ---------- */
+
+        .dashboard-page {
+          font-family: "Anuphan", sans-serif;
+        }
+
+        .dashboard-header h1 {
+          font-size: clamp(31px, 3.5vw, 43px);
+          letter-spacing: -.35px;
+          background: linear-gradient(90deg, #123c78 0%, #1877f2 48%, #2f68bd 100%);
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          text-shadow: 0 8px 24px rgba(24,119,242,.08);
+        }
+
+        .dashboard-header p {
+          font-size: 14px;
+          letter-spacing: .15px;
+        }
+
+        .brand-name {
+          font-size: 22px;
+          letter-spacing: -.15px;
+        }
+
+        .side-nav {
+          font-size: 13.5px;
+          letter-spacing: .05px;
+        }
+
+        .panel-heading h2,
+        .section-heading h2 {
+          font-size: 20px;
+          letter-spacing: -.15px;
+        }
+
+        .panel-heading span:not(.heading-badge),
+        .section-heading span:not(.text-btn) {
+          font-size: 10.5px;
+        }
+
+        .heading-badge {
+          font-size: 9.5px;
+          box-shadow: 0 4px 12px rgba(24,119,242,.06);
+        }
+
+        .metric-top {
+          font-size: 13px;
+        }
+
+        .metric-value {
+          font-size: 38px;
+          letter-spacing: -.5px;
+        }
+
+        .metric-helper {
+          font-size: 10px;
+        }
+
+        .compact-field label {
+          font-size: 9.5px;
+        }
+
+        .compact-field input {
+          font-size: 11px;
+        }
+
+        .primary-btn,
+        .start-now-btn {
+          font-size: 10.5px;
+        }
+
+        .food-empty strong {
+          font-size: 17px;
+          letter-spacing: -.15px;
+        }
+
+        .food-empty > span {
+          font-size: 10px;
+        }
+
+        .food-tags i {
+          font-size: 8.5px;
+        }
+
+        .workout-copy h3 {
+          font-size: 21px;
+          letter-spacing: -.2px;
+        }
+
+        .workout-copy p {
+          font-size: 10.5px;
+        }
+
+        .card-action {
+          font-size: 9.5px;
+        }
+
+        .info-strip b {
+          font-size: 9.5px;
+        }
+
+        .meal-item strong {
+          font-size: 12px;
+        }
+
+        .meal-item p {
+          font-size: 9px;
+        }
+
+        /* Glow / lift ที่นุ่มขึ้น */
+        .panel-icon,
+        .brand-mark {
+          position: relative;
+        }
+
+        .panel-icon::after,
+        .brand-mark::after {
+          content: "";
+          position: absolute;
+          inset: -3px;
+          border-radius: inherit;
+          border: 1px solid rgba(82,159,249,.14);
+          opacity: 0;
+          transform: scale(.82);
+          transition: .28s ease;
+        }
+
+        .panel:hover .panel-icon::after,
+        .brand-block:hover .brand-mark::after {
+          opacity: 1;
+          transform: scale(1.08);
+        }
+
+        .metric-value,
+        .workout-copy h3,
+        .meal-item strong {
+          transition: transform .22s ease, text-shadow .22s ease;
+        }
+
+        .metric-card:hover .metric-value {
+          transform: translateX(2px);
+          text-shadow: 0 5px 16px rgba(24,119,242,.12);
+        }
+
+        .workout-card:hover .workout-copy h3 {
+          transform: translateX(3px);
+          text-shadow: 0 4px 15px rgba(105,184,255,.25);
+        }
+
+        .meal-item:hover strong {
+          text-shadow: 0 3px 10px rgba(24,119,242,.12);
+        }
+
+        .primary-btn,
+        .start-now-btn,
+        .text-btn,
+        .profile-pill,
+        .notify-btn {
+          will-change: transform;
+        }
+
+        .primary-btn:active,
+        .start-now-btn:active,
+        .text-btn:active,
+        .profile-pill:active {
+          transform: translateY(1px) scale(.98);
+        }
+
+        @media (max-width: 760px) {
+          .dashboard-header h1 {
+            font-size: 28px;
+          }
+
+          .panel-heading h2,
+          .section-heading h2 {
+            font-size: 18px;
+          }
         }
 
         @media (max-width: 1050px) {
