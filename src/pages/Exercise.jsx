@@ -13,27 +13,28 @@ const CANVAS_H = 640;
 //              ใช้ได้ทั้งหันหน้าและหันข้างกล้อง
 //  2) มุมเข่า = สำรอง/เสริม (หันข้างแม่น หันหน้าจะคลาดเคลื่อน)
 // ---------------------------------------------------------------
-const SQUAT_DEPTH_DOWN = 0.17;     // ลดลงเกินนี้ = ย่อแล้ว
-const SQUAT_DEPTH_UP = 0.08;       // ต่ำกว่านี้ = ยืนแล้ว
-const SQUAT_ANGLE_DOWN = 110;      // มุมเข่าต่ำกว่านี้ = ย่อแล้ว
-const SQUAT_ANGLE_UP = 155;        // มุมเข่าสูงกว่านี้ = ยืนแล้ว
-const SQUAT_CONFIRM_FRAMES = 2;    // ยืนยันสถานะกี่เฟรมติด (น้อยๆ เพื่อไม่พลาดท่าเร็ว)
-const SQUAT_COOLDOWN_MS = 500;
-const SQUAT_SMOOTH = 3;
+const SQUAT_DEPTH_DOWN = 0.13;     // ลดลงเกินนี้ = ย่อแล้ว
+const SQUAT_DEPTH_UP = 0.06;       // ต่ำกว่านี้ = ยืนแล้ว
+const SQUAT_ANGLE_DOWN = 118;      // ใช้มุมเข่าเป็นสัญญาณสำรองเมื่อวัด depth ไม่ได้
+const SQUAT_ANGLE_UP = 150;
+const SQUAT_CONFIRM_FRAMES = 3;    // กรองการแกว่งของจุดตรวจจับ
+const SQUAT_COOLDOWN_MS = 650;
+const SQUAT_SMOOTH = 5;
 const BASELINE_DECAY = 0.9995;     // ค่าอ้างอิงความสูงตอนยืนค่อยๆ ลดเอง (รองรับขยับเข้า-ออกกล้อง)
 const MIN_VISIBILITY_SQUAT = 0.5;
 
 // ---------------------------------------------------------------
 // JUMPING JACK
 // ---------------------------------------------------------------
-const ARM_SMOOTHING_WINDOW = 2;
+const ARM_SMOOTHING_WINDOW = 5;
+const JJ_CONFIRM_FRAMES = 3;
 // ค่าแขน normalize ด้วยความยาวลำตัว: 0 = ข้อมือระดับไหล่, + = สูงกว่าไหล่, - = ต่ำกว่าไหล่
-const ARM_UP_THRESHOLD = 0.25;
-const ARM_DOWN_THRESHOLD = -0.45;
+const ARM_UP_THRESHOLD = 0.18;
+const ARM_DOWN_THRESHOLD = -0.25;
 const FALLBACK_TORSO = 0.3;
 const REQUIRE_LEGS_SPREAD = false;
 const LEG_SPREAD_RATIO = 1.2;
-const JJ_COOLDOWN_MS = 300;
+const JJ_COOLDOWN_MS = 600;
 const MIN_VISIBILITY_ARM = 0.4;
 
 // ทั่วไป
@@ -218,12 +219,14 @@ export default function Exercise() {
         return;
       }
 
-      const isDown =
-        (depth !== null && depth > SQUAT_DEPTH_DOWN) ||
-        (angle !== null && angle < SQUAT_ANGLE_DOWN);
-      const isUp =
-        (depth === null || depth < SQUAT_DEPTH_UP) &&
-        (angle === null || angle > SQUAT_ANGLE_UP);
+      // ใช้ depth เป็นหลัก เพราะมุมเข่าคลาดเคลื่อนได้เมื่อหันหน้าหากล้อง
+      // ใช้มุมเข่าเฉพาะกรณีที่ประเมิน depth ไม่ได้
+      const isDown = depth !== null
+        ? depth > SQUAT_DEPTH_DOWN
+        : angle !== null && angle < SQUAT_ANGLE_DOWN;
+      const isUp = depth !== null
+        ? depth < SQUAT_DEPTH_UP
+        : angle !== null && angle > SQUAT_ANGLE_UP;
 
       if (!initialized) {
         if (isUp) {
@@ -306,12 +309,16 @@ export default function Exercise() {
       }
 
       if (!initialized) {
-        stage = armRaise > 0 ? 'up' : 'down';
-        skipNextCount = stage === 'up';
-        initialized = true;
-        updateFeedback(
-          stage === 'down' ? 'พร้อมแล้ว กระโดดยกแขนขึ้นได้เลย' : 'ลดแขนลงก่อนเริ่มนับ'
-        );
+        // เริ่มนับเมื่อผู้ใช้อยู่ในท่าแขนลงชัดเจน ป้องกันเริ่มกลางจังหวะ
+        if (armRaise < ARM_DOWN_THRESHOLD) {
+          stage = 'down';
+          initialized = true;
+          candidate = null;
+          candidateFrames = 0;
+          updateFeedback('พร้อมแล้ว กระโดดยกแขนขึ้นได้เลย');
+        } else {
+          updateFeedback('ลดแขนลงก่อนเริ่มนับ');
+        }
         return;
       }
 
@@ -324,26 +331,33 @@ export default function Exercise() {
       }
 
       if (armRaise > ARM_UP_THRESHOLD) {
-        if (stage === 'down') {
+        if (confirm('up', JJ_CONFIRM_FRAMES) && stage !== 'up') {
           stage = 'up';
+          candidate = null;
+          candidateFrames = 0;
           legsSpreadSeen = false;
           legsVisibleInCycle = false;
           updateFeedback('ยอดเยี่ยม! หุบแขนขาลง');
         }
       } else if (armRaise < ARM_DOWN_THRESHOLD) {
-        if (stage === 'up') {
+        if (confirm('down', JJ_CONFIRM_FRAMES) && stage !== 'down') {
           stage = 'down';
+          candidate = null;
+          candidateFrames = 0;
           const legsOk = !REQUIRE_LEGS_SPREAD || !legsVisibleInCycle || legsSpreadSeen;
-          if (skipNextCount) {
-            skipNextCount = false;
-          } else if (legsOk) {
+          if (legsOk) {
             tryCountRep(JJ_COOLDOWN_MS);
+            updateFeedback('นับแล้ว! กระโดดกางแขนขาออกอีกครั้ง');
           } else {
             updateFeedback('กางขาให้กว้างขึ้นด้วย');
-            return;
           }
+        } else if (stage === 'down') {
+          updateFeedback('เตรียมตัว - กระโดดกางแขนขาออก');
         }
-        updateFeedback('เตรียมตัว - กระโดดกางแขนขาออก');
+      } else {
+        // ช่วงแขนกำลังเคลื่อนที่ ไม่เปลี่ยนสถานะและเริ่มนับเฟรมยืนยันใหม่
+        candidate = null;
+        candidateFrames = 0;
       }
     };
 
