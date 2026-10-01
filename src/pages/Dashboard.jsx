@@ -200,7 +200,7 @@ export default function Dashboard() {
         <div className="brand-block">
           <div className="brand-mark" aria-label="FitTrack">
             <svg viewBox="0 0 32 32" width="27" height="30" aria-hidden="true" focusable="false">
-              <path d="M8 3.5h17l-4.5 7H29L13 28v-11H4l4-13.5Z" fill="#a855f7" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
+              <path d="M8 3.5h17l-4.5 7H29L13 28v-11H4l4-13.5Z" fill="#a855f7" />
             </svg>
           </div>
           <div>
