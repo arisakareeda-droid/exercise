@@ -199,7 +199,9 @@ export default function Dashboard() {
       <aside className="dashboard-sidebar">
         <div className="brand-block">
           <div className="brand-mark" aria-label="FitTrack">
-            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABsAAAAeCAYAAADdGWXmAAAESUlEQVR4nN2WW29VRRTHf2v25ZyWYimUqwmoSC/xgYdGH4DEmBA0xuibH8AYv4ffxhsmKgmWRHjyQvDBkBAiMaC1tEBpe9rTc9mXmb8P+5S2cFoNJDy4kp19MnvN/NZ/1sxax6ampnhe5p4b6XnD4n6DkVLtCxPsZRyIwAlzhhlgPSdX/ZarntJE6cBHYs3fpdm+Qekbtnndx2DV7BfLM7xRfsyoGyMk4BKwuPJ2EVgE1EB1KGrQrsNKHRYHYHUQNPcD7Zv3KH1jO2VVECPhFY2FdxhJjlMkBaQOxQZRJdKsestBALqCpsQSgUZirDRusTxzgax7x6o11Q8m6tqjMb3Lsfg0rmZEaYxLqsWDM8QGLABCeIMygqIWkWUNWn9N0128apVH35wZTomOh3OM29vUagmqQZxWHlrPVy9OGZgT9NQVgpBDsfAjnQdXCBQ8rmo9zYA4FE4yrrMMx6MQiagHMG2aY+Bc9WCGAuBF7KF8+CvLc9+Q5XPWC6m/smF/TBPF++znJIULuNIICHl6uRIutkplT6EJXBApENZmWXxwkXbrJmYxQqBNMAsbsJfys7yanyONI6wAAlgB5iqPkEDQRniKqt0wiaSE0H1Ip5jHW7Zx1Lcc+t7Q1NQUk+VHqvmIlEEwPYpeFohdjcPxaxyqT5DUE0ggRBDM8Igc0bKchWyGZn4fH0DBwBuuNEq/yHV9ao+UNdI55sP3fWKp7KjO6BSfcNAmCK4XtoQBTo4adQ4kYwzHY2SCXFB6SAR5dwZam3J2X5f7icYwUoY0yji7dYT1VMhAGFI14AWZiY6DdgRtFwgxqFzmXvbF1gMSlPdFgTjiX2cyOceAewHvwMyQjBCgDJAb5A66kdFKYS0V7QFH6bq07k2z1Lq0FdbvTojAqJ/UZHiPEV7GmzAZEgSExygwOkDLibUUGoOwsgvyQQgL12guXaTQsj0Ge/JODIT9OpF9wBFOUcbgfJV0692iUqIr6MTQjGG5Do3dYm0EwuoN8vmvyLq3dirElTmlOtp+k6Od0ygNFAnEeZVDX0JhRuYcnUisRbBag5VdYmUECj+L//NzyuVfNtWcPjDrFZS92QQn2m+xrziMN4gycAJKIIEsElmiSlUKqwNiZRi6ro374xLM/7T1UveDqVc8m8ksvw2d57a/ipyv+hmAF0M6xoH4FIoO045EK4XmLshr4P6+gp/5Fh+aT1T8bbcxi5ZsdvByv0/UtEcnVHKQD+lG0BkQxZDBws/4O1/is/kntm9HGBgmY71OVzFWk6VAoYLciTwxirpB43e4fZ7QvLktaAeYkIn1nvTEVOeqPhYbUXsZuz9NuXRtPZz+S24P296EkAJmkBQ55fwFWkvf4dXZttw9NQyq9pKEku7yNI3O15Ra7XsgnhkWKHCITuc6D3WBbri7Y56eCeYtszt8JisdXRaqEvofQE8FA9HlgfVrjv9m/9+/3/8AqPseNnih8HQAAAAASUVORK5CYII=" alt="" aria-hidden="true" />
+            <svg viewBox="0 0 32 32" width="27" height="30" aria-hidden="true" focusable="false">
+              <path d="M8 3.5h17l-4.5 7H29L13 28v-11H4l4-13.5Z" fill="#a855f7" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
+            </svg>
           </div>
           <div>
             <div className="brand-name">FitTrack</div>
@@ -501,16 +503,18 @@ export default function Dashboard() {
               ×
             </button>
 
-            <div className="meal-modal-icon">
-              {mealDetails[selectedMeal].emoji}
-            </div>
-
-            <div className="meal-modal-heading">
-              <div>
-                <span className="meal-modal-label">รายละเอียดเมนู</span>
-                <h2 id="meal-modal-title">{mealDetails[selectedMeal].title}</h2>
+            <div className="meal-modal-top">
+              <div className="meal-modal-icon">
+                {mealDetails[selectedMeal].emoji}
               </div>
-              <span className="meal-modal-kcal">{mealDetails[selectedMeal].kcal}</span>
+
+              <div className="meal-modal-heading">
+                <div>
+                  <span className="meal-modal-label">รายละเอียดเมนู</span>
+                  <h2 id="meal-modal-title">{mealDetails[selectedMeal].title}</h2>
+                </div>
+                <span className="meal-modal-kcal">{mealDetails[selectedMeal].kcal}</span>
+              </div>
             </div>
 
             <div className="meal-modal-section">
@@ -1564,29 +1568,39 @@ export default function Dashboard() {
 
         .meal-modal {
           position: relative;
-          width: min(560px, 100%);
-          max-height: min(760px, calc(100vh - 44px));
+          width: min(600px, 100%);
+          max-height: min(780px, calc(100vh - 44px));
           overflow-y: auto;
-          padding: 26px;
-          border: 1px solid rgba(255,255,255,.75);
+          padding: 27px;
+          border: 1px solid rgba(151,196,255,.24);
           border-radius: 24px;
-          background: rgba(255,255,255,.98);
-          box-shadow: 0 24px 70px rgba(18,61,115,.28);
+          color: #e8f2ff;
+          background: linear-gradient(150deg, #102b50 0%, #0b2040 58%, #102b50 100%);
+          box-shadow: 0 26px 80px rgba(3,16,37,.55), inset 0 1px 0 rgba(255,255,255,.06);
           animation: mealModalPop .24s ease;
+        }
+
+        .meal-modal-top {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 3px 42px 19px 0;
+          margin-bottom: 5px;
+          border-bottom: 1px solid rgba(174,207,247,.15);
         }
 
         .meal-modal-close {
           position: absolute;
-          top: 14px;
+          top: 15px;
           right: 15px;
           width: 35px;
           height: 35px;
           display: grid;
           place-items: center;
-          border: 0;
+          border: 1px solid rgba(198,222,255,.16);
           border-radius: 50%;
-          color: #587493;
-          background: #edf4fb;
+          color: #dceaff;
+          background: rgba(220,237,255,.09);
           cursor: pointer;
           font-size: 24px;
           line-height: 1;
@@ -1595,126 +1609,138 @@ export default function Dashboard() {
 
         .meal-modal-close:hover {
           color: #fff;
-          background: #1877f2;
+          background: #287ee8;
           transform: rotate(6deg);
         }
 
         .meal-modal-icon {
-          width: 68px;
-          height: 68px;
+          width: 70px;
+          height: 70px;
+          flex: 0 0 70px;
           display: grid;
           place-items: center;
-          margin-bottom: 14px;
-          border-radius: 19px;
-          background: linear-gradient(145deg, #eaf4ff, #d9eaff);
-          box-shadow: inset 0 0 0 1px #d4e6fa;
-          font-size: 34px;
+          margin: 0;
+          border: 1px solid rgba(148,197,255,.3);
+          border-radius: 20px;
+          background: linear-gradient(145deg, #214e83, #17375f);
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 9px 24px rgba(0,0,0,.18);
+          font-size: 35px;
         }
 
         .meal-modal-heading {
+          min-width: 0;
+          flex: 1;
           display: flex;
-          align-items: flex-end;
+          align-items: center;
           justify-content: space-between;
-          gap: 15px;
-          padding-right: 38px;
-          margin-bottom: 18px;
+          gap: 12px;
+          padding: 0;
+          margin: 0;
         }
 
         .meal-modal-label {
           display: block;
-          margin-bottom: 3px;
-          color: #7d93ac;
+          margin-bottom: 4px;
+          color: #9ebde3;
           font-size: 9px;
           font-weight: 700;
-          letter-spacing: 1px;
+          letter-spacing: 1.2px;
           text-transform: uppercase;
         }
 
         .meal-modal-heading h2 {
           margin: 0;
-          color: #123c78;
+          color: #f4f8ff;
           font-family: "Kanit", sans-serif;
           font-size: 25px;
           font-weight: 600;
+          line-height: 1.3;
         }
 
         .meal-modal-kcal {
           flex: 0 0 auto;
-          padding: 6px 10px;
+          padding: 7px 11px;
+          border: 1px solid rgba(132,190,255,.28);
           border-radius: 999px;
-          color: #3174bf;
-          background: #eaf3ff;
+          color: #d9ebff;
+          background: rgba(49,124,211,.22);
           font-size: 10px;
           font-weight: 700;
+          white-space: nowrap;
         }
 
         .meal-modal-section {
-          margin-top: 14px;
-          padding: 13px 14px;
-          border: 1px solid #e1ebf5;
-          border-radius: 14px;
-          background: #f9fbfd;
+          margin-top: 13px;
+          padding: 14px 16px;
+          border: 1px solid rgba(159,195,239,.16);
+          border-radius: 15px;
+          background: rgba(222,237,255,.055);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
         }
 
         .meal-modal-section > strong {
           display: block;
-          margin-bottom: 7px;
-          color: #315a8f;
+          margin-bottom: 8px;
+          color: #cfe4ff;
           font-size: 11px;
           font-weight: 700;
         }
 
         .meal-modal-section p {
           margin: 0;
-          color: #6f849c;
+          color: #b5c9e2;
           font-size: 10.5px;
-          line-height: 1.6;
+          line-height: 1.7;
         }
 
         .meal-ingredient-list {
           display: flex;
           flex-wrap: wrap;
-          gap: 7px;
+          gap: 8px;
         }
 
         .meal-ingredient-list span {
-          padding: 6px 9px;
-          border-radius: 999px;
-          color: #3174bf;
-          background: #e8f2ff;
-          border: 1px solid #d5e7fb;
+          padding: 7px 11px;
+          border: 1px solid rgba(116,177,246,.25);
+          border-radius: 9px;
+          color: #dcecff;
+          background: rgba(42,112,190,.24);
           font-size: 9.5px;
           font-weight: 600;
         }
 
         .meal-modal-section ul {
           margin: 0;
-          padding-left: 18px;
-          color: #6f849c;
+          padding-left: 19px;
+          color: #b5c9e2;
           font-size: 10.5px;
-          line-height: 1.75;
+          line-height: 1.85;
         }
+
+        .meal-modal-section li { padding-left: 2px; }
+        .meal-modal-section li::marker { color: #75b5ff; }
 
         .meal-modal-tip {
           margin-top: 14px;
-          padding: 13px 14px;
+          padding: 14px 16px;
           display: flex;
           flex-direction: column;
-          gap: 4px;
-          border-left: 3px solid #1877f2;
-          border-radius: 10px;
-          background: #edf6ff;
+          gap: 5px;
+          border: 1px solid rgba(104,184,255,.25);
+          border-left: 3px solid #58a8ff;
+          border-radius: 12px;
+          background: linear-gradient(100deg, rgba(39,112,190,.24), rgba(39,112,190,.1));
         }
 
         .meal-modal-tip b {
-          color: #2869ae;
+          color: #d4e9ff;
           font-size: 10px;
         }
 
         .meal-modal-tip span {
-          color: #66809e;
+          color: #b7cce5;
           font-size: 9.5px;
-          line-height: 1.6;
+          line-height: 1.7;
         }
 
         @keyframes mealModalFade {
@@ -1961,10 +1987,14 @@ export default function Dashboard() {
           }
 
           .meal-modal {
-            padding: 21px;
+            padding: 20px;
             border-radius: 20px;
             max-height: calc(100vh - 24px);
           }
+
+          .meal-modal-top { gap: 11px; padding-right: 35px; }
+          .meal-modal-icon { width: 56px; height: 56px; flex-basis: 56px; font-size: 29px; border-radius: 16px; }
+          .meal-modal-heading { align-items: flex-start; flex-direction: column; gap: 7px; }
 
           .meal-modal-heading h2 {
             font-size: 22px;
