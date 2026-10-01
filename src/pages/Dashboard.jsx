@@ -451,159 +451,156 @@ export default function Dashboard() {
         </footer>
       </div>
 
-      <style>{`\n        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap');
+      <style>{`\n        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=Kanit:wght@400;500;600&display=swap');
 
         * { box-sizing: border-box; }
         html { scroll-behavior: smooth; }
 
         body {
           margin: 0;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          background: #090d0b;
+          font-family: "IBM Plex Sans Thai", "Kanit", sans-serif;
+          background: #f7faf8;
         }
 
         button, input { font-family: inherit; }
 
         /* =========================================================
-           FITTRACK / REDESIGN 02
-           เปลี่ยนเฉพาะการตกแต่ง ไม่แตะ React logic
+           FITTRACK — WHITE / SOFT GREEN DASHBOARD
+           เปลี่ยนเฉพาะหน้าตาและการจัดวาง
+           Logic, state, Firebase, API และปุ่มนำทางเดิมยังคงอยู่
            ========================================================= */
 
         .dashboard-page {
           min-height: 100vh;
-          padding: 42px 28px 38px;
-          color: #f4f8f5;
+          padding: 28px 34px 38px;
+          color: #163b32;
           position: relative;
           overflow: hidden;
           background:
-            radial-gradient(circle at 0% 0%, rgba(34,197,94,.12), transparent 30%),
-            radial-gradient(circle at 100% 8%, rgba(20,184,166,.08), transparent 28%),
-            linear-gradient(135deg, #080c0a 0%, #0d1310 48%, #090d0b 100%);
+            radial-gradient(circle at 8% 8%, rgba(185,235,211,.48), transparent 24%),
+            radial-gradient(circle at 94% 18%, rgba(222,245,236,.75), transparent 28%),
+            linear-gradient(135deg, #ffffff 0%, #f8fcfa 52%, #f2f9f5 100%);
         }
 
-        /* decorative ambient lights */
+        /* soft decorative shapes */
         .dashboard-page::before {
           content: "";
           position: absolute;
-          width: 620px;
-          height: 620px;
-          left: -310px;
-          top: 34%;
+          width: 470px;
+          height: 470px;
+          left: -300px;
+          bottom: -180px;
           border-radius: 50%;
-          border: 1px solid rgba(74,222,128,.055);
+          background: rgba(167,243,208,.18);
           box-shadow:
-            0 0 0 70px rgba(74,222,128,.018),
-            0 0 0 140px rgba(74,222,128,.012);
+            120px -40px 0 rgba(209,250,229,.24),
+            190px 55px 0 rgba(236,253,245,.55);
           pointer-events: none;
         }
 
         .dashboard-page::after {
           content: "";
           position: absolute;
-          width: 430px;
-          height: 430px;
-          right: -220px;
-          bottom: 2%;
+          width: 380px;
+          height: 380px;
+          right: -210px;
+          top: 230px;
           border-radius: 50%;
-          background: rgba(34,197,94,.045);
-          filter: blur(70px);
+          border: 1px solid rgba(52,148,111,.08);
+          box-shadow:
+            0 0 0 38px rgba(52,148,111,.025),
+            0 0 0 76px rgba(52,148,111,.018);
           pointer-events: none;
         }
 
+        /* profile button — คงการกดไป /profile ไว้ */
         .top-profile-btn {
           position: fixed;
-          top: 22px;
-          right: 24px;
-          z-index: 30;
-          width: 50px;
-          height: 50px;
+          top: 20px;
+          right: 25px;
+          z-index: 50;
+          width: 48px;
+          height: 48px;
           padding: 3px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 15px;
+          border-radius: 50%;
           cursor: pointer;
-          background: rgba(16,23,19,.92);
-          border: 1px solid rgba(255,255,255,.12);
-          box-shadow: 0 15px 35px rgba(0,0,0,.30);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
-          transition: .25s ease;
+          background: #ffffff;
+          border: 1px solid #dcebe4;
+          box-shadow: 0 9px 26px rgba(36,85,68,.13);
+          transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
         }
 
         .top-profile-btn:hover {
-          transform: translateY(-3px) rotate(2deg);
-          border-color: rgba(74,222,128,.45);
-          box-shadow: 0 18px 42px rgba(0,0,0,.38), 0 0 22px rgba(34,197,94,.08);
+          transform: translateY(-2px) scale(1.04);
+          border-color: #9bd6bb;
+          box-shadow: 0 13px 30px rgba(36,85,68,.18);
         }
 
         .profile-avatar {
           width: 100%;
           height: 100%;
-          border-radius: 11px;
           display: flex;
           align-items: center;
           justify-content: center;
-          color: #082b18;
-          font-size: 17px;
+          border-radius: 50%;
+          color: #ffffff;
+          font-size: 16px;
           font-weight: 700;
-          background: linear-gradient(145deg, #a7f3b8, #22c55e);
+          background: linear-gradient(145deg, #66b88e, #27845e);
         }
 
         .profile-status-dot {
           position: absolute;
           width: 10px;
           height: 10px;
-          right: -2px;
-          bottom: -2px;
+          right: 0;
+          bottom: 1px;
           border-radius: 50%;
-          background: #4ade80;
-          border: 2px solid #0c120f;
-          box-shadow: 0 0 0 3px rgba(74,222,128,.13);
+          background: #38c985;
+          border: 2px solid #ffffff;
         }
 
         .dashboard-container {
           width: 100%;
-          max-width: 1180px;
+          max-width: 1220px;
+          margin: 0 auto;
           position: relative;
           z-index: 1;
-          margin: 0 auto;
         }
 
-        /* ---------- HEADER: left aligned / editorial style ---------- */
+        /* ---------- HEADER ---------- */
 
         .dashboard-header {
           position: relative;
-          text-align: left;
-          margin: 12px 0 30px;
-          padding: 12px 74px 12px 4px;
-        }
-
-        .dashboard-header::before {
-          content: "SMART HEALTH • 01";
-          display: block;
-          width: fit-content;
-          margin-bottom: 18px;
-          padding: 5px 10px;
-          border: 1px solid rgba(74,222,128,.20);
-          border-radius: 999px;
-          color: #6ee79a;
-          background: rgba(34,197,94,.045);
-          font-size: 9px;
-          font-weight: 600;
-          letter-spacing: 1.8px;
+          min-height: 112px;
+          margin: 7px 0 24px;
+          padding: 13px 90px 10px 4px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
         }
 
         .logo {
-          display: block;
-          margin-bottom: 7px;
-          color: #6ee79a;
-          font-size: 11px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: fit-content;
+          margin-bottom: 8px;
+          color: #25815e;
+          font-size: 13px;
           font-weight: 700;
-          letter-spacing: 4px;
+          letter-spacing: 2.4px;
         }
 
-        .logo::before,
+        .logo::before {
+          content: "🌿";
+          font-size: 20px;
+          letter-spacing: 0;
+        }
+
         .logo::after {
           display: none;
         }
@@ -611,307 +608,163 @@ export default function Dashboard() {
         .welcome-icon {
           position: absolute;
           right: 5%;
-          top: 20px;
-          width: 88px;
-          height: 88px;
+          top: 17px;
+          width: 68px;
+          height: 68px;
           margin: 0;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 28px;
-          font-size: 35px;
-          background:
-            linear-gradient(145deg, rgba(74,222,128,.14), rgba(20,184,166,.045));
-          border: 1px solid rgba(74,222,128,.18);
-          box-shadow:
-            20px 20px 45px rgba(0,0,0,.28),
-            inset 0 1px 0 rgba(255,255,255,.08);
-          transform: rotate(5deg);
+          border-radius: 22px;
+          font-size: 29px;
+          background: linear-gradient(145deg, #e2f6eb, #f7fcf9);
+          border: 1px solid #d4ebe0;
+          box-shadow: 0 13px 32px rgba(44,105,80,.10);
+          transform: rotate(4deg);
         }
 
         .dashboard-header h1 {
-          max-width: 700px;
           margin: 0;
-          font-size: clamp(29px, 4.5vw, 42px);
-          line-height: 1.15;
+          color: #173e34;
+          font-size: clamp(26px, 4vw, 36px);
+          line-height: 1.25;
           font-weight: 700;
-          letter-spacing: -1px;
+          letter-spacing: -.6px;
         }
 
         .dashboard-header p {
           max-width: 650px;
-          margin: 13px 0 0;
-          color: #89978f;
-          font-size: 13px;
-          line-height: 1.8;
+          margin: 7px 0 0;
+          color: #779088;
+          font-size: 12.5px;
+          line-height: 1.75;
           font-weight: 300;
         }
 
-        /* ---------- GRID ---------- */
+        /* ---------- MAIN GRID
+           1) BMI/TDEE top-left
+           2) Food AI small top-right
+           3) Exercise menu large below
+           4) Daily food/compensation below
+        */
 
         .main-grid {
           display: grid;
-          grid-template-columns: 1.05fr .95fr;
-          gap: 20px;
-          align-items: start;
+          grid-template-columns: minmax(0, 1.65fr) minmax(280px, .75fr);
+          grid-template-areas:
+            "health food"
+            "workout workout"
+            "daily daily";
+          gap: 18px;
+          align-items: stretch;
         }
 
-        .span-2 { grid-column: span 2; }
+        /* Existing DOM order:
+           .main-card = workout
+           .feature-card #1 = health
+           .feature-card #2 = food
+           .span-2 = daily
+        */
+        .main-grid > .main-card {
+          grid-area: workout;
+        }
 
-        /* ---------- CARDS: darker, sharper, less generic ---------- */
+        .main-grid > .feature-card:not(.span-2):nth-child(2) {
+          grid-area: health;
+        }
+
+        .main-grid > .feature-card:not(.span-2):nth-child(3) {
+          grid-area: food;
+        }
+
+        .main-grid > .feature-card.span-2 {
+          grid-area: daily;
+        }
+
+        .span-2 { min-width: 0; }
+
+        /* ---------- CARD SYSTEM ---------- */
 
         .main-card,
         .feature-card {
           position: relative;
           overflow: hidden;
-          padding: 25px;
-          border-radius: 18px;
-          background: rgba(14,20,17,.88);
-          border: 1px solid rgba(255,255,255,.075);
+          padding: 22px;
+          border-radius: 22px;
+          background: rgba(255,255,255,.92);
+          border: 1px solid #e2eee8;
           box-shadow:
-            0 20px 55px rgba(0,0,0,.23),
-            inset 0 1px 0 rgba(255,255,255,.035);
-          transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+            0 12px 35px rgba(40,91,72,.075),
+            0 2px 7px rgba(40,91,72,.035);
+          transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease;
         }
 
         .main-card::before,
         .feature-card::before {
           content: "";
           position: absolute;
-          top: 0;
           left: 0;
-          width: 4px;
-          height: 58px;
-          border-radius: 0 0 5px 0;
-          background: linear-gradient(#4ade80, transparent);
-          opacity: .85;
+          top: 0;
+          width: 80px;
+          height: 4px;
+          border-radius: 0 0 8px 0;
+          background: linear-gradient(90deg, #49a978, #b8e8cf);
         }
 
         .main-card::after,
         .feature-card::after {
           content: "";
           position: absolute;
-          width: 160px;
-          height: 160px;
-          right: -95px;
-          top: -95px;
+          width: 125px;
+          height: 125px;
+          right: -65px;
+          top: -65px;
           border-radius: 50%;
-          border: 1px solid rgba(74,222,128,.08);
-          box-shadow: 0 0 0 24px rgba(74,222,128,.018);
+          border: 1px solid rgba(64,155,113,.09);
+          box-shadow: 0 0 0 18px rgba(64,155,113,.025);
           pointer-events: none;
         }
 
         .main-card:hover,
         .feature-card:hover {
-          transform: translateY(-3px);
-          border-color: rgba(74,222,128,.17);
+          transform: translateY(-2px);
+          border-color: #d1e8dc;
           box-shadow:
-            0 25px 65px rgba(0,0,0,.30),
-            0 0 35px rgba(34,197,94,.035);
+            0 17px 40px rgba(40,91,72,.10),
+            0 3px 9px rgba(40,91,72,.04);
         }
 
         .card-title {
           display: flex;
           align-items: center;
           gap: 9px;
-          margin: 0 0 9px;
-          color: #f2f7f3;
-          font-size: 16px;
-          line-height: 1.55;
-          font-weight: 600;
+          margin: 0 0 7px;
+          color: #17443a;
+          font-size: 17px;
+          line-height: 1.5;
+          font-weight: 700;
         }
 
         .card-description,
         .card-desc {
-          margin: 0 0 19px;
-          color: #7f8c84;
-          font-size: 12px;
+          margin: 0 0 17px;
+          color: #7a9289;
+          font-size: 11.5px;
           line-height: 1.75;
           font-weight: 300;
         }
 
-        /* ---------- MENU: large segmented controls ---------- */
+        /* ---------- BMI / TDEE ---------- */
 
-        .menu-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
+        .main-grid > .feature-card:not(.span-2):nth-child(2) {
+          min-height: 295px;
         }
-
-        .menu-card {
-          position: relative;
-          min-height: 145px;
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 12px;
-          width: 100%;
-          padding: 17px;
-          overflow: hidden;
-          text-align: left;
-          color: #fff;
-          border-radius: 16px;
-          cursor: pointer;
-          font-family: inherit;
-          transition: .25s ease;
-        }
-
-        .menu-card::before {
-          content: "";
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
-          height: 2px;
-          opacity: .75;
-        }
-
-        .menu-card::after {
-          content: "";
-          position: absolute;
-          width: 100px;
-          height: 100px;
-          right: -45px;
-          bottom: -48px;
-          border-radius: 50%;
-          background: rgba(255,255,255,.035);
-          transition: .35s ease;
-        }
-
-        .exercise-menu {
-          background: linear-gradient(150deg, rgba(28,86,50,.30), rgba(13,24,18,.96));
-          border: 1px solid rgba(74,222,128,.22);
-        }
-
-        .exercise-menu::before {
-          background: linear-gradient(90deg, #4ade80, transparent);
-        }
-
-        .history-menu {
-          background: linear-gradient(150deg, rgba(26,58,68,.34), rgba(12,22,23,.96));
-          border: 1px solid rgba(56,189,248,.18);
-        }
-
-        .history-menu::before {
-          background: linear-gradient(90deg, #38bdf8, transparent);
-        }
-
-        .menu-card:hover {
-          transform: translateY(-4px);
-          border-color: rgba(255,255,255,.20);
-          box-shadow: 0 17px 35px rgba(0,0,0,.25);
-        }
-
-        .menu-card:hover::after {
-          transform: scale(1.5);
-        }
-
-        .menu-icon {
-          width: 43px;
-          height: 43px;
-          flex: 0 0 auto;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 13px;
-          font-size: 20px;
-          background: rgba(0,0,0,.17);
-          border: 1px solid rgba(255,255,255,.07);
-        }
-
-        .menu-content {
-          min-width: 0;
-        }
-
-        .menu-content h2 {
-          margin: 0;
-          font-size: 14px;
-          line-height: 1.5;
-          font-weight: 600;
-        }
-
-        .menu-content p {
-          margin: 4px 0 0;
-          color: #87958d;
-          font-size: 10.5px;
-          line-height: 1.65;
-          font-weight: 300;
-        }
-
-        .arrow {
-          position: absolute;
-          right: 14px;
-          top: 13px;
-          margin: 0;
-          padding: 0;
-          color: #65736b;
-          font-size: 19px;
-          transition: .25s ease;
-        }
-
-        .menu-card:hover .arrow {
-          color: #72ee9a;
-          transform: translate(3px,-2px);
-        }
-
-        /* ---------- INFO STRIP ---------- */
-
-        .info-section {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 7px;
-          margin-top: 17px;
-          padding-top: 15px;
-          border-top: 1px solid rgba(255,255,255,.065);
-        }
-
-        .info-item {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          min-width: 0;
-          padding: 9px;
-          border-radius: 11px;
-          background: rgba(255,255,255,.018);
-          border: 1px solid rgba(255,255,255,.045);
-        }
-
-        .info-icon {
-          width: 28px;
-          height: 28px;
-          flex: 0 0 auto;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 8px;
-          font-size: 14px;
-          background: rgba(74,222,128,.055);
-        }
-
-        .info-item strong {
-          display: block;
-          color: #d3ddd6;
-          font-size: 9.5px;
-          line-height: 1.45;
-          font-weight: 600;
-        }
-
-        .info-item span {
-          display: block;
-          margin-top: 2px;
-          color: #68756e;
-          font-size: 8.5px;
-          line-height: 1.45;
-          font-weight: 300;
-        }
-
-        /* ---------- FORM ---------- */
 
         .bmi-form {
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
+          grid-template-columns: 1.05fr 1.05fr .9fr;
+          gap: 10px;
+          align-items: end;
         }
 
         .input-group {
@@ -921,75 +774,88 @@ export default function Dashboard() {
         }
 
         .input-group label {
-          color: #a9b4ad;
+          color: #527269;
           font-size: 10.5px;
           font-weight: 500;
         }
 
         .input-group input {
           width: 100%;
-          padding: 12px 13px;
-          border-radius: 10px;
+          padding: 11px 12px;
+          border-radius: 11px;
           outline: none;
-          color: #f5faf6;
+          color: #244b40;
           font-size: 12px;
-          background: #090e0b;
-          border: 1px solid rgba(255,255,255,.09);
+          background: #f7fbf9;
+          border: 1px solid #dcebe4;
           transition: .2s ease;
         }
 
         .input-group input::placeholder {
-          color: #505c55;
+          color: #a2b4ad;
         }
 
         .input-group input:focus {
-          border-color: rgba(74,222,128,.58);
-          box-shadow: 0 0 0 3px rgba(34,197,94,.08);
-          background: #0b120e;
+          background: #ffffff;
+          border-color: #6fc49b;
+          box-shadow: 0 0 0 4px rgba(78,180,128,.10);
         }
 
         .action-btn {
-          grid-column: 1 / -1;
           width: 100%;
-          padding: 11px 14px;
-          border: 1px solid rgba(134,239,172,.25);
-          border-radius: 10px;
+          min-height: 40px;
+          padding: 9px 12px;
+          border: 0;
+          border-radius: 11px;
           cursor: pointer;
-          color: #061d10;
+          color: #ffffff;
           font-size: 11.5px;
-          font-weight: 700;
-          background: linear-gradient(135deg, #86efac, #22c55e);
-          box-shadow: 0 10px 25px rgba(34,197,94,.13);
+          font-weight: 600;
+          background: linear-gradient(135deg, #4cab7b, #27865f);
+          box-shadow: 0 8px 18px rgba(39,134,95,.17);
           transition: .2s ease;
         }
 
         .action-btn:hover {
           transform: translateY(-2px);
-          box-shadow: 0 14px 30px rgba(34,197,94,.20);
-          filter: brightness(1.04);
-        }
-
-        .action-btn:active {
-          transform: translateY(0);
+          box-shadow: 0 11px 23px rgba(39,134,95,.22);
         }
 
         .result-box {
           margin-top: 12px;
-          padding: 13px;
-          border-radius: 11px;
-          color: #d8e2db;
-          font-size: 11.5px;
+          padding: 12px 14px;
+          border-radius: 13px;
+          color: #47645a;
+          font-size: 11px;
           line-height: 1.7;
-          background: #090e0b;
-          border: 1px solid rgba(255,255,255,.065);
+          background: linear-gradient(135deg, #f2faf5, #fbfdfc);
+          border: 1px solid #dceee5;
         }
 
         .result-box p { margin: 0; }
-        .result-box p + p { margin-top: 6px; }
-        .highlight { color: #70eb96; font-weight: 700; }
-        .highlight-warning { color: #facc15; font-weight: 700; }
+        .result-box p + p { margin-top: 5px; }
 
-        /* ---------- FOOD UPLOAD ---------- */
+        .highlight {
+          color: #27865f;
+          font-weight: 700;
+        }
+
+        .highlight-warning {
+          color: #d88b19;
+          font-weight: 700;
+        }
+
+        /* ---------- FOOD AI — เล็กด้านขวาบน ---------- */
+
+        .main-grid > .feature-card:not(.span-2):nth-child(3) {
+          min-height: 295px;
+          padding: 20px;
+          background: linear-gradient(150deg, #ffffff, #f6fcf9);
+        }
+
+        .main-grid > .feature-card:not(.span-2):nth-child(3) .card-title {
+          font-size: 15px;
+        }
 
         .upload-box {
           position: relative;
@@ -997,46 +863,40 @@ export default function Dashboard() {
           align-items: center;
           justify-content: center;
           width: 100%;
-          height: 180px;
+          height: 145px;
           overflow: hidden;
           cursor: pointer;
-          border-radius: 15px;
-          border: 1px dashed rgba(148,163,184,.28);
+          border-radius: 16px;
+          border: 1.5px dashed #acd8c0;
           background:
-            repeating-linear-gradient(
-              -45deg,
-              rgba(255,255,255,.018) 0,
-              rgba(255,255,255,.018) 1px,
-              transparent 1px,
-              transparent 9px
-            ),
-            #090e0b;
-          transition: .25s ease;
+            radial-gradient(circle at center, rgba(180,232,205,.25), transparent 58%),
+            #f7fcf9;
+          transition: .24s ease;
         }
 
         .upload-box::before {
           content: "AI FOOD SCAN";
           position: absolute;
-          top: 13px;
-          left: 15px;
-          color: #526158;
-          font-size: 8px;
+          left: 12px;
+          top: 10px;
+          color: #86a198;
+          font-size: 7.5px;
           font-weight: 600;
-          letter-spacing: 1.5px;
+          letter-spacing: 1.4px;
         }
 
         .upload-box:hover {
-          border-color: rgba(56,189,248,.52);
-          background-color: #0b1110;
-          box-shadow: inset 0 0 30px rgba(56,189,248,.025);
+          border-color: #68b98e;
+          background-color: #f1faf5;
+          box-shadow: inset 0 0 28px rgba(68,170,119,.06);
         }
 
         .upload-placeholder {
           position: relative;
           z-index: 1;
-          padding: 0 18px;
-          color: #89968e;
-          font-size: 11.5px;
+          padding: 0 16px;
+          color: #688279;
+          font-size: 10.5px;
           line-height: 1.7;
           text-align: center;
         }
@@ -1050,35 +910,219 @@ export default function Dashboard() {
         }
 
         .scanning-text {
-          margin: 8px 0 0;
-          color: #38bdf8;
-          font-size: 11px;
+          margin: 7px 0 0;
+          color: #3999bd;
+          font-size: 10.5px;
           text-align: center;
           animation: pulseText 1.4s ease-in-out infinite;
         }
 
         .error-text {
-          margin: 8px 0 0 !important;
-          color: #fca5a5 !important;
-          font-size: 11px !important;
-          line-height: 1.5;
+          margin: 7px 0 0 !important;
+          color: #d85c5c !important;
+          font-size: 10.5px !important;
         }
 
-        /* ---------- MEALS ---------- */
+        /* ---------- WORKOUT MENU ---------- */
+
+        .main-grid > .main-card {
+          padding: 22px;
+        }
+
+        .menu-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 13px;
+        }
+
+        .menu-card {
+          position: relative;
+          min-height: 180px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          justify-content: flex-end;
+          gap: 8px;
+          width: 100%;
+          padding: 20px;
+          overflow: hidden;
+          text-align: left;
+          color: #17443a;
+          border-radius: 18px;
+          cursor: pointer;
+          font-family: inherit;
+          transition: transform .24s ease, box-shadow .24s ease, border-color .24s ease;
+        }
+
+        .menu-card::before {
+          content: "";
+          position: absolute;
+          right: -25px;
+          bottom: -45px;
+          width: 150px;
+          height: 150px;
+          border-radius: 50%;
+          background: rgba(255,255,255,.46);
+          transition: transform .3s ease;
+        }
+
+        .menu-card::after {
+          position: absolute;
+          right: 18px;
+          top: 16px;
+          font-size: 30px;
+          opacity: .18;
+        }
+
+        .exercise-menu {
+          background: linear-gradient(135deg, #e8f8ef, #f7fcf9);
+          border: 1px solid #d1eadc;
+        }
+
+        .exercise-menu::after {
+          content: "🏃";
+        }
+
+        .history-menu {
+          background: linear-gradient(135deg, #eef4ff, #f8fbff);
+          border: 1px solid #dce6f8;
+        }
+
+        .history-menu::after {
+          content: "📈";
+        }
+
+        .menu-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 15px 28px rgba(45,91,74,.10);
+        }
+
+        .menu-card:hover::before {
+          transform: scale(1.22);
+        }
+
+        .menu-icon {
+          width: 47px;
+          height: 47px;
+          flex: 0 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 15px;
+          font-size: 21px;
+          background: rgba(255,255,255,.72);
+          border: 1px solid rgba(60,130,98,.10);
+          box-shadow: 0 6px 15px rgba(43,103,79,.07);
+        }
+
+        .menu-content {
+          min-width: 0;
+          position: relative;
+          z-index: 2;
+        }
+
+        .menu-content h2 {
+          margin: 0;
+          color: #19483d;
+          font-size: 15px;
+          line-height: 1.5;
+          font-weight: 700;
+        }
+
+        .menu-content p {
+          margin: 4px 0 0;
+          color: #779087;
+          font-size: 10.5px;
+          line-height: 1.65;
+          font-weight: 300;
+        }
+
+        .arrow {
+          position: absolute;
+          right: 18px;
+          bottom: 17px;
+          margin: 0;
+          padding: 0;
+          color: #438a6c;
+          font-size: 19px;
+          z-index: 3;
+          transition: .2s ease;
+        }
+
+        .menu-card:hover .arrow {
+          transform: translateX(4px);
+        }
+
+        /* ---------- INFO STRIP ---------- */
+
+        .info-section {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+          margin-top: 15px;
+          padding-top: 14px;
+          border-top: 1px solid #e7f0eb;
+        }
+
+        .info-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          min-width: 0;
+          padding: 9px;
+          border-radius: 12px;
+          background: #fbfdfc;
+          border: 1px solid #e6efeb;
+        }
+
+        .info-icon {
+          width: 29px;
+          height: 29px;
+          flex: 0 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 9px;
+          font-size: 14px;
+          background: #edf8f2;
+        }
+
+        .info-item strong {
+          display: block;
+          color: #46685d;
+          font-size: 9.5px;
+          line-height: 1.4;
+          font-weight: 600;
+        }
+
+        .info-item span {
+          display: block;
+          margin-top: 2px;
+          color: #91a29b;
+          font-size: 8px;
+          line-height: 1.4;
+          font-weight: 300;
+        }
+
+        /* ---------- DAILY FOOD ---------- */
+
+        .main-grid > .feature-card.span-2 {
+          background: linear-gradient(145deg, #ffffff, #fbfdfc);
+        }
 
         .meal-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
-          gap: 9px;
-          margin-bottom: 14px;
+          gap: 10px;
+          margin-bottom: 13px;
         }
 
         .meal-item {
           position: relative;
-          padding: 14px;
+          padding: 13px;
           border-radius: 13px;
-          background: #0b100d;
-          border: 1px solid rgba(255,255,255,.06);
+          background: #f8fbf9;
+          border: 1px solid #e2eee8;
           overflow: hidden;
           transition: .2s ease;
         }
@@ -1088,59 +1132,57 @@ export default function Dashboard() {
           position: absolute;
           left: 0;
           top: 0;
-          width: 2px;
+          width: 3px;
           height: 100%;
-          background: rgba(103,212,248,.42);
+          background: #76c69b;
         }
 
         .meal-item:hover {
           transform: translateY(-2px);
-          border-color: rgba(103,212,248,.20);
-          background: #0c1310;
+          border-color: #cfe6da;
+          box-shadow: 0 8px 18px rgba(42,92,73,.06);
         }
 
         .meal-item strong {
           display: block;
-          margin-bottom: 6px;
-          color: #67d4f8;
+          margin-bottom: 5px;
+          color: #3c8062;
           font-size: 10.5px;
           font-weight: 600;
         }
 
         .meal-item p {
           margin: 0;
-          color: #9ba69f;
-          font-size: 10.5px;
+          color: #7c9189;
+          font-size: 10px;
           line-height: 1.7;
           font-weight: 300;
         }
 
-        /* ---------- ALERT ---------- */
-
         .alert-box {
           margin-top: 10px;
-          padding: 14px;
+          padding: 13px;
           border-radius: 12px;
-          font-size: 11.5px;
+          font-size: 11px;
           line-height: 1.7;
         }
 
         .alert-success {
-          color: #86efac;
-          background: rgba(34,197,94,.055);
-          border: 1px solid rgba(34,197,94,.20);
+          color: #267a56;
+          background: #effaf4;
+          border: 1px solid #ccebd9;
         }
 
         .alert-danger {
-          color: #fca5a5;
-          background: rgba(239,68,68,.055);
-          border: 1px solid rgba(239,68,68,.20);
+          color: #b54e4e;
+          background: #fff4f2;
+          border: 1px solid #f2d3ce;
         }
 
         .workout-suggestion {
           margin-top: 9px;
           padding-top: 9px;
-          border-top: 1px solid rgba(255,255,255,.08);
+          border-top: 1px solid rgba(90,120,105,.15);
         }
 
         .workout-suggestion ul {
@@ -1157,30 +1199,30 @@ export default function Dashboard() {
           border: 0;
           border-radius: 9px;
           cursor: pointer;
-          color: #fff;
-          font-size: 11px;
+          color: #ffffff;
+          font-size: 10.5px;
           font-weight: 600;
-          background: linear-gradient(135deg, #ef4444, #dc2626);
-          box-shadow: 0 8px 20px rgba(239,68,68,.13);
+          background: linear-gradient(135deg, #ef6d61, #d95249);
+          box-shadow: 0 7px 16px rgba(217,82,73,.15);
           transition: .2s ease;
         }
 
         .start-now-btn:hover {
           transform: translateY(-2px);
-          box-shadow: 0 11px 25px rgba(239,68,68,.20);
+          box-shadow: 0 10px 21px rgba(217,82,73,.21);
         }
 
         .dashboard-footer {
-          text-align: left;
-          margin-top: 22px;
+          margin-top: 20px;
           padding: 0 4px;
+          text-align: center;
         }
 
         .dashboard-footer p {
           margin: 0;
-          color: #4f5b54;
-          font-size: 9px;
-          letter-spacing: 1.2px;
+          color: #9badA5;
+          font-size: 8.5px;
+          letter-spacing: 1px;
           font-weight: 500;
         }
 
@@ -1189,75 +1231,95 @@ export default function Dashboard() {
           50% { opacity: 1; }
         }
 
+        /* ---------- RESPONSIVE ---------- */
+
         @media (max-width: 900px) {
           .dashboard-page {
             padding-left: 18px;
             padding-right: 18px;
           }
 
-          .dashboard-header {
-            padding-right: 100px;
+          .main-grid {
+            grid-template-columns: 1fr 1fr;
+            grid-template-areas:
+              "health health"
+              "food food"
+              "workout workout"
+              "daily daily";
           }
 
-          .main-card,
-          .feature-card {
-            padding: 20px;
+          .main-grid > .feature-card:not(.span-2):nth-child(3) {
+            min-height: 0;
+          }
+
+          .bmi-form {
+            grid-template-columns: 1fr 1fr 1fr;
           }
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 700px) {
           .dashboard-page {
-            padding-top: 25px;
-          }
-
-          .top-profile-btn {
-            top: 14px;
-            right: 14px;
+            padding: 18px 12px 25px;
           }
 
           .dashboard-header {
-            margin-top: 26px;
-            margin-bottom: 23px;
-            padding-right: 80px;
-          }
-
-          .dashboard-header h1 {
-            font-size: 27px;
+            min-height: 125px;
+            margin-top: 35px;
+            padding-right: 8px;
           }
 
           .welcome-icon {
-            width: 65px;
-            height: 65px;
-            right: 2%;
-            top: 34px;
-            font-size: 27px;
-            border-radius: 20px;
+            right: 8px;
+            top: 8px;
+            width: 54px;
+            height: 54px;
+            border-radius: 17px;
+            font-size: 23px;
           }
 
-          .main-grid {
-            grid-template-columns: 1fr;
+          .dashboard-header h1 {
+            max-width: calc(100% - 65px);
+            font-size: 25px;
           }
 
-          .span-2 {
-            grid-column: span 1;
+          .dashboard-header p {
+            max-width: 100%;
+            font-size: 11.5px;
           }
 
-          .info-section {
+          .bmi-form {
+            grid-template-columns: 1fr 1fr;
+          }
+
+          .action-btn {
+            grid-column: 1 / -1;
+          }
+
+          .menu-grid {
             grid-template-columns: 1fr;
           }
 
           .meal-grid {
             grid-template-columns: 1fr;
           }
-        }
 
-        @media (max-width: 560px) {
-          .menu-grid {
+          .info-section {
             grid-template-columns: 1fr;
           }
+        }
 
-          .menu-card {
-            min-height: 125px;
+        @media (max-width: 460px) {
+          .top-profile-btn {
+            top: 10px;
+            right: 10px;
+            width: 44px;
+            height: 44px;
+          }
+
+          .main-card,
+          .feature-card {
+            padding: 17px;
+            border-radius: 18px;
           }
 
           .bmi-form {
@@ -1267,55 +1329,14 @@ export default function Dashboard() {
           .action-btn {
             grid-column: auto;
           }
-        }
-
-        @media (max-width: 480px) {
-          .dashboard-page {
-            padding: 18px 11px 22px;
-          }
-
-          .top-profile-btn {
-            top: 10px;
-            right: 10px;
-            width: 45px;
-            height: 45px;
-          }
-
-          .dashboard-header {
-            margin-top: 35px;
-            padding-right: 5px;
-          }
-
-          .dashboard-header::before {
-            margin-bottom: 14px;
-          }
 
           .dashboard-header h1 {
-            font-size: 25px;
-            padding-right: 65px;
-          }
-
-          .dashboard-header p {
-            font-size: 11.5px;
+            max-width: 100%;
+            font-size: 23px;
           }
 
           .welcome-icon {
-            width: 52px;
-            height: 52px;
-            right: 3px;
-            top: 47px;
-            font-size: 23px;
-            border-radius: 16px;
-          }
-
-          .main-card,
-          .feature-card {
-            padding: 17px;
-            border-radius: 16px;
-          }
-
-          .card-title {
-            font-size: 15px;
+            display: none;
           }
         }
       `}</style>
