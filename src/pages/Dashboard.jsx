@@ -155,7 +155,7 @@ export default function Dashboard() {
     <div className="dashboard-page">
       <aside className="dashboard-sidebar">
         <div className="brand-block">
-          <div className="brand-mark">✦</div>
+          <div className="brand-mark">⚡</div>
           <div>
             <div className="brand-name">FitTrack</div>
             <div className="brand-tagline">Healthy Today</div>
@@ -216,7 +216,6 @@ export default function Dashboard() {
                 <h2>สุขภาพของคุณ</h2>
                 <span>ข้อมูลล่าสุด</span>
               </div>
-              <span className="heading-badge">เช็กได้ทุกวัน ↗</span>
             </div>
 
             <div className="health-grid">
@@ -298,7 +297,6 @@ export default function Dashboard() {
                 <h2>AI วิเคราะห์อาหาร</h2>
                 <span>สแกนเมนูได้ทันที</span>
               </div>
-              <span className="heading-badge">แนะนำ ✓</span>
             </div>
 
             <label className="food-scan-box">
@@ -359,7 +357,7 @@ export default function Dashboard() {
               </button>
 
               <button className="workout-card history-card" onClick={() => navigate("/history")}>
-                <div className="workout-art chart-art">▥</div>
+                <div className="workout-art chart-art">◴</div>
                 <div className="workout-copy">
                   <span className="mini-label">TRACKER</span>
                   <h3>ประวัติการใช้งาน</h3>
@@ -1464,10 +1462,22 @@ export default function Dashboard() {
           font-size: clamp(31px, 3.5vw, 43px);
           letter-spacing: -.35px;
           background: linear-gradient(90deg, #123c78 0%, #1877f2 48%, #2f68bd 100%);
+          background-size: 200% 100%;
+          background-position: 0% 50%;
           -webkit-background-clip: text;
           background-clip: text;
           -webkit-text-fill-color: transparent;
           text-shadow: 0 8px 24px rgba(24,119,242,.08);
+          animation: titleWink 3.6s ease-in-out infinite;
+        }
+
+        @keyframes titleWink {
+          0%, 65%, 100% {
+            background-position: 0% 50%;
+          }
+          78% {
+            background-position: 100% 50%;
+          }
         }
 
         .dashboard-header p {
