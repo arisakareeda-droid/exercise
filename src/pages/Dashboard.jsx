@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [itemNote, setItemNote] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
+  const [selectedMeal, setSelectedMeal] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -151,11 +152,55 @@ export default function Dashboard() {
   const requiredJumpingJackReps =
     calorieSurplus > 0 ? Math.ceil(calorieSurplus / 0.2) : 0;
 
+  const mealDetails = {
+    breakfast: {
+      title: "มื้อเช้า",
+      kcal: "~400 kcal",
+      emoji: "🍓",
+      time: "06:30–09:00 น.",
+      ingredients: ["ข้าวโอ๊ต", "ไข่ต้ม", "ผลไม้สด"],
+      benefits: [
+        "ให้พลังงานสำหรับเริ่มต้นวัน",
+        "โปรตีนจากไข่ช่วยเสริมสร้างและซ่อมแซมกล้ามเนื้อ",
+        "ใยอาหารจากข้าวโอ๊ตและผลไม้ช่วยให้อิ่มนานและช่วยการขับถ่าย"
+      ],
+      recommendation: "เหมาะสำหรับรับประทานก่อนเริ่มเรียนหรือทำกิจกรรมในช่วงเช้า"
+    },
+    lunch: {
+      title: "มื้อกลางวัน",
+      kcal: "~550 kcal",
+      emoji: "🥗",
+      time: "11:30–13:30 น.",
+      ingredients: ["อกไก่", "ข้าวกล้อง", "ผักหลากสี"],
+      benefits: [
+        "โปรตีนจากอกไก่ช่วยเสริมสร้างกล้ามเนื้อ",
+        "คาร์โบไฮเดรตเชิงซ้อนจากข้าวกล้องช่วยให้พลังงานต่อเนื่อง",
+        "วิตามิน แร่ธาตุ และใยอาหารจากผักช่วยสนับสนุนสุขภาพโดยรวม"
+      ],
+      recommendation: "เหมาะสำหรับเติมพลังงานระหว่างวัน โดยควรรับประทานให้ครบทั้งโปรตีน คาร์โบไฮเดรต และผัก"
+    },
+    dinner: {
+      title: "มื้อเย็น",
+      kcal: "~350 kcal",
+      emoji: "🐟",
+      time: "17:30–19:30 น.",
+      ingredients: ["ปลาแซลมอน", "ผักต้ม", "คีนัว"],
+      benefits: [
+        "โปรตีนและไขมันดีจากปลาแซลมอนช่วยสนับสนุนการทำงานของร่างกาย",
+        "ผักต้มให้วิตามิน แร่ธาตุ และใยอาหาร",
+        "คีนัวช่วยเติมพลังงานและมีโปรตีนจากพืช"
+      ],
+      recommendation: "เหมาะสำหรับมื้อเย็นที่ต้องการสารอาหารครบถ้วนและไม่หนักเกินไป"
+    }
+  };
+
   return (
     <div className="dashboard-page">
       <aside className="dashboard-sidebar">
         <div className="brand-block">
-          <div className="brand-mark">⚡</div>
+          <div className="brand-mark" aria-label="FitTrack">
+            <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABsAAAAeCAYAAADdGWXmAAAESUlEQVR4nN2WW29VRRTHf2v25ZyWYimUqwmoSC/xgYdGH4DEmBA0xuibH8AYv4ffxhsmKgmWRHjyQvDBkBAiMaC1tEBpe9rTc9mXmb8P+5S2cFoNJDy4kp19MnvN/NZ/1sxax6ampnhe5p4b6XnD4n6DkVLtCxPsZRyIwAlzhhlgPSdX/ZarntJE6cBHYs3fpdm+Qekbtnndx2DV7BfLM7xRfsyoGyMk4BKwuPJ2EVgE1EB1KGrQrsNKHRYHYHUQNPcD7Zv3KH1jO2VVECPhFY2FdxhJjlMkBaQOxQZRJdKsestBALqCpsQSgUZirDRusTxzgax7x6o11Q8m6tqjMb3Lsfg0rmZEaYxLqsWDM8QGLABCeIMygqIWkWUNWn9N0128apVH35wZTomOh3OM29vUagmqQZxWHlrPVy9OGZgT9NQVgpBDsfAjnQdXCBQ8rmo9zYA4FE4yrrMMx6MQiagHMG2aY+Bc9WCGAuBF7KF8+CvLc9+Q5XPWC6m/smF/TBPF++znJIULuNIICHl6uRIutkplT6EJXBApENZmWXxwkXbrJmYxQqBNMAsbsJfys7yanyONI6wAAlgB5iqPkEDQRniKqt0wiaSE0H1Ip5jHW7Zx1Lcc+t7Q1NQUk+VHqvmIlEEwPYpeFohdjcPxaxyqT5DUE0ggRBDM8Igc0bKchWyGZn4fH0DBwBuuNEq/yHV9ao+UNdI55sP3fWKp7KjO6BSfcNAmCK4XtoQBTo4adQ4kYwzHY2SCXFB6SAR5dwZam3J2X5f7icYwUoY0yji7dYT1VMhAGFI14AWZiY6DdgRtFwgxqFzmXvbF1gMSlPdFgTjiX2cyOceAewHvwMyQjBCgDJAb5A66kdFKYS0V7QFH6bq07k2z1Lq0FdbvTojAqJ/UZHiPEV7GmzAZEgSExygwOkDLibUUGoOwsgvyQQgL12guXaTQsj0Ge/JODIT9OpF9wBFOUcbgfJV0692iUqIr6MTQjGG5Do3dYm0EwuoN8vmvyLq3dirElTmlOtp+k6Od0ygNFAnEeZVDX0JhRuYcnUisRbBag5VdYmUECj+L//NzyuVfNtWcPjDrFZS92QQn2m+xrziMN4gycAJKIIEsElmiSlUKqwNiZRi6ro374xLM/7T1UveDqVc8m8ksvw2d57a/ipyv+hmAF0M6xoH4FIoO045EK4XmLshr4P6+gp/5Fh+aT1T8bbcxi5ZsdvByv0/UtEcnVHKQD+lG0BkQxZDBws/4O1/is/kntm9HGBgmY71OVzFWk6VAoYLciTwxirpB43e4fZ7QvLktaAeYkIn1nvTEVOeqPhYbUXsZuz9NuXRtPZz+S24P296EkAJmkBQ55fwFWkvf4dXZttw9NQyq9pKEku7yNI3O15Ra7XsgnhkWKHCITuc6D3WBbri7Y56eCeYtszt8JisdXRaqEvofQE8FA9HlgfVrjv9m/9+/3/8AqPseNnih8HQAAAAASUVORK5CYII=" alt="" aria-hidden="true" />
+          </div>
           <div>
             <div className="brand-name">FitTrack</div>
             <div className="brand-tagline">Healthy Today</div>
@@ -188,11 +233,6 @@ export default function Dashboard() {
           </div>
 
           <div className="header-actions">
-            <button className="notify-btn" type="button" aria-label="การแจ้งเตือน">
-              ♟
-              <i></i>
-            </button>
-
             <button
               className="profile-pill"
               onClick={() => navigate("/profile")}
@@ -383,25 +423,41 @@ export default function Dashboard() {
                 <h2>เมนูอาหารแนะนำ</h2>
                 <span>อร่อย · มีประโยชน์</span>
               </div>
-              <button className="text-btn" type="button">ดูทั้งหมด</button>
             </div>
 
             <div className="meal-grid">
-              <div className="meal-item breakfast">
+              <button
+                type="button"
+                className="meal-item breakfast"
+                onClick={() => setSelectedMeal("breakfast")}
+                aria-label="ดูรายละเอียดมื้อเช้า"
+              >
                 <div className="meal-emoji">🍓</div>
                 <div><strong>มื้อเช้า</strong><span>~400 kcal</span><p>ข้าวโอ๊ต · ไข่ต้ม · ผลไม้</p></div>
                 <b>›</b>
-              </div>
-              <div className="meal-item lunch">
+              </button>
+
+              <button
+                type="button"
+                className="meal-item lunch"
+                onClick={() => setSelectedMeal("lunch")}
+                aria-label="ดูรายละเอียดมื้อกลางวัน"
+              >
                 <div className="meal-emoji">🥗</div>
                 <div><strong>มื้อกลางวัน</strong><span>~550 kcal</span><p>อกไก่ · ข้าวกล้อง · ผัก</p></div>
                 <b>›</b>
-              </div>
-              <div className="meal-item dinner">
+              </button>
+
+              <button
+                type="button"
+                className="meal-item dinner"
+                onClick={() => setSelectedMeal("dinner")}
+                aria-label="ดูรายละเอียดมื้อเย็น"
+              >
                 <div className="meal-emoji">🐟</div>
                 <div><strong>มื้อเย็น</strong><span>~350 kcal</span><p>ปลาแซลมอน · ผักต้ม · คีนัว</p></div>
                 <b>›</b>
-              </div>
+              </button>
             </div>
 
             {itemCalories > 0 && tdeeResult && (
@@ -422,6 +478,71 @@ export default function Dashboard() {
 
         <footer className="dashboard-footer">Small Steps · Big Changes · FITTRACK</footer>
       </main>
+
+      {selectedMeal && (
+        <div
+          className="meal-modal-backdrop"
+          onClick={() => setSelectedMeal(null)}
+          role="presentation"
+        >
+          <div
+            className="meal-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="meal-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="meal-modal-close"
+              onClick={() => setSelectedMeal(null)}
+              aria-label="ปิดรายละเอียดเมนู"
+            >
+              ×
+            </button>
+
+            <div className="meal-modal-icon">
+              {mealDetails[selectedMeal].emoji}
+            </div>
+
+            <div className="meal-modal-heading">
+              <div>
+                <span className="meal-modal-label">รายละเอียดเมนู</span>
+                <h2 id="meal-modal-title">{mealDetails[selectedMeal].title}</h2>
+              </div>
+              <span className="meal-modal-kcal">{mealDetails[selectedMeal].kcal}</span>
+            </div>
+
+            <div className="meal-modal-section">
+              <strong>🕐 ช่วงเวลาที่แนะนำ</strong>
+              <p>{mealDetails[selectedMeal].time}</p>
+            </div>
+
+            <div className="meal-modal-section">
+              <strong>🥗 ส่วนประกอบ</strong>
+              <div className="meal-ingredient-list">
+                {mealDetails[selectedMeal].ingredients.map((ingredient) => (
+                  <span key={ingredient}>{ingredient}</span>
+                ))}
+              </div>
+            </div>
+
+            <div className="meal-modal-section">
+              <strong>💪 ประโยชน์ที่ได้รับ</strong>
+              <ul>
+                {mealDetails[selectedMeal].benefits.map((benefit) => (
+                  <li key={benefit}>{benefit}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="meal-modal-tip">
+              <b>💡 แนะนำ</b>
+              <span>{mealDetails[selectedMeal].recommendation}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Anuphan:wght@400;500;600;700&display=swap');
@@ -476,9 +597,15 @@ export default function Dashboard() {
           place-items: center;
           border-radius: 13px;
           color: #fff;
-          font-size: 21px;
           background: linear-gradient(145deg, #5b9cf6, #1769dc);
           box-shadow: 0 9px 20px rgba(24,119,242,.22);
+        }
+
+        .brand-mark img {
+          width: 27px;
+          height: 30px;
+          display: block;
+          object-fit: contain;
         }
 
         .brand-name {
@@ -1332,6 +1459,7 @@ export default function Dashboard() {
           position: relative;
           min-width: 0;
           min-height: 103px;
+          width: 100%;
           padding: 13px;
           display: flex;
           align-items: center;
@@ -1340,7 +1468,16 @@ export default function Dashboard() {
           border-radius: 13px;
           background: #fff;
           overflow: hidden;
+          cursor: pointer;
+          text-align: left;
+          font: inherit;
+          color: inherit;
           transition: .2s ease;
+        }
+
+        .meal-item:focus-visible {
+          outline: 3px solid rgba(24,119,242,.18);
+          outline-offset: 2px;
         }
 
         .meal-item:hover {
@@ -1410,6 +1547,190 @@ export default function Dashboard() {
           color: #2777d8;
           background: #eaf3ff;
           font-size: 17px;
+        }
+
+        .meal-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 100;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 22px;
+          background: rgba(13,42,78,.48);
+          backdrop-filter: blur(7px);
+          animation: mealModalFade .2s ease;
+        }
+
+        .meal-modal {
+          position: relative;
+          width: min(560px, 100%);
+          max-height: min(760px, calc(100vh - 44px));
+          overflow-y: auto;
+          padding: 26px;
+          border: 1px solid rgba(255,255,255,.75);
+          border-radius: 24px;
+          background: rgba(255,255,255,.98);
+          box-shadow: 0 24px 70px rgba(18,61,115,.28);
+          animation: mealModalPop .24s ease;
+        }
+
+        .meal-modal-close {
+          position: absolute;
+          top: 14px;
+          right: 15px;
+          width: 35px;
+          height: 35px;
+          display: grid;
+          place-items: center;
+          border: 0;
+          border-radius: 50%;
+          color: #587493;
+          background: #edf4fb;
+          cursor: pointer;
+          font-size: 24px;
+          line-height: 1;
+          transition: .2s ease;
+        }
+
+        .meal-modal-close:hover {
+          color: #fff;
+          background: #1877f2;
+          transform: rotate(6deg);
+        }
+
+        .meal-modal-icon {
+          width: 68px;
+          height: 68px;
+          display: grid;
+          place-items: center;
+          margin-bottom: 14px;
+          border-radius: 19px;
+          background: linear-gradient(145deg, #eaf4ff, #d9eaff);
+          box-shadow: inset 0 0 0 1px #d4e6fa;
+          font-size: 34px;
+        }
+
+        .meal-modal-heading {
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          gap: 15px;
+          padding-right: 38px;
+          margin-bottom: 18px;
+        }
+
+        .meal-modal-label {
+          display: block;
+          margin-bottom: 3px;
+          color: #7d93ac;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 1px;
+          text-transform: uppercase;
+        }
+
+        .meal-modal-heading h2 {
+          margin: 0;
+          color: #123c78;
+          font-family: "Kanit", sans-serif;
+          font-size: 25px;
+          font-weight: 600;
+        }
+
+        .meal-modal-kcal {
+          flex: 0 0 auto;
+          padding: 6px 10px;
+          border-radius: 999px;
+          color: #3174bf;
+          background: #eaf3ff;
+          font-size: 10px;
+          font-weight: 700;
+        }
+
+        .meal-modal-section {
+          margin-top: 14px;
+          padding: 13px 14px;
+          border: 1px solid #e1ebf5;
+          border-radius: 14px;
+          background: #f9fbfd;
+        }
+
+        .meal-modal-section > strong {
+          display: block;
+          margin-bottom: 7px;
+          color: #315a8f;
+          font-size: 11px;
+          font-weight: 700;
+        }
+
+        .meal-modal-section p {
+          margin: 0;
+          color: #6f849c;
+          font-size: 10.5px;
+          line-height: 1.6;
+        }
+
+        .meal-ingredient-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+        }
+
+        .meal-ingredient-list span {
+          padding: 6px 9px;
+          border-radius: 999px;
+          color: #3174bf;
+          background: #e8f2ff;
+          border: 1px solid #d5e7fb;
+          font-size: 9.5px;
+          font-weight: 600;
+        }
+
+        .meal-modal-section ul {
+          margin: 0;
+          padding-left: 18px;
+          color: #6f849c;
+          font-size: 10.5px;
+          line-height: 1.75;
+        }
+
+        .meal-modal-tip {
+          margin-top: 14px;
+          padding: 13px 14px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          border-left: 3px solid #1877f2;
+          border-radius: 10px;
+          background: #edf6ff;
+        }
+
+        .meal-modal-tip b {
+          color: #2869ae;
+          font-size: 10px;
+        }
+
+        .meal-modal-tip span {
+          color: #66809e;
+          font-size: 9.5px;
+          line-height: 1.6;
+        }
+
+        @keyframes mealModalFade {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes mealModalPop {
+          from {
+            opacity: 0;
+            transform: translateY(12px) scale(.97);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
         }
 
         .alert-box {
@@ -1635,6 +1956,20 @@ export default function Dashboard() {
         }
 
         @media (max-width: 760px) {
+          .meal-modal-backdrop {
+            padding: 12px;
+          }
+
+          .meal-modal {
+            padding: 21px;
+            border-radius: 20px;
+            max-height: calc(100vh - 24px);
+          }
+
+          .meal-modal-heading h2 {
+            font-size: 22px;
+          }
+
           .dashboard-header h1 {
             font-size: 28px;
           }
