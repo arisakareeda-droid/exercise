@@ -451,86 +451,98 @@ export default function Dashboard() {
         </footer>
       </div>
 
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
+      <style>{`\n        @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
 
         * { box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
+
+        html {
+          scroll-behavior: smooth;
+        }
 
         body {
           margin: 0;
-          background: #f5f8fc;
-          font-family: "Mitr", "Noto Sans Thai", sans-serif;
+          background: #f0f4f8;
+          color: #172b4d;
+          font-family: "Noto Sans Thai", sans-serif;
         }
 
-        button, input { font-family: inherit; }
+        button,
+        input {
+          font-family: inherit;
+        }
 
         /* =========================================================
-           FITTRACK — FACEBOOK BLUE / WHITE REDESIGN
-           เปลี่ยนเฉพาะการจัดวางและการตกแต่ง
-           Logic / Firebase / API / navigate / state เดิมไม่ถูกแตะ
+           FITTRACK V5 — CLEAN BLUE SYSTEM
+           โครงสร้างใหม่: Header → Health row → Workout → Daily plan
+           เปลี่ยนเฉพาะ CSS / layout / visual design
            ========================================================= */
 
         .dashboard-page {
           min-height: 100vh;
-          padding: 28px 34px 42px;
-          color: #172b4d;
+          padding: 32px 30px 44px;
           position: relative;
           overflow: hidden;
           background:
-            radial-gradient(circle at 8% 0%, rgba(24,119,242,.055), transparent 24%),
-            linear-gradient(180deg, #ffffff 0%, #f7f9fc 58%, #f2f6fb 100%);
+            linear-gradient(180deg, #f8fbff 0%, #f2f6fa 48%, #eef3f8 100%);
         }
 
         .dashboard-page::before {
           content: "";
           position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 4px;
-          background: linear-gradient(90deg, #1877f2 0%, #69aaf8 32%, transparent 62%);
+          width: 520px;
+          height: 520px;
+          left: -300px;
+          top: 120px;
+          border-radius: 50%;
+          background: rgba(24,119,242,.035);
           pointer-events: none;
         }
 
         .dashboard-page::after {
           content: "";
           position: absolute;
-          width: 310px;
-          height: 310px;
-          right: -170px;
-          top: 120px;
+          width: 420px;
+          height: 420px;
+          right: -250px;
+          bottom: 70px;
           border-radius: 50%;
           background: rgba(24,119,242,.025);
-          border: 1px solid rgba(24,119,242,.045);
           pointer-events: none;
         }
 
-        /* ---------- PROFILE: คงปุ่มและ navigate /profile ---------- */
+        .dashboard-container {
+          width: 100%;
+          max-width: 1180px;
+          margin: 0 auto;
+          position: relative;
+          z-index: 1;
+        }
+
+        /* ---------- PROFILE ---------- */
 
         .top-profile-btn {
           position: fixed;
           top: 19px;
           right: 24px;
-          z-index: 60;
-          width: 48px;
-          height: 48px;
+          z-index: 50;
+          width: 46px;
+          height: 46px;
           padding: 3px;
           display: flex;
           align-items: center;
           justify-content: center;
+          border: 1px solid #d5e0eb;
           border-radius: 50%;
           cursor: pointer;
-          background: #ffffff;
-          border: 1px solid #d9e3ef;
-          box-shadow: 0 8px 24px rgba(23,55,91,.12);
-          transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+          background: #fff;
+          box-shadow: 0 7px 22px rgba(23,43,77,.12);
+          transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
         }
 
         .top-profile-btn:hover {
-          transform: translateY(-2px) scale(1.04);
-          border-color: #9fc6f4;
-          box-shadow: 0 12px 30px rgba(24,119,242,.16);
+          transform: translateY(-2px);
+          border-color: #1877f2;
+          box-shadow: 0 11px 28px rgba(24,119,242,.16);
         }
 
         .profile-avatar {
@@ -540,10 +552,10 @@ export default function Dashboard() {
           align-items: center;
           justify-content: center;
           border-radius: 50%;
-          color: #ffffff;
-          font-size: 16px;
-          font-weight: 600;
-          background: linear-gradient(145deg, #4b93ed, #1877f2);
+          color: #fff;
+          font-size: 15px;
+          font-weight: 700;
+          background: #1877f2;
         }
 
         .profile-status-dot {
@@ -552,337 +564,313 @@ export default function Dashboard() {
           bottom: 1px;
           width: 10px;
           height: 10px;
+          border: 2px solid #fff;
           border-radius: 50%;
           background: #31a24c;
-          border: 2px solid #ffffff;
-        }
-
-        .dashboard-container {
-          width: 100%;
-          max-width: 1220px;
-          margin: 0 auto;
-          position: relative;
-          z-index: 1;
         }
 
         /* ---------- HEADER ---------- */
 
         .dashboard-header {
-          min-height: 150px;
-          margin: 10px 0 22px;
-          padding: 10px 70px;
+          position: relative;
+          min-height: 158px;
+          margin: 0 0 22px;
+          padding: 20px 90px 22px;
           display: flex;
+          flex-direction: column;
           align-items: center;
           justify-content: center;
           text-align: center;
+          border-bottom: 1px solid #dfe7ef;
         }
 
         .logo {
-          width: fit-content;
-          margin: 0 auto 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          margin: 0 0 8px;
           color: #1877f2;
           font-size: 13px;
-          line-height: 1.4;
-          font-weight: 600;
+          font-weight: 700;
           letter-spacing: 1.7px;
         }
 
-        .logo::before,
+        .logo::before {
+          content: "FITTRACK";
+        }
+
         .logo::after {
           display: none;
         }
 
-        .welcome-icon {
-          display: none;
-        }
-
         .dashboard-header h1 {
+          max-width: 850px;
           margin: 0;
-          color: #172b4d;
-          font-size: clamp(27px, 4vw, 38px);
-          line-height: 1.3;
+          color: #162b49;
+          font-family: "Mitr", sans-serif;
+          font-size: clamp(27px, 4vw, 37px);
           font-weight: 600;
-          letter-spacing: -.35px;
+          line-height: 1.35;
+          letter-spacing: -.2px;
         }
 
         .dashboard-header p {
-          max-width: 760px;
-          margin: 9px auto 0;
-          color: #6b7c93;
-          font-size: 15px;
-          line-height: 1.85;
-          font-weight: 400;
-          letter-spacing: .1px;
+          max-width: 720px;
+          margin: 8px auto 0;
+          color: #6d7f93;
+          font-size: 13px;
+          line-height: 1.75;
         }
 
-        /* ---------- LAYOUT ----------
-           BMI = top left
-           FOOD = top right
-           WORKOUT = full width below
-           DAILY = full width last
-        */
+        .welcome-icon {
+          position: absolute;
+          right: 3px;
+          top: 17px;
+          width: 58px;
+          height: 58px;
+          margin: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #d5e3f0;
+          border-radius: 16px;
+          background: #fff;
+          box-shadow: 0 8px 22px rgba(23,43,77,.08);
+          font-size: 25px;
+        }
+
+        /* ---------- MAIN LAYOUT ---------- */
 
         .main-grid {
           display: grid;
-          grid-template-columns: minmax(0, 1.65fr) minmax(310px, .78fr);
+          grid-template-columns: minmax(0, 1.6fr) minmax(300px, .8fr);
           grid-template-areas:
             "health food"
             "workout workout"
             "daily daily";
-          gap: 20px;
+          gap: 18px;
           align-items: stretch;
         }
 
-        .main-grid > .main-card { grid-area: workout; }
-        .main-grid > .feature-card:not(.span-2):nth-child(2) { grid-area: health; }
-        .main-grid > .feature-card:not(.span-2):nth-child(3) { grid-area: food; }
-        .main-grid > .feature-card.span-2 { grid-area: daily; }
+        .main-grid > .main-card {
+          grid-area: workout;
+        }
 
-        /* ---------- CARD BASE ---------- */
+        .main-grid > .feature-card:not(.span-2):nth-child(2) {
+          grid-area: health;
+        }
+
+        .main-grid > .feature-card:not(.span-2):nth-child(3) {
+          grid-area: food;
+        }
+
+        .main-grid > .feature-card.span-2 {
+          grid-area: daily;
+        }
+
+        /* ---------- UNIVERSAL CARD ---------- */
 
         .main-card,
         .feature-card {
           position: relative;
+          min-width: 0;
           overflow: hidden;
-          padding: 25px;
+          padding: 24px;
+          border: 1px solid #dbe4ed;
           border-radius: 18px;
-          background: rgba(255,255,255,.98);
-          border: 1px solid #dfe7f0;
-          box-shadow:
-            0 9px 28px rgba(23,55,91,.065),
-            0 1px 3px rgba(23,55,91,.035);
-          transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease;
+          background: #fff;
+          box-shadow: 0 8px 26px rgba(23,43,77,.065);
+          transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
         }
 
         .main-card::before,
         .feature-card::before {
           content: "";
           position: absolute;
-          top: 0;
           left: 0;
-          width: 74px;
+          top: 0;
+          width: 100%;
           height: 3px;
-          border-radius: 0 0 8px 0;
           background: #1877f2;
-        }
-
-        .main-card::after,
-        .feature-card::after {
-          display: none;
         }
 
         .main-card:hover,
         .feature-card:hover {
           transform: translateY(-2px);
-          border-color: #c9d8e8;
-          box-shadow:
-            0 14px 34px rgba(23,55,91,.09),
-            0 2px 5px rgba(23,55,91,.04);
+          border-color: #cbd9e8;
+          box-shadow: 0 12px 32px rgba(23,43,77,.09);
         }
 
         .card-title {
           display: flex;
           align-items: center;
-          gap: 8px;
-          margin: 0 0 8px;
+          gap: 9px;
+          margin: 0 0 7px;
           color: #172b4d;
+          font-family: "Mitr", sans-serif;
           font-size: 18px;
-          line-height: 1.55;
           font-weight: 600;
-          letter-spacing: .05px;
+          line-height: 1.5;
         }
 
         .card-description,
         .card-desc {
-          margin: 0 0 19px;
-          color: #6b7c93;
-          font-size: 13px;
+          margin: 0 0 17px;
+          color: #718096;
+          font-size: 12px;
           line-height: 1.8;
-          font-weight: 400;
         }
 
-        /* ---------- BMI ---------- */
+        /* ---------- BMI / HEALTH ---------- */
 
         .main-grid > .feature-card:not(.span-2):nth-child(2) {
-          min-height: 300px;
+          min-height: 295px;
         }
 
         .bmi-form {
           display: grid;
-          grid-template-columns: 1fr 1fr .95fr;
-          gap: 12px;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 11px;
           align-items: end;
         }
 
         .input-group {
           display: flex;
           flex-direction: column;
-          gap: 7px;
+          gap: 6px;
         }
 
         .input-group label {
-          color: #506784;
-          font-size: 12px;
-          line-height: 1.5;
-          font-weight: 500;
+          color: #52667d;
+          font-size: 11px;
+          font-weight: 600;
         }
 
         .input-group input {
           width: 100%;
-          padding: 12px 13px;
-          border-radius: 10px;
+          min-height: 42px;
+          padding: 9px 12px;
           outline: none;
+          border: 1px solid #d5e0eb;
+          border-radius: 9px;
           color: #172b4d;
-          font-size: 13px;
-          background: #f7f9fc;
-          border: 1px solid #d8e2ed;
-          transition: .2s ease;
+          background: #f8fafc;
+          font-size: 12px;
+          transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
         }
 
         .input-group input::placeholder {
-          color: #9aa9bb;
+          color: #9aa9b9;
         }
 
         .input-group input:focus {
-          background: #ffffff;
           border-color: #1877f2;
+          background: #fff;
           box-shadow: 0 0 0 3px rgba(24,119,242,.10);
         }
 
         .action-btn {
           width: 100%;
-          min-height: 43px;
-          padding: 9px 14px;
+          min-height: 42px;
+          padding: 9px 13px;
           border: 0;
-          border-radius: 10px;
+          border-radius: 9px;
           cursor: pointer;
-          color: #ffffff;
-          font-size: 13px;
-          line-height: 1.4;
-          font-weight: 500;
-          background: #1877f2;
-          box-shadow: 0 7px 16px rgba(24,119,242,.18);
-          transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+          color: #fff;
+          background: #172b4d;
+          font-size: 12px;
+          font-weight: 600;
+          box-shadow: 0 6px 14px rgba(23,43,77,.15);
+          transition: transform .2s ease, background .2s ease, box-shadow .2s ease;
         }
 
         .action-btn:hover {
           transform: translateY(-2px);
-          background: #166fe5;
-          box-shadow: 0 11px 23px rgba(24,119,242,.24);
+          background: #0f203a;
+          box-shadow: 0 10px 20px rgba(23,43,77,.20);
         }
 
         .action-btn:active {
           transform: translateY(0);
-          box-shadow: 0 5px 12px rgba(24,119,242,.16);
         }
 
         .result-box {
-          margin-top: 14px;
-          padding: 13px 15px;
+          margin-top: 13px;
+          padding: 13px 14px;
+          border: 1px solid #dbe6f0;
           border-radius: 11px;
-          color: #4d6480;
-          font-size: 12.5px;
-          line-height: 1.8;
-          background: #f4f8fd;
-          border: 1px solid #dce7f2;
+          color: #52667d;
+          background: #f7faff;
+          font-size: 11.5px;
+          line-height: 1.75;
         }
 
-        .result-box p { margin: 0; }
-        .result-box p + p { margin-top: 5px; }
+        .result-box p {
+          margin: 0;
+        }
+
+        .result-box p + p {
+          margin-top: 5px;
+        }
 
         .highlight {
           color: #1877f2;
-          font-weight: 600;
+          font-weight: 700;
         }
 
         .highlight-warning {
-          color: #c77b00;
-          font-weight: 600;
+          color: #d97706;
+          font-weight: 700;
         }
 
-        /* ---------- FOOD AI ---------- */
+        /* ---------- FOOD SCAN ---------- */
 
         .main-grid > .feature-card:not(.span-2):nth-child(3) {
-          min-height: 300px;
+          min-height: 295px;
           padding: 22px;
-          background: linear-gradient(145deg, #ffffff, #f8fbff);
-        }
-
-        .main-grid > .feature-card:not(.span-2):nth-child(3) .card-title {
-          font-size: 16px;
         }
 
         .upload-box {
           position: relative;
+          width: 100%;
+          height: 163px;
           display: flex;
-          flex-direction: column;
           align-items: center;
           justify-content: center;
-          width: 100%;
-          height: 155px;
           overflow: hidden;
           cursor: pointer;
+          border: 1.5px dashed #a9c8e8;
           border-radius: 14px;
-          border: 1.5px dashed #a9c6e7;
-          background: #f6f9fd;
-          transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease, background .2s ease;
+          background: #f7faff;
+          transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
         }
 
         .upload-box::before {
           content: "AI FOOD SCAN";
           position: absolute;
+          top: 12px;
           left: 14px;
-          top: 11px;
-          color: #8a9bb0;
+          color: #7d91a7;
           font-size: 8px;
-          line-height: 1.3;
-          font-weight: 600;
+          font-weight: 700;
           letter-spacing: 1.4px;
         }
 
         .upload-box:hover {
-          transform: translateY(-2px);
           border-color: #1877f2;
-          background: #f1f6fd;
-          box-shadow: 0 10px 24px rgba(24,119,242,.08);
-        }
-
-        .camera-icon {
-          width: 50px;
-          height: 50px;
-          margin-bottom: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 13px;
-          color: #ffffff;
-          font-size: 23px;
-          background: #1877f2;
-          box-shadow: 0 8px 18px rgba(24,119,242,.20);
-          transition: transform .2s ease, box-shadow .2s ease;
-        }
-
-        .upload-box:hover .camera-icon {
-          transform: translateY(-2px) scale(1.04);
-          box-shadow: 0 11px 24px rgba(24,119,242,.26);
+          background: #f2f7fd;
+          box-shadow: inset 0 0 25px rgba(24,119,242,.045);
         }
 
         .upload-placeholder {
           position: relative;
           z-index: 1;
           padding: 0 15px;
-          color: #506784;
-          font-size: 12.5px;
-          line-height: 1.7;
+          color: #65798e;
+          font-size: 12px;
+          line-height: 1.75;
           text-align: center;
-        }
-
-        .upload-placeholder strong {
-          display: block;
-          margin-bottom: 2px;
-          color: #172b4d;
-          font-size: 14px;
-          font-weight: 600;
         }
 
         .food-preview {
@@ -894,17 +882,16 @@ export default function Dashboard() {
         }
 
         .scanning-text {
-          margin: 8px 0 0;
+          margin: 7px 0 0;
           color: #1877f2;
           font-size: 11px;
-          line-height: 1.5;
           text-align: center;
-          animation: pulseText 1.4s ease-in-out infinite;
+          animation: scanPulse 1.3s ease-in-out infinite;
         }
 
         .error-text {
           margin: 7px 0 0 !important;
-          color: #d04d4d !important;
+          color: #c24141 !important;
           font-size: 11px !important;
         }
 
@@ -915,13 +902,7 @@ export default function Dashboard() {
         }
 
         .main-grid > .main-card .card-title {
-          justify-content: center;
-          font-size: 19px;
-        }
-
-        .main-grid > .main-card .card-description {
-          text-align: center;
-          margin-bottom: 19px;
+          margin-bottom: 3px;
         }
 
         .menu-grid {
@@ -932,99 +913,108 @@ export default function Dashboard() {
 
         .menu-card {
           position: relative;
-          min-height: 172px;
+          min-height: 185px;
           display: flex;
           flex-direction: column;
-          align-items: flex-start;
           justify-content: flex-end;
-          gap: 9px;
+          align-items: flex-start;
           width: 100%;
-          padding: 20px;
+          padding: 21px;
           overflow: hidden;
-          text-align: left;
-          color: #ffffff;
+          border: 1px solid #263c55;
           border-radius: 15px;
           cursor: pointer;
+          color: #fff;
+          text-align: left;
           font-family: inherit;
-          background: #173b5e;
-          border: 1px solid #244f77;
-          box-shadow: 0 10px 24px rgba(18,57,91,.15);
-          transition: transform .22s ease, box-shadow .22s ease, background .22s ease, border-color .22s ease;
+          background: #172b4d;
+          box-shadow: 0 10px 24px rgba(23,43,77,.16);
+          transition: transform .22s ease, box-shadow .22s ease, background .22s ease;
         }
 
         .menu-card::before {
           content: "";
           position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
-          height: 3px;
-          background: #4597ed;
+          width: 150px;
+          height: 150px;
+          right: -72px;
+          bottom: -78px;
+          border-radius: 50%;
+          background: rgba(24,119,242,.20);
+          transition: transform .3s ease;
         }
 
         .menu-card::after {
+          content: "";
           position: absolute;
-          right: 18px;
-          top: 17px;
-          font-size: 28px;
-          opacity: .14;
-          pointer-events: none;
+          top: 18px;
+          right: 20px;
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+          background: #4594f5;
+          box-shadow: 0 0 0 6px rgba(69,148,245,.10);
         }
-
-        .exercise-menu::after { content: "✦"; }
-        .history-menu::after { content: "◌"; }
 
         .menu-card:hover {
           transform: translateY(-4px);
-          background: #1b456c;
-          border-color: #4d96dc;
-          box-shadow:
-            0 15px 30px rgba(18,57,91,.20),
-            0 0 0 3px rgba(24,119,242,.06);
+          background: #10223c;
+          box-shadow: 0 16px 30px rgba(23,43,77,.23);
         }
 
-        .menu-card:active {
-          transform: translateY(-1px);
+        .menu-card:hover::before {
+          transform: scale(1.25);
+        }
+
+        .exercise-menu,
+        .history-menu {
+          background: #172b4d;
+          border-color: #263c55;
         }
 
         .menu-icon {
-          width: 46px;
-          height: 46px;
-          flex: 0 0 auto;
+          position: absolute;
+          top: 20px;
+          left: 21px;
+          width: 47px;
+          height: 47px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 12px;
+          border: 1px solid rgba(255,255,255,.12);
+          border-radius: 13px;
+          background: rgba(255,255,255,.08);
           font-size: 20px;
-          background: rgba(255,255,255,.11);
-          border: 1px solid rgba(255,255,255,.15);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
         }
 
         .menu-content {
-          min-width: 0;
           position: relative;
           z-index: 2;
+          min-width: 0;
+          padding-top: 52px;
         }
 
         .menu-content h2 {
           margin: 0;
-          color: #ffffff;
+          color: #fff;
+          font-family: "Mitr", sans-serif;
           font-size: 17px;
-          line-height: 1.55;
           font-weight: 500;
-          letter-spacing: .05px;
+          line-height: 1.55;
         }
 
         .menu-content p {
-          margin: 5px 0 0;
-          color: #c5d9ec;
-          font-size: 12px;
+          max-width: 300px;
+          margin: 6px 0 0;
+          color: #c9d8ea;
+          font-size: 11.5px;
           line-height: 1.75;
-          font-weight: 300;
         }
 
-        /* ลูกศรถูกเอาออกจากหน้าตาแล้ว */
+        /* ลูกศรถูกตัดออกจากหน้าตา */
+        .arrow {
+          display: none !important;
+        }
 
         /* ---------- INFO STRIP ---------- */
 
@@ -1032,9 +1022,9 @@ export default function Dashboard() {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 9px;
-          margin-top: 18px;
+          margin-top: 17px;
           padding-top: 15px;
-          border-top: 1px solid #e1e8f0;
+          border-top: 1px solid #e0e7ef;
         }
 
         .info-item {
@@ -1042,61 +1032,60 @@ export default function Dashboard() {
           align-items: center;
           gap: 9px;
           min-width: 0;
-          padding: 10px;
-          border-radius: 11px;
+          padding: 10px 11px;
+          border: 1px solid #e0e7ef;
+          border-radius: 10px;
           background: #f8fafc;
-          border: 1px solid #e2e9f1;
         }
 
         .info-icon {
-          width: 30px;
-          height: 30px;
+          width: 31px;
+          height: 31px;
           flex: 0 0 auto;
           display: flex;
           align-items: center;
           justify-content: center;
-          border-radius: 9px;
+          border-radius: 8px;
+          background: #eaf3ff;
           font-size: 14px;
-          background: #eaf3fc;
         }
 
         .info-item strong {
           display: block;
-          color: #425b76;
-          font-size: 10.5px;
-          line-height: 1.5;
+          color: #38516d;
+          font-size: 10px;
+          line-height: 1.45;
           font-weight: 600;
         }
 
         .info-item span {
           display: block;
           margin-top: 2px;
-          color: #8192a7;
-          font-size: 9px;
-          line-height: 1.5;
-          font-weight: 400;
+          color: #8292a4;
+          font-size: 8.5px;
+          line-height: 1.45;
         }
 
         /* ---------- DAILY FOOD ---------- */
 
         .main-grid > .feature-card.span-2 {
-          background: #ffffff;
+          padding: 23px 24px;
         }
 
         .meal-grid {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 11px;
-          margin-bottom: 14px;
+          margin-bottom: 13px;
         }
 
         .meal-item {
           position: relative;
-          min-height: 96px;
-          padding: 14px 15px 14px 18px;
+          min-width: 0;
+          padding: 15px 15px 15px 18px;
+          border: 1px solid #dce5ee;
           border-radius: 12px;
-          background: #f8fafc;
-          border: 1px solid #e1e8f0;
+          background: #fff;
           overflow: hidden;
           transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
         }
@@ -1113,51 +1102,50 @@ export default function Dashboard() {
 
         .meal-item:hover {
           transform: translateY(-2px);
-          border-color: #c7d7e8;
-          box-shadow: 0 8px 20px rgba(23,55,91,.07);
+          border-color: #c5d5e6;
+          box-shadow: 0 8px 20px rgba(23,43,77,.07);
         }
 
         .meal-item strong {
           display: block;
           margin-bottom: 6px;
-          color: #285f91;
-          font-size: 12px;
-          line-height: 1.55;
-          font-weight: 600;
+          color: #245f9f;
+          font-size: 11px;
+          line-height: 1.5;
+          font-weight: 700;
         }
 
         .meal-item p {
           margin: 0;
-          color: #708299;
-          font-size: 11px;
+          color: #708297;
+          font-size: 10.5px;
           line-height: 1.75;
-          font-weight: 400;
         }
 
         .alert-box {
           margin-top: 10px;
           padding: 13px 14px;
           border-radius: 11px;
-          font-size: 12px;
+          font-size: 11px;
           line-height: 1.75;
         }
 
         .alert-success {
-          color: #2d7b45;
-          background: #f0f9f3;
-          border: 1px solid #d2ebd8;
+          color: #246b3d;
+          border: 1px solid #cde6d4;
+          background: #f1faf3;
         }
 
         .alert-danger {
-          color: #b24d4d;
-          background: #fff5f4;
-          border: 1px solid #f1d4d1;
+          color: #a43e3e;
+          border: 1px solid #efd0d0;
+          background: #fff5f5;
         }
 
         .workout-suggestion {
           margin-top: 9px;
           padding-top: 9px;
-          border-top: 1px solid #e3e9f0;
+          border-top: 1px solid #e5ebf1;
         }
 
         .workout-suggestion ul {
@@ -1170,22 +1158,22 @@ export default function Dashboard() {
         }
 
         .start-now-btn {
-          padding: 9px 14px;
+          padding: 8px 14px;
           border: 0;
-          border-radius: 9px;
+          border-radius: 8px;
           cursor: pointer;
-          color: #ffffff;
-          font-size: 11.5px;
-          font-weight: 500;
-          background: #173b5e;
-          box-shadow: 0 7px 16px rgba(23,59,94,.16);
+          color: #fff;
+          background: #1877f2;
+          font-size: 11px;
+          font-weight: 600;
+          box-shadow: 0 6px 15px rgba(24,119,242,.18);
           transition: transform .2s ease, background .2s ease, box-shadow .2s ease;
         }
 
         .start-now-btn:hover {
           transform: translateY(-2px);
-          background: #1b456c;
-          box-shadow: 0 10px 22px rgba(23,59,94,.21);
+          background: #166fe5;
+          box-shadow: 0 9px 20px rgba(24,119,242,.24);
         }
 
         .dashboard-footer {
@@ -1196,14 +1184,13 @@ export default function Dashboard() {
 
         .dashboard-footer p {
           margin: 0;
-          color: #93a1b2;
+          color: #91a0b0;
           font-size: 9px;
           line-height: 1.5;
-          letter-spacing: .6px;
-          font-weight: 400;
+          letter-spacing: .7px;
         }
 
-        @keyframes pulseText {
+        @keyframes scanPulse {
           0%, 100% { opacity: .55; }
           50% { opacity: 1; }
         }
@@ -1212,17 +1199,17 @@ export default function Dashboard() {
 
         @media (max-width: 900px) {
           .dashboard-page {
-            padding-left: 20px;
-            padding-right: 20px;
+            padding-left: 18px;
+            padding-right: 18px;
           }
 
           .main-grid {
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: 1fr;
             grid-template-areas:
-              "health health"
-              "food food"
-              "workout workout"
-              "daily daily";
+              "health"
+              "food"
+              "workout"
+              "daily";
           }
 
           .bmi-form {
@@ -1230,29 +1217,28 @@ export default function Dashboard() {
           }
         }
 
-        @media (max-width: 700px) {
+        @media (max-width: 680px) {
           .dashboard-page {
-            padding: 22px 13px 30px;
+            padding: 18px 12px 28px;
           }
 
           .dashboard-header {
             min-height: 145px;
-            margin-top: 26px;
-            padding: 10px 8px;
+            margin-top: 32px;
+            padding: 14px 10px 20px;
+          }
+
+          .welcome-icon {
+            display: none;
           }
 
           .dashboard-header h1 {
-            font-size: 26px;
+            max-width: 100%;
+            font-size: 25px;
           }
 
           .dashboard-header p {
-            font-size: 13px;
-          }
-
-          .main-card,
-          .feature-card {
-            padding: 19px;
-            border-radius: 16px;
+            font-size: 11.5px;
           }
 
           .bmi-form {
@@ -1280,28 +1266,14 @@ export default function Dashboard() {
           .top-profile-btn {
             top: 10px;
             right: 10px;
-            width: 44px;
-            height: 44px;
-          }
-
-          .dashboard-header {
-            margin-top: 30px;
-            min-height: 130px;
-          }
-
-          .dashboard-header h1 {
-            font-size: 23px;
-            line-height: 1.4;
-          }
-
-          .dashboard-header p {
-            font-size: 12px;
-            line-height: 1.75;
+            width: 43px;
+            height: 43px;
           }
 
           .main-card,
           .feature-card {
-            padding: 16px;
+            padding: 18px;
+            border-radius: 15px;
           }
 
           .bmi-form {
@@ -1312,12 +1284,12 @@ export default function Dashboard() {
             grid-column: auto;
           }
 
-          .menu-card {
-            min-height: 155px;
-          }
-
           .card-title {
             font-size: 16px;
+          }
+
+          .dashboard-header h1 {
+            font-size: 22px;
           }
         }
       `}</style>
