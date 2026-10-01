@@ -301,7 +301,7 @@ export default function Dashboard() {
           {/* เพิ่มรูปอาหาร เครื่องดื่ม หรือขนม */}
           <div className="feature-card">
             <div className="card-title">
-              🍰🥤🍲 เพิ่มรูปอาหาร เครื่องดื่ม หรือขนม
+            เพิ่มรูปอาหาร เครื่องดื่ม หรือขนม
             </div>
 
             <p className="card-desc">
