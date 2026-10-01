@@ -155,9 +155,7 @@ export default function Dashboard() {
     <div className="dashboard-page">
       <aside className="dashboard-sidebar">
         <div className="brand-block">
-          <div className="brand-mark" aria-label="FitTrack logo">
-            <span className="brand-bolt">ϟ</span>
-          </div>
+          <div className="brand-mark">✦</div>
           <div>
             <div className="brand-name">FitTrack</div>
             <div className="brand-tagline">Healthy Today</div>
@@ -218,6 +216,7 @@ export default function Dashboard() {
                 <h2>สุขภาพของคุณ</h2>
                 <span>ข้อมูลล่าสุด</span>
               </div>
+              <span className="heading-badge">เช็กได้ทุกวัน ↗</span>
             </div>
 
             <div className="health-grid">
@@ -299,6 +298,7 @@ export default function Dashboard() {
                 <h2>AI วิเคราะห์อาหาร</h2>
                 <span>สแกนเมนูได้ทันที</span>
               </div>
+              <span className="heading-badge">แนะนำ ✓</span>
             </div>
 
             <label className="food-scan-box">
@@ -478,32 +478,9 @@ export default function Dashboard() {
           place-items: center;
           border-radius: 13px;
           color: #fff;
+          font-size: 21px;
           background: linear-gradient(145deg, #5b9cf6, #1769dc);
           box-shadow: 0 9px 20px rgba(24,119,242,.22);
-          overflow: hidden;
-        }
-
-        .brand-bolt {
-          display: block;
-          color: #ffffff;
-          font-family: Arial, sans-serif;
-          font-size: 35px;
-          font-weight: 900;
-          line-height: 1;
-          transform: skewX(-8deg) translateY(-1px);
-          text-shadow:
-            0 2px 8px rgba(255,255,255,.28),
-            0 0 14px rgba(255,255,255,.12);
-        }
-
-        .brand-block:hover .brand-bolt {
-          animation: boltPulse .65s ease;
-        }
-
-        @keyframes boltPulse {
-          0% { transform: skewX(-8deg) translateY(-1px) scale(1); }
-          45% { transform: skewX(-8deg) translateY(-2px) scale(1.12) rotate(-3deg); }
-          100% { transform: skewX(-8deg) translateY(-1px) scale(1); }
         }
 
         .brand-name {
