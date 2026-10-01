@@ -824,53 +824,176 @@ export default function Dashboard() {
           font-weight: 700;
         }
 
-        /* ---------- FOOD SCAN ---------- */
+        /* ---------- FOOD SCAN / REDESIGNED ---------- */
 
         .main-grid > .feature-card:not(.span-2):nth-child(3) {
-          min-height: 295px;
-          padding: 22px;
+          min-height: 322px;
+          padding: 24px;
+          display: flex;
+          flex-direction: column;
+          background:
+            linear-gradient(145deg, #ffffff 0%, #f8fbff 100%);
+          border: 1px solid #d7e3ef;
+          box-shadow: 0 10px 30px rgba(23,43,77,.07);
+        }
+
+        .main-grid > .feature-card:not(.span-2):nth-child(3)::before {
+          height: 4px;
+          background: linear-gradient(90deg, #1877f2 0%, #64a8f7 100%);
+        }
+
+        .main-grid > .feature-card:not(.span-2):nth-child(3) .card-title {
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          margin: 0 0 5px;
+          padding-left: 0;
+          color: #152d4c;
+          font-family: "Mitr", sans-serif;
+          font-size: 18px;
+          font-weight: 600;
+          line-height: 1.45;
+        }
+
+        .main-grid > .feature-card:not(.span-2):nth-child(3) .card-title::before {
+          content: "📷";
+          width: 38px;
+          height: 38px;
+          flex: 0 0 38px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 11px;
+          background: #eaf3ff;
+          border: 1px solid #d5e6fa;
+          font-size: 17px;
+        }
+
+        .main-grid > .feature-card:not(.span-2):nth-child(3) .card-description,
+        .main-grid > .feature-card:not(.span-2):nth-child(3) .card-desc {
+          margin: 0 0 16px 49px;
+          color: #75869a;
+          font-size: 11.5px;
+          line-height: 1.7;
         }
 
         .upload-box {
           position: relative;
           width: 100%;
-          height: 163px;
+          min-height: 183px;
+          flex: 1;
           display: flex;
           align-items: center;
           justify-content: center;
           overflow: hidden;
           cursor: pointer;
-          border: 1.5px dashed #a9c8e8;
-          border-radius: 14px;
-          background: #f7faff;
-          transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+          border: 1.5px dashed #9fc6ee;
+          border-radius: 16px;
+          background:
+            radial-gradient(circle at 50% 46%, rgba(24,119,242,.07), transparent 31%),
+            #f7faff;
+          transition:
+            border-color .22s ease,
+            background .22s ease,
+            box-shadow .22s ease,
+            transform .22s ease;
         }
 
         .upload-box::before {
           content: "AI FOOD SCAN";
           position: absolute;
-          top: 12px;
-          left: 14px;
-          color: #7d91a7;
+          top: 14px;
+          left: 16px;
+          color: #7b91a8;
           font-size: 8px;
           font-weight: 700;
-          letter-spacing: 1.4px;
+          letter-spacing: 1.7px;
+        }
+
+        .upload-box::after {
+          content: "";
+          position: absolute;
+          width: 92px;
+          height: 92px;
+          right: -45px;
+          bottom: -47px;
+          border-radius: 50%;
+          border: 1px solid rgba(24,119,242,.12);
+          box-shadow: 0 0 0 14px rgba(24,119,242,.025);
+          pointer-events: none;
         }
 
         .upload-box:hover {
+          transform: translateY(-2px);
           border-color: #1877f2;
-          background: #f2f7fd;
-          box-shadow: inset 0 0 25px rgba(24,119,242,.045);
+          background:
+            radial-gradient(circle at 50% 46%, rgba(24,119,242,.10), transparent 33%),
+            #f3f8ff;
+          box-shadow:
+            0 10px 24px rgba(24,119,242,.09),
+            inset 0 0 24px rgba(24,119,242,.025);
         }
 
         .upload-placeholder {
           position: relative;
-          z-index: 1;
-          padding: 0 15px;
-          color: #65798e;
-          font-size: 12px;
-          line-height: 1.75;
+          z-index: 2;
+          width: 100%;
+          padding: 30px 20px 17px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          color: #63768c;
           text-align: center;
+        }
+
+        .camera-icon {
+          width: 58px;
+          height: 58px;
+          margin-bottom: 3px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid #d4e5f8;
+          border-radius: 16px;
+          background: #ffffff;
+          box-shadow:
+            0 8px 18px rgba(24,119,242,.10),
+            0 2px 5px rgba(23,43,77,.05);
+          font-size: 25px;
+          line-height: 1;
+          transition: transform .22s ease, box-shadow .22s ease;
+        }
+
+        .upload-box:hover .camera-icon {
+          transform: translateY(-3px) scale(1.04);
+          box-shadow:
+            0 11px 23px rgba(24,119,242,.15),
+            0 2px 6px rgba(23,43,77,.06);
+        }
+
+        .upload-placeholder strong {
+          color: #172b4d;
+          font-family: "Mitr", sans-serif;
+          font-size: 15px;
+          font-weight: 500;
+          line-height: 1.55;
+        }
+
+        .upload-placeholder small {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: 1px;
+          padding: 5px 10px;
+          border-radius: 999px;
+          color: #71859b;
+          background: #edf4fb;
+          border: 1px solid #dce9f6;
+          font-size: 9.5px;
+          line-height: 1.4;
         }
 
         .food-preview {
@@ -879,20 +1002,44 @@ export default function Dashboard() {
           width: 100%;
           height: 100%;
           object-fit: cover;
+          border-radius: 14px;
         }
 
         .scanning-text {
-          margin: 7px 0 0;
+          margin: 8px 0 0;
           color: #1877f2;
           font-size: 11px;
+          line-height: 1.5;
           text-align: center;
           animation: scanPulse 1.3s ease-in-out infinite;
         }
 
         .error-text {
-          margin: 7px 0 0 !important;
+          margin: 8px 0 0 !important;
           color: #c24141 !important;
           font-size: 11px !important;
+          line-height: 1.5;
+        }
+
+        .main-grid > .feature-card:not(.span-2):nth-child(3) .result-box {
+          margin-top: 12px;
+          border-color: #d7e5f4;
+          background: #f6f9fd;
+        }
+
+        @media (max-width: 680px) {
+          .main-grid > .feature-card:not(.span-2):nth-child(3) {
+            min-height: 300px;
+          }
+
+          .main-grid > .feature-card:not(.span-2):nth-child(3) .card-description,
+          .main-grid > .feature-card:not(.span-2):nth-child(3) .card-desc {
+            margin-left: 0;
+          }
+
+          .upload-box {
+            min-height: 175px;
+          }
         }
 
         /* ---------- WORKOUT ---------- */
