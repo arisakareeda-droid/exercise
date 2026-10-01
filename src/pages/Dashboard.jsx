@@ -424,8 +424,6 @@ export default function Dashboard() {
 
         <footer className="dashboard-footer">Small Steps · Big Changes · FITTRACK</footer>
       </main>
-    </div>
-  );
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
@@ -1600,5 +1598,6 @@ export default function Dashboard() {
           }
         }
       `}</style>
-
+    </div>
+  );
 }
