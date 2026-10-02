@@ -27,6 +27,12 @@ export default function ExerciseSetting() {
       icon: "🏃",
       description: "เพิ่มอัตราการเต้นของหัวใจและฝึกกล้ามเนื้อต้นขา",
     },
+    punches: {
+      name: "Punches",
+      thaiName: "ชกหมัด",
+      icon: "🥊",
+      description: "ชกหมัดสลับซ้าย-ขวา ฝึกกล้ามเนื้อแขน ไหล่ และเพิ่มอัตราการเต้นของหัวใจ",
+    },
   };
 
   const exerciseInfo = exerciseInfoMap[exerciseType] || exerciseInfoMap.squat;

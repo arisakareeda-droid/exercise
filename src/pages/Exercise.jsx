@@ -50,6 +50,22 @@ const HK_LEG_COOLDOWN_MS = 350;    // กันนับซ้ำของเข
 const HK_COOLDOWN_MS = 150;        // กันนับซ้ำรวมทั้งสองข้าง
 const MIN_VISIBILITY_HK = 0.4;
 
+// ---------------------------------------------------------------
+// PUNCHES (ชกหมัด): นับทีละข้างเมื่อแขนเหยียดออกไปด้านหน้า แล้วกลับมาตั้งการ์ด
+//  reach   = ระยะไหล่->ข้อมือ / ความยาวแขนทั้งท่อน (1 = เหยียดตรงเต็มที่ในภาพ 2 มิติ)
+//  forward = ข้อมือยื่นเข้าหากล้องกี่เท่าของลำตัว (ใช้ z ช่วยตอนหันหน้าชกเข้าหากล้อง)
+//  height  = ข้อมือสูงกว่าไหล่กี่เท่าของลำตัว (กันนับตอนปล่อยแขนห้อยตรงๆ)
+// ---------------------------------------------------------------
+const PUNCH_REACH_OUT = 0.9;       // reach เกินนี้ = หมัดเหยียดออกแล้ว
+const PUNCH_REACH_IN = 0.65;       // reach ต่ำกว่านี้ = ดึงหมัดกลับแล้ว
+const PUNCH_FORWARD_OUT = 0.55;    // ข้อมือยื่นเข้าหากล้องเกินนี้ = ชกแล้ว
+const PUNCH_FORWARD_IN = 0.3;
+const PUNCH_MIN_HEIGHT = -0.35;    // ข้อมือต้องอยู่ประมาณระดับอกขึ้นไป
+const PUNCH_CONFIRM_FRAMES = 2;
+const PUNCH_ARM_COOLDOWN_MS = 250; // กันนับซ้ำของแขนข้างเดียวกัน
+const PUNCH_COOLDOWN_MS = 120;     // กันนับซ้ำรวมทั้งสองข้าง
+const MIN_VISIBILITY_PUNCH = 0.4;
+
 // ทั่วไป
 const MIN_VISIBILITY_DRAW = 0.4;
 const POSE_LOST_RESET_FRAMES = 15;
@@ -122,6 +138,11 @@ export default function Exercise() {
     let hkConfirm = { L: 0, R: 0 };
     let hkLast = { L: 0, R: 0 };
 
+    // punches (แยกสถานะซ้าย/ขวา)
+    let punchStage = { L: 'guard', R: 'guard' };
+    let punchConfirm = { L: 0, R: 0 };
+    let punchLast = { L: 0, R: 0 };
+
     setCounter(0);
     setCalories(0);
     setDebug('');
@@ -147,6 +168,8 @@ export default function Exercise() {
       hkBuffer = { L: [], R: [] };
       hkStage = { L: 'down', R: 'down' };
       hkConfirm = { L: 0, R: 0 };
+      punchStage = { L: 'guard', R: 'guard' };
+      punchConfirm = { L: 0, R: 0 };
       baselineSpan = 0;
       candidate = null;
       candidateFrames = 0;
@@ -161,7 +184,7 @@ export default function Exercise() {
       lastRepTime = now;
 
       count += 1;
-      const caloriesPerRepMap = { squat: 0.32, jumping_jack: 0.2, high_knees: 0.1 };
+      const caloriesPerRepMap = { squat: 0.32, jumping_jack: 0.2, high_knees: 0.1, punches: 0.15 };
       const caloriesPerRep = caloriesPerRepMap[exerciseType] ?? 0.2;
       const totalCal = Number((count * caloriesPerRep).toFixed(2));
       setCounter(count);
@@ -456,6 +479,83 @@ export default function Exercise() {
       processKnee('R', right);
     };
 
+    // ---------------- PUNCHES ----------------
+    const getPunchSignal = (lm, shoulderIdx, elbowIdx, wristIdx) => {
+      const v = MIN_VISIBILITY_PUNCH;
+      const s = lm[shoulderIdx];
+      const e = lm[elbowIdx];
+      const w = lm[wristIdx];
+      if (!isVisible(s, v) || !isVisible(e, v) || !isVisible(w, v)) return null;
+
+      const armLen = Math.hypot(s.x - e.x, s.y - e.y) + Math.hypot(e.x - w.x, e.y - w.y);
+      if (armLen < 0.05) return null;
+
+      const torso = getTorsoLength(lm);
+      return {
+        reach: Math.hypot(s.x - w.x, s.y - w.y) / armLen,
+        forward: ((s.z ?? 0) - (w.z ?? 0)) / torso, // z ติดลบ = อยู่ใกล้กล้อง
+        height: (s.y - w.y) / torso,
+      };
+    };
+
+    const processPunch = (side, sig) => {
+      if (sig === null) return;
+
+      const heightOk = sig.height > PUNCH_MIN_HEIGHT;
+      const extended =
+        heightOk && (sig.reach > PUNCH_REACH_OUT || sig.forward > PUNCH_FORWARD_OUT);
+      const retracted =
+        !heightOk || (sig.reach < PUNCH_REACH_IN && sig.forward < PUNCH_FORWARD_IN);
+
+      if (punchStage[side] === 'guard') {
+        if (extended) {
+          punchConfirm[side] += 1;
+          if (punchConfirm[side] >= PUNCH_CONFIRM_FRAMES) {
+            punchStage[side] = 'out';
+            punchConfirm[side] = 0;
+            const now = Date.now();
+            if (now - punchLast[side] >= PUNCH_ARM_COOLDOWN_MS) {
+              punchLast[side] = now;
+              if (tryCountRep(PUNCH_COOLDOWN_MS) && !finished) {
+                updateFeedback('นับแล้ว! ชกอีกข้างต่อเลย');
+              }
+            }
+          }
+        } else {
+          punchConfirm[side] = 0;
+        }
+      } else if (retracted) {
+        // ดึงหมัดกลับมาแล้ว พร้อมนับหมัดต่อไปของแขนข้างนี้
+        punchStage[side] = 'guard';
+        punchConfirm[side] = 0;
+      }
+    };
+
+    const handlePunches = (lm) => {
+      const left = getPunchSignal(lm, 11, 13, 15);
+      const right = getPunchSignal(lm, 12, 14, 16);
+
+      const fmt = (s) =>
+        s === null ? '-' : `${s.reach.toFixed(2)}/${s.forward.toFixed(2)}/${s.height.toFixed(2)}`;
+      updateDebug(
+        `หมัดซ้าย(reach/fwd/สูง): ${fmt(left)}  |  หมัดขวา: ${fmt(right)}  |  ซ้าย: ${punchStage.L}  ขวา: ${punchStage.R}`
+      );
+
+      if (left === null && right === null) {
+        updateFeedback('ถอยให้เห็นแขนและลำตัวชัดเจน');
+        return;
+      }
+
+      if (!initialized) {
+        initialized = true;
+        updateFeedback('พร้อมแล้ว ตั้งการ์ดแล้วชกหมัดได้เลย');
+        return;
+      }
+
+      processPunch('L', left);
+      processPunch('R', right);
+    };
+
     // ---------------- วาดภาพ (cover-crop ลงแคนวาสแนวตั้ง) ----------------
     const drawSkeleton = (ctx, lm, map) => {
       if (window.POSE_CONNECTIONS) {
@@ -518,6 +618,7 @@ export default function Exercise() {
           if (exerciseType === 'squat') handleSquat(lm);
           else if (exerciseType === 'jumping_jack') handleJumpingJack(lm);
           else if (exerciseType === 'high_knees') handleHighKnees(lm);
+          else if (exerciseType === 'punches') handlePunches(lm);
           else updateFeedback('ไม่รู้จักท่านี้');
         }
       } else {
@@ -585,6 +686,7 @@ export default function Exercise() {
     squat: 'Squat',
     jumping_jack: 'Jumping Jack',
     high_knees: 'High Knees',
+    punches: 'Punches',
   };
   const exerciseName = exerciseNames[exerciseType] || 'ออกกำลังกาย';
   const progress = Math.min(100, Math.round((counter / targetCount) * 100));

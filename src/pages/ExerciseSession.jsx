@@ -18,6 +18,14 @@ const HK_UP_THRESHOLD = -0.2;
 const HK_DOWN_THRESHOLD = -0.5;
 const HK_LEG_COOLDOWN_MS = 350;
 
+// PUNCHES: reach = ระยะไหล่->ข้อมือ / ความยาวแขนทั้งท่อน, height = ข้อมือสูงกว่าไหล่กี่เท่าของลำตัว
+const PUNCH_REACH_OUT = 0.9;
+const PUNCH_REACH_IN = 0.65;
+const PUNCH_FORWARD_OUT = 0.55;
+const PUNCH_FORWARD_IN = 0.3;
+const PUNCH_MIN_HEIGHT = -0.35;
+const PUNCH_ARM_COOLDOWN_MS = 250;
+
 export default function ExerciseSession() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -31,6 +39,8 @@ export default function ExerciseSession() {
   const stageRef = useRef("up");
   const hkStageRef = useRef({ L: "down", R: "down" });
   const hkLastRef = useRef({ L: 0, R: 0 });
+  const punchStageRef = useRef({ L: "guard", R: "guard" });
+  const punchLastRef = useRef({ L: 0, R: 0 });
 
   const calculateAngle = (a, b, c) => {
     const radians =
@@ -159,6 +169,51 @@ export default function ExerciseSession() {
           });
         }
 
+        // --- เงื่อนไขท่า PUNCHES ---
+        else if (exerciseType === "punches") {
+          const shoulderMid = lm[11] && lm[12] ? (lm[11].y + lm[12].y) / 2 : null;
+          const hipMid = lm[23] && lm[24] ? (lm[23].y + lm[24].y) / 2 : null;
+          const torso =
+            shoulderMid !== null && hipMid !== null && Math.abs(hipMid - shoulderMid) > 0.05
+              ? Math.abs(hipMid - shoulderMid)
+              : 0.3;
+
+          const arms = [
+            { side: "L", s: lm[11], e: lm[13], w: lm[15] },
+            { side: "R", s: lm[12], e: lm[14], w: lm[16] },
+          ];
+
+          arms.forEach(({ side, s, e, w }) => {
+            if (!s || !e || !w) return;
+            if ((s.visibility ?? 1) < 0.4 || (e.visibility ?? 1) < 0.4 || (w.visibility ?? 1) < 0.4) return;
+
+            const armLen =
+              Math.hypot(s.x - e.x, s.y - e.y) + Math.hypot(e.x - w.x, e.y - w.y);
+            if (armLen < 0.05) return;
+
+            const reach = Math.hypot(s.x - w.x, s.y - w.y) / armLen;
+            const forward = ((s.z ?? 0) - (w.z ?? 0)) / torso;
+            const height = (s.y - w.y) / torso;
+
+            const heightOk = height > PUNCH_MIN_HEIGHT;
+            const extended = heightOk && (reach > PUNCH_REACH_OUT || forward > PUNCH_FORWARD_OUT);
+            const retracted = !heightOk || (reach < PUNCH_REACH_IN && forward < PUNCH_FORWARD_IN);
+            const stage = punchStageRef.current[side];
+
+            if (stage === "guard" && extended) {
+              punchStageRef.current[side] = "out";
+              const now = Date.now();
+              if (now - punchLastRef.current[side] >= PUNCH_ARM_COOLDOWN_MS) {
+                punchLastRef.current[side] = now;
+                setCounter((prev) => prev + 1);
+                setFeedback("ยอดเยี่ยม! ชกอีกข้าง");
+              }
+            } else if (stage === "out" && retracted) {
+              punchStageRef.current[side] = "guard";
+            }
+          });
+        }
+
         // --- เงื่อนไขท่า JUMPING JACK ---
         else if (exerciseType === "jumping_jack") {
           const shoulderL = lm[11],
@@ -213,6 +268,7 @@ export default function ExerciseSession() {
     squat: "Squat (ลุกนั่ง)",
     jumping_jack: "Jumping Jack (กระโดดตบ)",
     high_knees: "High Knees (ยกเข่าสูง)",
+    punches: "Punches (ชกหมัด)",
   };
   const exerciseName = exerciseNames[exerciseType] || exerciseNames.squat;
 

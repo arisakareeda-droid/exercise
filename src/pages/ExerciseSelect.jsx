@@ -38,6 +38,17 @@ export default function ExerciseSelect() {
       light: "#eaf4ff",
       shadow: "rgba(24,119,242,.18)",
     },
+    {
+      id: "punches",
+      icon: "🥊",
+      name: "Punches",
+      thaiName: "ชกหมัด",
+      video: "/punches.mp4",
+      description: "ชกหมัดสลับซ้าย-ขวา เพิ่มความเร็วหัวใจและฝึกกล้ามเนื้อแขน ไหล่ และแกนกลางลำตัว",
+      color: "#4b9af5",
+      light: "#eaf4ff",
+      shadow: "rgba(24,119,242,.18)",
+    },
   ];
 
   return (
