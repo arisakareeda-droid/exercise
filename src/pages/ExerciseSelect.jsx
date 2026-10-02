@@ -214,8 +214,33 @@ export default function ExerciseSelect() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Anuphan:wght@400;500;600;700&display=swap');
 
-        * { box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
+        * , *::before, *::after { box-sizing: border-box; }
+        html {
+          width: 100%;
+          min-width: 0;
+          margin: 0;
+          padding: 0;
+          scroll-behavior: smooth;
+          overflow-x: hidden;
+        }
+        body {
+          width: 100%;
+          min-width: 0;
+          margin: 0;
+          padding: 0;
+          overflow-x: hidden;
+        }
+        #root {
+          width: 100%;
+          max-width: none;
+          min-height: 100vh;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          outline: 0;
+          box-shadow: none;
+          overflow-x: clip;
+        }
 
         /* ป้องกันเส้นแบ่งแนวตั้ง/เส้นขอบที่ไม่ต้องการ */
         .dashboard-page,
@@ -249,7 +274,6 @@ export default function ExerciseSelect() {
         }
 
         body {
-          margin: 0;
           background: #eef4fb;
           color: #173b73;
           font-family: "Anuphan", sans-serif;
@@ -258,8 +282,13 @@ export default function ExerciseSelect() {
         button, input { font-family: inherit; }
 
         .dashboard-page {
+          position: relative;
+          width: 100%;
+          max-width: 100%;
+          min-width: 0;
           min-height: 100vh;
           display: flex;
+          overflow-x: clip;
           background:
             radial-gradient(circle at 70% 10%, rgba(87,153,255,.12), transparent 27%),
             linear-gradient(135deg, #f9fcff 0%, #eef5ff 48%, #f7fbff 100%);
@@ -396,12 +425,16 @@ export default function ExerciseSelect() {
 
         /* MAIN */
         .dashboard-main {
-          border: 0 !important;
-          outline: 0 !important;
-          width: calc(100% - 232px);
+          position: relative;
+          flex: 1 1 0%;
+          width: auto;
+          max-width: none;
           margin-left: 232px;
           min-width: 0;
           padding: 0 31px 36px;
+          border: 0 !important;
+          outline: 0 !important;
+          box-shadow: none !important;
         }
 
         .dashboard-header {
@@ -822,7 +855,8 @@ export default function ExerciseSelect() {
           }
 
           .dashboard-main {
-            width: calc(100% - 200px);
+            flex: 1 1 0%;
+            width: auto;
             margin-left: 200px;
             padding: 0 20px 30px;
           }
@@ -863,7 +897,9 @@ export default function ExerciseSelect() {
           }
 
           .dashboard-main {
+            flex: none;
             width: 100%;
+            max-width: 100%;
             margin-left: 0;
             padding: 0 12px 25px;
           }
