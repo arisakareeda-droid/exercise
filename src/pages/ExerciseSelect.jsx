@@ -59,7 +59,7 @@ export default function ExerciseSelect() {
           <button
             className="brand-button"
             type="button"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
             aria-label="กลับหน้าหลัก FitTrack"
           >
             <div className="brand-mark" aria-hidden="true">

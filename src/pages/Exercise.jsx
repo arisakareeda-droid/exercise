@@ -707,7 +707,7 @@ export default function Exercise() {
         </div>
 
         <nav className="sidebar-nav">
-          <button className="side-nav" type="button" onClick={() => navigate('/')}>
+          <button className="side-nav" type="button" onClick={() => navigate('/dashboard')}>
             <span>⌂</span><b>หน้าหลัก</b>
           </button>
           <button className="side-nav active" type="button" onClick={() => navigate('/exercises')}>

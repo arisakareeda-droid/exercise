@@ -63,7 +63,7 @@ export default function History() {
           <button
             className="history-brand-button"
             type="button"
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/dashboard')}
             aria-label="กลับหน้าหลัก FitTrack"
           >
             <div className="history-brand-mark" aria-hidden="true">

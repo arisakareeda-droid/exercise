@@ -731,7 +731,7 @@ export default function ExerciseSession() {
             </button>
           </div>
           <nav className="session-nav">
-            <button className="session-nav-item" type="button" onClick={() => navigate('/')}>
+            <button className="session-nav-item" type="button" onClick={() => navigate('/dashboard')}>
               <span>⌂</span><b>หน้าหลัก</b>
             </button>
             <button className="session-nav-item active" type="button" onClick={() => navigate('/exercises')}>

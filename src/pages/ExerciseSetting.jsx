@@ -75,7 +75,7 @@ export default function ExerciseSetting() {
           <button
             className="side-nav"
             type="button"
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/dashboard")}
           >
             <span>⌂</span>
             <b>หน้าหลัก</b>
