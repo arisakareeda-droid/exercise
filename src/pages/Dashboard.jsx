@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
@@ -10,7 +10,7 @@ export default function Dashboard() {
 
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
-  const [age, setAge] = useState("21");
+  const [age, setAge] = useState("");
   const [bmiResult, setBmiResult] = useState(null);
   const [tdeeResult, setTdeeResult] = useState(null);
 
@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [selectedMeal, setSelectedMeal] = useState(null);
+  const [exerciseBurned, setExerciseBurned] = useState(0);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -94,6 +95,7 @@ export default function Dashboard() {
     setItemCalories(0);
     setItemConfidence(null);
     setItemNote("");
+    setExerciseBurned(0);
 
     // แสดงรูปภาพตัวอย่างทันที
     const imageUrl = URL.createObjectURL(file);
@@ -108,25 +110,58 @@ export default function Dashboard() {
       const response = await fetch("/api/analyze-food", {
         method: "POST",
         body: formData,
+        headers: {
+          Accept: "application/json",
+        },
       });
 
-      const data = await response.json();
+      // อ่านเป็น text ก่อน แล้วค่อย JSON.parse เพื่อป้องกัน
+      // `Unexpected end of JSON input` เมื่อ API ส่ง body ว่างหรือส่ง HTML/error กลับมา
+      const rawText = await response.text();
+      let data = null;
 
-      if (!response.ok) {
-        throw new Error(data.error || "ไม่สามารถวิเคราะห์ภาพได้");
+      if (rawText.trim()) {
+        try {
+          data = JSON.parse(rawText);
+        } catch (parseError) {
+          console.error("API returned non-JSON response:", rawText);
+          throw new Error(
+            response.ok
+              ? "เซิร์ฟเวอร์วิเคราะห์อาหารส่งข้อมูลไม่ถูกต้อง กรุณาตรวจสอบ API /api/analyze-food"
+              : `เซิร์ฟเวอร์วิเคราะห์อาหารตอบกลับ ${response.status} แต่ไม่ใช่ JSON`
+          );
+        }
       }
 
-      setItemName(data.name || "ไม่สามารถระบุได้ชัดเจน");
-      setItemCategory(data.category || "ไม่สามารถระบุได้");
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            data?.message ||
+            (rawText.trim()
+              ? `ไม่สามารถวิเคราะห์ภาพได้ (HTTP ${response.status})`
+              : `ไม่สามารถวิเคราะห์ภาพได้ เพราะเซิร์ฟเวอร์ไม่ส่งข้อมูลกลับมา (HTTP ${response.status})`)
+        );
+      }
+
+      if (!data || typeof data !== "object") {
+        throw new Error(
+          "เซิร์ฟเวอร์วิเคราะห์อาหารไม่ได้ส่งผลลัพธ์กลับมา กรุณาตรวจสอบ API /api/analyze-food"
+        );
+      }
+
+      setItemName(data.name || data.foodName || "ไม่สามารถระบุได้ชัดเจน");
+      setItemCategory(data.category || data.type || "ไม่สามารถระบุได้");
       setItemCalories(
-        Number.isFinite(Number(data.calories)) ? Number(data.calories) : 0
+        Number.isFinite(Number(data.calories ?? data.kcal))
+          ? Number(data.calories ?? data.kcal)
+          : 0
       );
       setItemConfidence(
         Number.isFinite(Number(data.confidence))
           ? Number(data.confidence)
           : null
       );
-      setItemNote(data.note || "");
+      setItemNote(data.note || data.description || "");
     } catch (error) {
       console.error("Food analysis error:", error);
       setItemName("");
@@ -142,15 +177,24 @@ export default function Dashboard() {
     }
   };
 
-  const calorieSurplus = tdeeResult
-    ? itemCalories - Math.round(tdeeResult / 3)
+  const bmiScalePosition = bmiResult ? (() => {
+    const bmi = Number(bmiResult.value);
+    if (bmi < 18.5) return Math.max(0, (bmi / 18.5) * 25);
+    if (bmi < 25) return 25 + ((bmi - 18.5) / 6.5) * 30;
+    if (bmi < 30) return 55 + ((bmi - 25) / 5) * 23;
+    return Math.min(100, 78 + ((bmi - 30) / 10) * 22);
+  })() : 0;
+
+  const dailyCalorieTarget = tdeeResult || 0;
+  const consumedCalories = itemCalories || 0;
+  const remainingCalories = dailyCalorieTarget
+    ? dailyCalorieTarget - consumedCalories + exerciseBurned
     : 0;
-
-  const requiredSquatReps =
-    calorieSurplus > 0 ? Math.ceil(calorieSurplus / 0.32) : 0;
-
-  const requiredJumpingJackReps =
-    calorieSurplus > 0 ? Math.ceil(calorieSurplus / 0.2) : 0;
+  const calorieSurplus = dailyCalorieTarget
+    ? Math.max(0, consumedCalories - dailyCalorieTarget - exerciseBurned)
+    : 0;
+  const exerciseNeeded = calorieSurplus > 0 ? calorieSurplus : 0;
+  const exerciseMinutes = exerciseNeeded > 0 ? Math.ceil(exerciseNeeded / 6) : 0;
 
   const mealDetails = {
     breakfast: {
@@ -221,7 +265,18 @@ export default function Dashboard() {
           </button>
         </nav>
 
-        <button className="side-logout" type="button">
+        <button
+          className="side-logout"
+          type="button"
+          onClick={async () => {
+            try {
+              await signOut(auth);
+              navigate("/login", { replace: true });
+            } catch (err) {
+              console.error("ออกจากระบบไม่สำเร็จ:", err);
+            }
+          }}
+        >
           <span>↪</span> ออกจากระบบ
         </button>
       </aside>
@@ -268,27 +323,32 @@ export default function Dashboard() {
                 </div>
 
                 {bmiResult ? (
-                  <>
-                    <div className="metric-value">
-                      {bmiResult.value}
-                      <em>{bmiResult.status.includes("ปกติ") ? "ปกติ" : "ดูผล"}</em>
+                  <div className="health-result bmi-result">
+                    <div className="result-main">
+                      <div className="metric-value">{bmiResult.value}</div>
+                      <span className={`result-status ${bmiResult.status.includes("ปกติ") ? "normal" : "attention"}`}>
+                        {bmiResult.status.includes("ปกติ") ? "ปกติ" : "ดูแลเพิ่มเติม"}
+                      </span>
                     </div>
-                    <div className="bmi-scale">
+                    <div className="result-description">{bmiResult.status}</div>
+                    <div className="bmi-scale compact-scale">
                       <span className="scale-line"></span>
-                      <span className="scale-dot"></span>
+                      <span className="scale-dot" style={{ left: `${bmiScalePosition}%` }}></span>
                     </div>
                     <div className="scale-labels">
-                      <span>&lt;18.5 ผอม</span>
-                      <span>18.5–25 ปกติ</span>
-                      <span>25–30 เกิน</span>
-                      <span>&gt;30 อ้วน</span>
+                      <span>&lt;18.5</span>
+                      <span>18.5–25</span>
+                      <span>25–30</span>
+                      <span>&gt;30</span>
                     </div>
-                  </>
+                  </div>
                 ) : (
-                  <>
-                    <div className="metric-value placeholder-value">—<em>รอข้อมูล</em></div>
-                    <div className="metric-helper">กรอกน้ำหนักและส่วนสูงเพื่อดู BMI</div>
-                  </>
+                  <div className="health-empty-state">
+                    <span className="empty-icon">✦</span>
+                    <div className="health-empty-copy">
+                      <strong>พร้อมดูแลสุขภาพของคุณ · กรอกข้อมูลด้านล่างเพื่อดู BMI</strong>
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -299,35 +359,76 @@ export default function Dashboard() {
                 </div>
 
                 {tdeeResult ? (
-                  <>
-                    <div className="metric-value tdee-value">
-                      {tdeeResult}<small> kcal/วัน</small>
+                  <div className="health-result tdee-result">
+                    <div className="result-main">
+                      <div className="metric-value tdee-value">
+                        {tdeeResult}<small>kcal/วัน</small>
+                      </div>
                     </div>
-                    <div className="energy-pill">◉ พลังงานที่ควรได้รับ</div>
-                  </>
+                    <div className="energy-pill">◉ พลังงานที่แนะนำต่อวัน</div>
+                    <div className="result-description">คำนวณจากข้อมูลร่างกายและกิจกรรมของคุณ</div>
+                  </div>
                 ) : (
-                  <>
-                    <div className="metric-value placeholder-value">—<em>รอข้อมูล</em></div>
-                    <div className="metric-helper">คำนวณพลังงานต่อวันพร้อม BMI</div>
-                  </>
+                  <div className="health-empty-state tdee-empty">
+                    <span className="empty-icon fire-empty">✦</span>
+                    <div className="health-empty-copy">
+                      <strong>พลังงานของคุณจะอยู่ตรงนี้ · ระบบจะคำนวณ TDEE พร้อมกับ BMI</strong>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
 
             <form onSubmit={calculateHealth} className="health-form">
-              <div className="compact-field">
-                <label>น้ำหนัก</label>
-                <div><input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="60" required /><small>kg</small></div>
+              <div className="health-form-head">
+                <div className="health-form-title">
+                  <span className="health-form-orb">✦</span>
+                  <div>
+                    <strong>ข้อมูลร่างกายของคุณ</strong>
+                    <span>กรอกข้อมูลเพื่อดู BMI และพลังงานที่เหมาะสม</span>
+                  </div>
+                </div>
               </div>
-              <div className="compact-field">
-                <label>ส่วนสูง</label>
-                <div><input type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="170" required /><small>cm</small></div>
+
+              <div className="health-input-row">
+                <div className="modern-field">
+                  <div className="modern-field-icon">⚖</div>
+                  <div className="modern-field-copy">
+                    <label htmlFor="weight">น้ำหนัก</label>
+                    <div className="modern-input-wrap">
+                      <input id="weight" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="—" required />
+                      <small>kg</small>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modern-field">
+                  <div className="modern-field-icon height-icon">↕</div>
+                  <div className="modern-field-copy">
+                    <label htmlFor="height">ส่วนสูง</label>
+                    <div className="modern-input-wrap">
+                      <input id="height" type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="—" required />
+                      <small>cm</small>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modern-field age-modern-field">
+                  <div className="modern-field-icon age-icon">◷</div>
+                  <div className="modern-field-copy">
+                    <label htmlFor="age">อายุ</label>
+                    <div className="modern-input-wrap">
+                      <input id="age" type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="—" required />
+                      <small>ปี</small>
+                    </div>
+                  </div>
+                </div>
+
+                <button type="submit" className="health-calculate-btn">
+                  <span>ดูผลสุขภาพ</span>
+                  <small>คำนวณ BMI + TDEE</small>
+                </button>
               </div>
-              <div className="compact-field age-field">
-                <label>อายุ</label>
-                <div><input type="number" value={age} onChange={(e) => setAge(e.target.value)} /><small>ปี</small></div>
-              </div>
-              <button type="submit" className="primary-btn">คำนวณสุขภาพ</button>
             </form>
           </section>
 
@@ -367,10 +468,62 @@ export default function Dashboard() {
             {analysisError && <p className="error-text">⚠️ {analysisError}</p>}
 
             {itemName && !isAnalyzing && (
-              <div className="result-box food-result">
-                <span>{itemCategory || "อาหาร"}</span>
-                <strong>{itemName}</strong>
-                <b>{itemCalories} kcal</b>
+              <div className="food-result-dashboard">
+                <div className="food-result-top">
+                  <div>
+                    <span className="food-result-category">{itemCategory || "อาหาร / เครื่องดื่ม / ของกินเล่น"}</span>
+                    <strong>{itemName}</strong>
+                  </div>
+                  <div className="food-kcal-badge">
+                    <b>{itemCalories}</b>
+                    <small>kcal</small>
+                  </div>
+                </div>
+
+                {tdeeResult ? (
+                  <div className="calorie-tracker">
+                    <div className="calorie-tracker-head">
+                      <span>แคลอรี่วันนี้</span>
+                      <b>เป้าหมาย {dailyCalorieTarget.toLocaleString()} kcal</b>
+                    </div>
+                    <div className="calorie-progress">
+                      <span style={{ width: `${Math.min(100, Math.round((consumedCalories / dailyCalorieTarget) * 100))}%` }}></span>
+                    </div>
+                    <div className="calorie-summary">
+                      <div><small>กินไป</small><strong>{consumedCalories.toLocaleString()} kcal</strong></div>
+                      <div className={remainingCalories < 0 ? "remaining-danger" : "remaining-ok"}>
+                        <small>{remainingCalories < 0 ? "เกินเป้าหมาย" : "กินได้อีก"}</small>
+                        <strong>{Math.abs(remainingCalories).toLocaleString()} kcal</strong>
+                      </div>
+                    </div>
+
+                    {calorieSurplus > 0 ? (
+                      <div className="calorie-warning">
+                        <div>
+                          <strong>⚠️ เกินแคลอรี่ {calorieSurplus.toLocaleString()} kcal</strong>
+                          <span>แนะนำออกกำลังกายเพิ่มประมาณ {exerciseMinutes} นาที เพื่อช่วยชดเชยพลังงานส่วนเกิน</span>
+                        </div>
+                        <button type="button" onClick={() => navigate("/exercises")} className="food-exercise-btn">ไปออกกำลังกาย</button>
+                      </div>
+                    ) : (
+                      <div className="calorie-good">✓ หลังมื้อนี้ยังอยู่ในกรอบพลังงานที่ตั้งไว้</div>
+                    )}
+
+                    <div className="exercise-adjust">
+                      <span>ออกกำลังกายเพิ่มแล้ว</span>
+                      <div>
+                        {[0, 100, 200, 300].map((value) => (
+                          <button key={value} type="button" className={exerciseBurned === value ? "active" : ""} onClick={() => setExerciseBurned(value)}>
+                            {value === 0 ? "0" : `-${value}`}
+                          </button>
+                        ))}
+                        <small>kcal</small>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="calorie-no-target">กรอกข้อมูลสุขภาพก่อน เพื่อดูว่าเมนูนี้ใช้พลังงานไปเท่าไรจากเป้าหมายต่อวัน</div>
+                )}
               </div>
             )}
           </section>
@@ -462,19 +615,7 @@ export default function Dashboard() {
               </button>
             </div>
 
-            {itemCalories > 0 && tdeeResult && (
-              <div className={`alert-box ${calorieSurplus > 0 ? "alert-danger" : "alert-success"}`}>
-                {calorieSurplus > 0 ? (
-                  <>
-                    <strong>⚠️ เกินประมาณ {calorieSurplus} kcal</strong>
-                    <span>แนะนำ Squat {requiredSquatReps} ครั้ง หรือ Jumping Jack {requiredJumpingJackReps} ครั้ง</span>
-                    <button onClick={() => navigate("/exercises")} className="start-now-btn">ไปออกกำลังกาย</button>
-                  </>
-                ) : (
-                  <p>✅ พลังงานอยู่ในเกณฑ์เหมาะสม</p>
-                )}
-              </div>
-            )}
+
           </section>
         </div>
 
@@ -488,7 +629,7 @@ export default function Dashboard() {
           role="presentation"
         >
           <div
-            className="meal-modal"
+            className={`meal-modal ${selectedMeal}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="meal-modal-title"
@@ -517,12 +658,12 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="meal-modal-section">
+            <div className="meal-modal-section time-section">
               <strong>🕐 ช่วงเวลาที่แนะนำ</strong>
               <p>{mealDetails[selectedMeal].time}</p>
             </div>
 
-            <div className="meal-modal-section">
+            <div className="meal-modal-section ingredients-section">
               <strong>🥗 ส่วนประกอบ</strong>
               <div className="meal-ingredient-list">
                 {mealDetails[selectedMeal].ingredients.map((ingredient) => (
@@ -531,7 +672,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="meal-modal-section">
+            <div className="meal-modal-section benefits-section">
               <strong>💪 ประโยชน์ที่ได้รับ</strong>
               <ul>
                 {mealDetails[selectedMeal].benefits.map((benefit) => (
@@ -549,7 +690,7 @@ export default function Dashboard() {
       )}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Anuphan:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&family=Anuphan:wght@400;500;600;700&display=swap');
 
         * { box-sizing: border-box; }
         html {
@@ -1035,6 +1176,112 @@ export default function Dashboard() {
           font-size: 9.5px;
         }
 
+        .health-result {
+          min-height: 92px;
+          margin-top: 10px;
+          padding: 11px 12px 9px;
+          border: 1px solid #dce9f6;
+          border-radius: 14px;
+          background: linear-gradient(135deg, rgba(255,255,255,.94), rgba(239,247,255,.92));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+        }
+
+        .result-main {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .result-status {
+          padding: 5px 9px;
+          border-radius: 999px;
+          font-size: 8.5px;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+
+        .result-status.normal {
+          color: #21865a;
+          background: #ddf7ea;
+          border: 1px solid #c5ecd9;
+        }
+
+        .result-status.attention {
+          color: #b87518;
+          background: #fff1d9;
+          border: 1px solid #f4dfb7;
+        }
+
+        .result-description {
+          margin-top: 4px;
+          color: #7b91aa;
+          font-size: 8.5px;
+          line-height: 1.45;
+        }
+
+        .health-empty-state {
+          min-height: 111px;
+          margin-top: 9px;
+          padding: 13px;
+          display: flex;
+          align-items: center;
+          gap: 11px;
+          border: 1px dashed #cbdff2;
+          border-radius: 14px;
+          background: linear-gradient(135deg, #f8fbff, #f1f7fd);
+        }
+
+        .empty-icon {
+          width: 38px;
+          height: 38px;
+          flex: 0 0 38px;
+          display: grid;
+          place-items: center;
+          border-radius: 12px;
+          color: #2c80ed;
+          background: #e7f2ff;
+          font-size: 18px;
+          box-shadow: 0 5px 12px rgba(24,119,242,.09);
+        }
+
+        .fire-empty {
+          color: #f39a31;
+          background: #fff1dd;
+        }
+
+        .health-empty-state strong {
+          display: block;
+          color: #315a8f;
+          font-size: 11px;
+          font-weight: 700;
+        }
+
+        .health-empty-state p {
+          margin: 4px 0 0;
+          color: #8ba0b7;
+          font-size: 8.5px;
+          line-height: 1.5;
+        }
+
+        .compact-scale {
+          margin-top: 9px;
+        }
+
+        .tdee-result {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+
+        .tdee-result .result-main {
+          justify-content: flex-start;
+        }
+
+        .tdee-result .energy-pill {
+          margin-top: 7px;
+        }
+
         .bmi-scale {
           position: relative;
           height: 10px;
@@ -1050,7 +1297,8 @@ export default function Dashboard() {
 
         .scale-dot {
           position: absolute;
-          left: 47%;
+          left: 0%;
+          transform: translateX(-50%);
           top: -3px;
           width: 16px;
           height: 16px;
@@ -1080,70 +1328,244 @@ export default function Dashboard() {
         }
 
         .health-form {
-          margin-top: 12px;
-          padding-top: 12px;
-          display: grid;
-          grid-template-columns: 1fr 1fr .75fr 1.2fr;
-          gap: 8px;
-          border-top: 1px solid #e4ecf5;
-        }
-
-        .compact-field label {
-          display: block;
-          margin-bottom: 4px;
-          color: #6d8199;
-          font-size: 8.5px;
-          font-weight: 600;
-        }
-
-        .compact-field > div {
           position: relative;
+          margin-top: 18px;
+          padding: 18px;
+          border: 1px solid rgba(196,218,240,.9);
+          border-radius: 20px;
+          background:
+            radial-gradient(circle at 8% 0%, rgba(64,143,255,.10), transparent 26%),
+            radial-gradient(circle at 100% 100%, rgba(85,203,166,.07), transparent 30%),
+            linear-gradient(145deg, #ffffff 0%, #f8fbff 100%);
+          box-shadow: 0 12px 32px rgba(35,82,137,.07), inset 0 1px 0 rgba(255,255,255,.95);
+          overflow: hidden;
         }
 
-        .compact-field input {
-          width: 100%;
-          height: 35px;
-          padding: 7px 30px 7px 10px;
-          outline: none;
-          border: 1px solid #d6e2ee;
-          border-radius: 9px;
-          color: #173b73;
-          background: #fff;
-          font-size: 10px;
-        }
-
-        .compact-field input:focus {
-          border-color: #1877f2;
-          box-shadow: 0 0 0 3px rgba(24,119,242,.08);
-        }
-
-        .compact-field small {
+        .health-form::before {
+          content: "";
           position: absolute;
-          right: 8px;
-          top: 10px;
-          color: #91a2b5;
-          font-size: 8px;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: linear-gradient(90deg, #5ba6ff, #1877f2 45%, #73d7b0);
         }
 
-        .primary-btn,
-        .start-now-btn {
-          height: 35px;
-          align-self: end;
-          border: 0;
-          border-radius: 9px;
+        .health-form-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 14px;
+        }
+
+        .health-form-title {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+        }
+
+        .health-form-orb {
+          width: 31px;
+          height: 31px;
+          flex: 0 0 31px;
+          display: grid;
+          place-items: center;
+          border-radius: 10px;
           color: #fff;
-          background: linear-gradient(135deg, #1877f2, #0d5dcc);
-          box-shadow: 0 7px 15px rgba(24,119,242,.18);
-          cursor: pointer;
-          font-size: 10px;
+          background: linear-gradient(145deg, #4b9bfa, #176de0);
+          box-shadow: 0 7px 16px rgba(24,119,242,.18);
+          font-size: 13px;
+        }
+
+        .health-form-title strong {
+          display: block;
+          color: #214d85;
+          font-family: "Kanit", sans-serif;
+          font-size: 12px;
+          font-weight: 600;
+          line-height: 1.2;
+        }
+
+        .health-form-title span:not(.health-form-orb) {
+          display: block;
+          margin-top: 3px;
+          color: #8a9db3;
+          font-size: 8px;
+          line-height: 1.4;
+        }
+
+        .health-form-badge {
+          flex: 0 0 auto;
+          padding: 5px 9px;
+          border: 1px solid #dbe9f8;
+          border-radius: 999px;
+          color: #5c7ea5;
+          background: #f2f7fd;
+          font-size: 8px;
           font-weight: 700;
+        }
+
+        .health-input-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr .82fr 1.35fr;
+          gap: 9px;
+          align-items: stretch;
+        }
+
+        .modern-field {
+          min-width: 0;
+          min-height: 57px;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+          padding: 8px 10px;
+          border: 1px solid #e0ebf6;
+          border-radius: 14px;
+          background: rgba(255,255,255,.9);
+          box-shadow: 0 4px 13px rgba(40,91,145,.035);
           transition: .2s ease;
         }
 
-        .primary-btn:hover,
-        .start-now-btn:hover {
+        .modern-field:focus-within {
+          border-color: #72aff0;
+          background: #fff;
+          box-shadow: 0 0 0 3px rgba(24,119,242,.07), 0 8px 18px rgba(24,119,242,.07);
+          transform: translateY(-1px);
+        }
+
+        .modern-field-icon {
+          width: 31px;
+          height: 31px;
+          flex: 0 0 31px;
+          display: grid;
+          place-items: center;
+          border-radius: 10px;
+          color: #2d82ed;
+          background: #eaf4ff;
+          font-size: 14px;
+          font-weight: 700;
+        }
+
+        .height-icon {
+          color: #6a7ee8;
+          background: #eef0ff;
+        }
+
+        .age-icon {
+          color: #25a477;
+          background: #e8f9f2;
+        }
+
+        .modern-field-copy {
+          min-width: 0;
+          flex: 1;
+        }
+
+        .modern-field label {
+          display: block;
+          margin: 0 0 1px;
+          color: #70859d;
+          font-size: 8px;
+          font-weight: 700;
+        }
+
+        .modern-input-wrap {
+          display: flex;
+          align-items: baseline;
+          gap: 4px;
+        }
+
+        .modern-input-wrap input {
+          width: 100%;
+          min-width: 0;
+          height: 25px;
+          padding: 0;
+          outline: none;
+          border: 0;
+          color: #163f79;
+          background: transparent;
+          font-family: "Kanit", sans-serif;
+          font-size: 17px;
+          font-weight: 500;
+          line-height: 1;
+        }
+
+        .modern-input-wrap input::placeholder {
+          color: #c1cfdd;
+        }
+
+        .modern-input-wrap input::-webkit-outer-spin-button,
+        .modern-input-wrap input::-webkit-inner-spin-button {
+          margin: 0;
+          -webkit-appearance: none;
+        }
+
+        .modern-input-wrap input[type=number] {
+          -moz-appearance: textfield;
+        }
+
+        .modern-input-wrap small {
+          flex: 0 0 auto;
+          color: #9aadc1;
+          font-size: 7.5px;
+          font-weight: 600;
+        }
+
+        .health-calculate-btn {
+          position: relative;
+          min-height: 57px;
+          padding: 9px 13px 9px 42px;
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          justify-content: center;
+          border: 0;
+          border-radius: 14px;
+          color: #fff;
+          background: linear-gradient(135deg, #2d87f4 0%, #1767d8 100%);
+          box-shadow: 0 9px 20px rgba(24,119,242,.2);
+          cursor: pointer;
+          overflow: hidden;
+          transition: .22s ease;
+        }
+
+        .health-calculate-btn::after {
+          content: "";
+          position: absolute;
+          width: 90px;
+          height: 90px;
+          right: -35px;
+          top: -55px;
+          border-radius: 50%;
+          background: rgba(255,255,255,.12);
+        }
+
+        .health-calculate-btn:hover {
           transform: translateY(-2px);
-          box-shadow: 0 10px 20px rgba(24,119,242,.25);
+          box-shadow: 0 13px 25px rgba(24,119,242,.28);
+        }
+
+        .health-calculate-btn:active {
+          transform: translateY(0) scale(.985);
+        }
+
+        .health-calculate-btn > span {
+          position: relative;
+          z-index: 1;
+          font-family: "Kanit", sans-serif;
+          font-size: 11px;
+          font-weight: 600;
+          line-height: 1.2;
+        }
+
+        .health-calculate-btn small {
+          position: relative;
+          z-index: 1;
+          margin-top: 3px;
+          color: rgba(255,255,255,.76);
+          font-size: 7px;
         }
 
         /* ---------- FOOD ---------- */
@@ -1293,6 +1715,181 @@ export default function Dashboard() {
           color: #f08b26;
           font-size: 10px;
         }
+
+        /* ---------- FOOD RESULT / CALORIE TRACKER ---------- */
+        .food-scan-box {
+          aspect-ratio: 4 / 3;
+          min-height: 0;
+          height: auto;
+        }
+
+        .food-preview {
+          width: 100%;
+          height: 100%;
+          min-height: 0;
+          aspect-ratio: 4 / 3;
+          object-fit: cover;
+          display: block;
+          border-radius: 16px;
+        }
+
+        .food-result-dashboard {
+          margin-top: 12px;
+          padding: 15px;
+          border: 1px solid #d9e8f7;
+          border-radius: 18px;
+          background: linear-gradient(145deg, #ffffff 0%, #f5f9ff 100%);
+          box-shadow: 0 10px 26px rgba(35,82,137,.07);
+        }
+
+        .food-result-top {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .food-result-top > div:first-child { min-width: 0; }
+        .food-result-category {
+          display: block;
+          color: #7190b1;
+          font-size: 10px;
+          font-weight: 600;
+        }
+        .food-result-top strong {
+          display: block;
+          margin-top: 3px;
+          color: #183f78;
+          font-family: "Kanit", sans-serif;
+          font-size: 18px;
+          font-weight: 600;
+        }
+        .food-kcal-badge {
+          flex: 0 0 auto;
+          min-width: 78px;
+          padding: 8px 10px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          border: 1px solid #ffdcae;
+          border-radius: 14px;
+          color: #e98218;
+          background: #fff7e9;
+        }
+        .food-kcal-badge b {
+          font-family: "Kanit", sans-serif;
+          font-size: 22px;
+          line-height: 1;
+        }
+        .food-kcal-badge small { font-size: 9px; font-weight: 700; }
+
+        .calorie-tracker {
+          margin-top: 13px;
+          padding-top: 13px;
+          border-top: 1px solid #e4edf6;
+        }
+        .calorie-tracker-head, .calorie-summary {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+        .calorie-tracker-head { color: #547392; font-size: 10px; }
+        .calorie-tracker-head b { color: #2e5d8f; font-size: 10px; }
+        .calorie-progress {
+          height: 9px;
+          margin: 8px 0 10px;
+          overflow: hidden;
+          border-radius: 999px;
+          background: #e9f0f7;
+        }
+        .calorie-progress span {
+          display: block;
+          height: 100%;
+          border-radius: inherit;
+          background: linear-gradient(90deg, #42a5ff, #42c49a);
+          transition: width .35s ease;
+        }
+        .calorie-summary > div {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .calorie-summary small { color: #8aa0b7; font-size: 9px; }
+        .calorie-summary strong { color: #315a8f; font-family: "Kanit", sans-serif; font-size: 17px; }
+        .calorie-summary > div:last-child { text-align: right; }
+        .remaining-ok strong { color: #1d9a68; }
+        .remaining-danger strong { color: #dc4b4b; }
+
+        .calorie-warning, .calorie-good {
+          margin-top: 11px;
+          padding: 10px 11px;
+          border-radius: 13px;
+        }
+        .calorie-warning {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          border: 1px solid #f3cccc;
+          background: #fff5f5;
+        }
+        .calorie-warning strong { display: block; color: #c83f3f; font-size: 10px; }
+        .calorie-warning span { display: block; margin-top: 3px; color: #9b6a6a; font-size: 8.5px; line-height: 1.5; }
+        .food-exercise-btn {
+          flex: 0 0 auto;
+          padding: 8px 11px;
+          border: 0;
+          border-radius: 9px;
+          color: #fff;
+          background: #dc5252;
+          cursor: pointer;
+          font-size: 9px;
+          font-weight: 700;
+        }
+        .calorie-good {
+          color: #237a58;
+          background: #effaf5;
+          border: 1px solid #d0eddf;
+          font-size: 9px;
+          font-weight: 600;
+        }
+        .calorie-no-target {
+          margin-top: 10px;
+          padding: 10px 11px;
+          border-radius: 11px;
+          color: #7890a9;
+          background: #f4f8fc;
+          font-size: 9px;
+          line-height: 1.5;
+        }
+        .exercise-adjust {
+          margin-top: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+          color: #7890a9;
+          font-size: 8.5px;
+        }
+        .exercise-adjust > div { display: flex; align-items: center; gap: 4px; }
+        .exercise-adjust button {
+          min-width: 34px;
+          padding: 4px 6px;
+          border: 1px solid #d8e6f4;
+          border-radius: 7px;
+          color: #5e7c9d;
+          background: #fff;
+          cursor: pointer;
+          font-size: 8px;
+          font-weight: 700;
+        }
+        .exercise-adjust button.active {
+          color: #fff;
+          border-color: #2e86ee;
+          background: #2e86ee;
+        }
+        .exercise-adjust small { font-size: 8px; }
 
         /* ---------- WORKOUT ---------- */
 
@@ -1586,6 +2183,8 @@ export default function Dashboard() {
           font-size: 17px;
         }
 
+        /* ---------- MEAL DETAIL POPUP ---------- */
+
         .meal-modal-backdrop {
           position: fixed;
           inset: 0;
@@ -1593,71 +2192,152 @@ export default function Dashboard() {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 22px;
-          background: rgba(13,42,78,.48);
-          backdrop-filter: blur(7px);
-          animation: mealModalFade .2s ease;
+          padding: 28px;
+          background:
+            radial-gradient(circle at 50% 25%, rgba(67,151,255,.12), transparent 35%),
+            rgba(6, 24, 48, .66);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          animation: mealModalFade .22s ease;
         }
 
         .meal-modal {
+          --meal-accent: #5aa8ff;
+          --meal-accent-soft: rgba(76,155,244,.15);
+          --meal-accent-border: rgba(116,181,255,.25);
+
           position: relative;
-          width: min(600px, 100%);
-          max-height: min(780px, calc(100vh - 44px));
+          width: min(760px, 100%);
+          max-height: min(820px, calc(100vh - 56px));
           overflow-y: auto;
-          padding: 27px;
-          border: 1px solid rgba(151,196,255,.24);
-          border-radius: 24px;
+          padding: 25px;
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          gap: 12px;
+          border: 1px solid rgba(151,196,255,.28);
+          border-radius: 28px;
           color: #e8f2ff;
-          background: linear-gradient(150deg, #102b50 0%, #0b2040 58%, #102b50 100%);
-          box-shadow: 0 26px 80px rgba(3,16,37,.55), inset 0 1px 0 rgba(255,255,255,.06);
-          animation: mealModalPop .24s ease;
+          background:
+            radial-gradient(circle at 10% 0%, rgba(82,157,255,.16), transparent 28%),
+            radial-gradient(circle at 95% 100%, rgba(56,122,222,.12), transparent 30%),
+            linear-gradient(150deg, #102f59 0%, #0b2243 55%, #0d294f 100%);
+          box-shadow:
+            0 32px 90px rgba(2,14,33,.62),
+            0 0 0 1px rgba(255,255,255,.025),
+            inset 0 1px 0 rgba(255,255,255,.08);
+          animation: mealModalPop .28s cubic-bezier(.2,.8,.2,1);
+          scrollbar-width: thin;
+          scrollbar-color: rgba(117,181,255,.45) transparent;
+        }
+
+        .meal-modal::-webkit-scrollbar {
+          width: 6px;
+        }
+
+        .meal-modal::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .meal-modal::-webkit-scrollbar-thumb {
+          border-radius: 999px;
+          background: rgba(117,181,255,.4);
+        }
+
+        .meal-modal.breakfast {
+          --meal-accent: #ffbf55;
+          --meal-accent-soft: rgba(255,191,85,.14);
+          --meal-accent-border: rgba(255,191,85,.28);
+        }
+
+        .meal-modal.lunch {
+          --meal-accent: #58d5a8;
+          --meal-accent-soft: rgba(88,213,168,.14);
+          --meal-accent-border: rgba(88,213,168,.27);
+        }
+
+        .meal-modal.dinner {
+          --meal-accent: #69aaff;
+          --meal-accent-soft: rgba(105,170,255,.15);
+          --meal-accent-border: rgba(105,170,255,.28);
         }
 
         .meal-modal-top {
+          grid-column: 1 / -1;
           display: flex;
           align-items: center;
-          gap: 16px;
-          padding: 3px 42px 19px 0;
-          margin-bottom: 5px;
-          border-bottom: 1px solid rgba(174,207,247,.15);
+          gap: 15px;
+          min-width: 0;
+          padding: 1px 48px 17px 1px;
+          margin-bottom: 1px;
+          border-bottom: 1px solid rgba(174,207,247,.14);
+          position: relative;
+        }
+
+        .meal-modal-top::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          bottom: -1px;
+          width: 86px;
+          height: 2px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, var(--meal-accent), transparent);
         }
 
         .meal-modal-close {
           position: absolute;
-          top: 15px;
-          right: 15px;
-          width: 35px;
-          height: 35px;
+          top: 14px;
+          right: 14px;
+          width: 39px;
+          height: 39px;
           display: grid;
           place-items: center;
-          border: 1px solid rgba(198,222,255,.16);
+          border: 1px solid rgba(198,222,255,.18);
           border-radius: 50%;
           color: #dceaff;
-          background: rgba(220,237,255,.09);
+          background: rgba(220,237,255,.08);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
           cursor: pointer;
-          font-size: 24px;
+          font-size: 25px;
           line-height: 1;
-          transition: .2s ease;
+          transition: .22s ease;
+          z-index: 5;
         }
 
         .meal-modal-close:hover {
           color: #fff;
-          background: #287ee8;
-          transform: rotate(6deg);
+          background: var(--meal-accent);
+          border-color: var(--meal-accent);
+          box-shadow: 0 8px 22px rgba(55,135,235,.28);
+          transform: rotate(8deg) scale(1.04);
         }
 
         .meal-modal-icon {
-          width: 70px;
-          height: 70px;
-          flex: 0 0 70px;
+          width: 72px;
+          height: 72px;
+          flex: 0 0 72px;
           display: grid;
           place-items: center;
           margin: 0;
-          border: 1px solid rgba(148,197,255,.3);
-          border-radius: 20px;
-          background: linear-gradient(145deg, #214e83, #17375f);
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,.04), 0 9px 24px rgba(0,0,0,.18);
+          border: 1px solid var(--meal-accent-border);
+          border-radius: 21px;
+          background:
+            linear-gradient(145deg, rgba(255,255,255,.08), transparent),
+            var(--meal-accent-soft);
+          box-shadow:
+            inset 0 0 0 1px rgba(255,255,255,.035),
+            0 12px 28px rgba(0,0,0,.18);
           font-size: 35px;
+          position: relative;
+        }
+
+        .meal-modal-icon::after {
+          content: "";
+          position: absolute;
+          inset: -5px;
+          border-radius: 25px;
+          border: 1px solid var(--meal-accent-border);
+          opacity: .45;
         }
 
         .meal-modal-heading {
@@ -1666,114 +2346,219 @@ export default function Dashboard() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          gap: 12px;
+          gap: 14px;
           padding: 0;
           margin: 0;
         }
 
         .meal-modal-label {
-          display: block;
-          margin-bottom: 4px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          margin-bottom: 5px;
           color: #9ebde3;
-          font-size: 9px;
+          font-size: 8.5px;
           font-weight: 700;
-          letter-spacing: 1.2px;
+          letter-spacing: 1.4px;
           text-transform: uppercase;
+        }
+
+        .meal-modal-label::before {
+          content: "✦";
+          color: var(--meal-accent);
+          font-size: 10px;
         }
 
         .meal-modal-heading h2 {
           margin: 0;
-          color: #f4f8ff;
+          color: #f7fbff;
           font-family: "Kanit", sans-serif;
-          font-size: 25px;
+          font-size: 27px;
           font-weight: 600;
-          line-height: 1.3;
+          line-height: 1.25;
+          letter-spacing: -.3px;
         }
 
         .meal-modal-kcal {
           flex: 0 0 auto;
-          padding: 7px 11px;
-          border: 1px solid rgba(132,190,255,.28);
+          padding: 8px 13px;
+          border: 1px solid var(--meal-accent-border);
           border-radius: 999px;
-          color: #d9ebff;
-          background: rgba(49,124,211,.22);
+          color: #f1f7ff;
+          background: var(--meal-accent-soft);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
           font-size: 10px;
           font-weight: 700;
           white-space: nowrap;
         }
 
         .meal-modal-section {
-          margin-top: 13px;
-          padding: 14px 16px;
-          border: 1px solid rgba(159,195,239,.16);
-          border-radius: 15px;
+          min-width: 0;
+          margin: 0;
+          padding: 15px 16px;
+          border: 1px solid rgba(159,195,239,.14);
+          border-radius: 17px;
           background: rgba(222,237,255,.055);
           box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+          transition: .2s ease;
+        }
+
+        .meal-modal-section:hover {
+          border-color: rgba(139,196,255,.24);
+          background: rgba(222,237,255,.07);
+          transform: translateY(-1px);
+        }
+
+        .meal-modal-section.time-section,
+        .meal-modal-section.ingredients-section {
+          min-height: 126px;
+        }
+
+        .meal-modal-section.benefits-section,
+        .meal-modal-tip {
+          grid-column: 1 / -1;
         }
 
         .meal-modal-section > strong {
-          display: block;
-          margin-bottom: 8px;
-          color: #cfe4ff;
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          margin-bottom: 10px;
+          color: #d8eaff;
           font-size: 11px;
           font-weight: 700;
         }
 
+        .meal-modal-section > strong::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: linear-gradient(90deg, rgba(136,192,255,.2), transparent);
+        }
+
         .meal-modal-section p {
           margin: 0;
-          color: #b5c9e2;
-          font-size: 10.5px;
+          color: #c0d2e8;
+          font-size: 11px;
           line-height: 1.7;
         }
 
-        .meal-ingredient-list {
+        .time-section p {
+          min-height: 58px;
           display: flex;
-          flex-wrap: wrap;
+          align-items: center;
+          justify-content: center;
+          padding: 10px;
+          border: 1px solid rgba(128,184,248,.11);
+          border-radius: 12px;
+          color: #e8f3ff;
+          background: rgba(44,112,188,.13);
+          font-family: "Kanit", sans-serif;
+          font-size: 16px;
+          font-weight: 500;
+          letter-spacing: .1px;
+        }
+
+        .meal-ingredient-list {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 8px;
         }
 
         .meal-ingredient-list span {
-          padding: 7px 11px;
-          border: 1px solid rgba(116,177,246,.25);
-          border-radius: 9px;
-          color: #dcecff;
-          background: rgba(42,112,190,.24);
+          min-width: 0;
+          min-height: 43px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 7px 9px;
+          border: 1px solid var(--meal-accent-border);
+          border-radius: 11px;
+          color: #e4f1ff;
+          background: var(--meal-accent-soft);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
           font-size: 9.5px;
           font-weight: 600;
+          text-align: center;
+          transition: .2s ease;
+        }
+
+        .meal-ingredient-list span:hover {
+          transform: translateY(-2px);
+          border-color: var(--meal-accent);
         }
 
         .meal-modal-section ul {
           margin: 0;
-          padding-left: 19px;
-          color: #b5c9e2;
-          font-size: 10.5px;
-          line-height: 1.85;
+          padding: 0;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 9px;
+          list-style: none;
+          color: #bfd1e6;
+          font-size: 10px;
+          line-height: 1.65;
         }
 
-        .meal-modal-section li { padding-left: 2px; }
-        .meal-modal-section li::marker { color: #75b5ff; }
+        .meal-modal-section li {
+          position: relative;
+          min-height: 82px;
+          padding: 11px 11px 11px 29px;
+          display: flex;
+          align-items: center;
+          border: 1px solid rgba(143,193,244,.11);
+          border-radius: 13px;
+          background: rgba(255,255,255,.035);
+        }
+
+        .meal-modal-section li::before {
+          content: "✓";
+          position: absolute;
+          left: 10px;
+          top: 12px;
+          width: 17px;
+          height: 17px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          color: #0d294d;
+          background: var(--meal-accent);
+          font-size: 9px;
+          font-weight: 800;
+        }
+
+        .meal-modal-section li::marker {
+          color: transparent;
+        }
 
         .meal-modal-tip {
-          margin-top: 14px;
+          margin: 0;
           padding: 14px 16px;
           display: flex;
-          flex-direction: column;
-          gap: 5px;
-          border: 1px solid rgba(104,184,255,.25);
-          border-left: 3px solid #58a8ff;
-          border-radius: 12px;
-          background: linear-gradient(100deg, rgba(39,112,190,.24), rgba(39,112,190,.1));
+          flex-direction: row;
+          align-items: center;
+          gap: 13px;
+          border: 1px solid var(--meal-accent-border);
+          border-left: 3px solid var(--meal-accent);
+          border-radius: 15px;
+          background:
+            linear-gradient(100deg, var(--meal-accent-soft), rgba(39,112,190,.07));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
         }
 
         .meal-modal-tip b {
-          color: #d4e9ff;
-          font-size: 10px;
+          flex: 0 0 auto;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          color: #f0f7ff;
+          font-size: 10.5px;
         }
 
         .meal-modal-tip span {
-          color: #b7cce5;
+          color: #c2d5e9;
           font-size: 9.5px;
-          line-height: 1.7;
+          line-height: 1.65;
         }
 
         @keyframes mealModalFade {
@@ -1784,7 +2569,7 @@ export default function Dashboard() {
         @keyframes mealModalPop {
           from {
             opacity: 0;
-            transform: translateY(12px) scale(.97);
+            transform: translateY(14px) scale(.965);
           }
           to {
             opacity: 1;
@@ -2020,17 +2805,60 @@ export default function Dashboard() {
           }
 
           .meal-modal {
-            padding: 20px;
-            border-radius: 20px;
+            padding: 18px;
+            border-radius: 22px;
             max-height: calc(100vh - 24px);
+            grid-template-columns: 1fr;
+            gap: 10px;
           }
 
-          .meal-modal-top { gap: 11px; padding-right: 35px; }
-          .meal-modal-icon { width: 56px; height: 56px; flex-basis: 56px; font-size: 29px; border-radius: 16px; }
-          .meal-modal-heading { align-items: flex-start; flex-direction: column; gap: 7px; }
+          .meal-modal-top {
+            gap: 11px;
+            padding-right: 35px;
+          }
+
+          .meal-modal-icon {
+            width: 56px;
+            height: 56px;
+            flex-basis: 56px;
+            font-size: 29px;
+            border-radius: 16px;
+          }
+
+          .meal-modal-heading {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 7px;
+          }
 
           .meal-modal-heading h2 {
             font-size: 22px;
+          }
+
+          .meal-modal-section.time-section,
+          .meal-modal-section.ingredients-section,
+          .meal-modal-section.benefits-section,
+          .meal-modal-tip {
+            grid-column: 1;
+          }
+
+          .meal-modal-section.time-section,
+          .meal-modal-section.ingredients-section {
+            min-height: auto;
+          }
+
+          .meal-modal-section ul {
+            grid-template-columns: 1fr;
+          }
+
+          .meal-modal-section li {
+            min-height: 0;
+          }
+
+          .meal-modal-tip {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 5px;
           }
 
           .dashboard-header h1 {
@@ -2043,7 +2871,125 @@ export default function Dashboard() {
           }
         }
 
+        /* ---------- MODERN READABILITY PASS ---------- */
+        .dashboard-page {
+          font-family: "Noto Sans Thai", "Anuphan", sans-serif;
+          font-size: 15px;
+        }
+
+        .dashboard-page button,
+        .dashboard-page input,
+        .dashboard-page textarea,
+        .dashboard-page select {
+          font-family: "Noto Sans Thai", "Anuphan", sans-serif;
+        }
+
+        .brand-name { font-size: 24px; }
+        .side-nav { font-size: 15px; }
+        .side-logout { font-size: 13px; }
+        .side-logout span { font-size: 19px; }
+        .dashboard-header h1 { font-size: clamp(32px, 3.5vw, 43px); }
+        .dashboard-header p { font-size: 15px; }
+        .panel-heading h2, .section-heading h2 { font-size: 22px; }
+        .panel-heading span:not(.heading-badge),
+        .section-heading span:not(.text-btn) { font-size: 12px; }
+        .metric-top { font-size: 15px; }
+        .metric-icon { width: 31px; height: 31px; font-size: 16px; }
+        .metric-value { font-size: 40px; }
+        .metric-value em, .result-status { font-size: 11px; }
+        .metric-helper, .result-description { font-size: 11px; }
+        .health-empty-state strong { font-size: 14px; }
+        .health-empty-state p { font-size: 11px; }
+        .health-form { padding: 20px; }
+        .health-form-title strong { font-size: 15px; }
+        .health-form-title span:not(.health-form-orb) { font-size: 11px; }
+        .health-form-badge { font-size: 10px; padding: 6px 10px; }
+        .modern-field { min-height: 68px; padding: 10px 12px; gap: 11px; }
+        .modern-field-icon { width: 37px; height: 37px; flex-basis: 37px; font-size: 17px; }
+        .modern-field label { font-size: 10px; margin-bottom: 3px; }
+        .modern-input-wrap input { height: 29px; font-size: 21px; }
+        .modern-input-wrap small { font-size: 10px; }
+        .health-calculate-btn { min-height: 68px; padding-left: 18px; }
+        .health-calculate-btn > span { font-size: 14px; }
+        .health-calculate-btn small { font-size: 9px; }
+        .scale-labels { font-size: 9px; }
+        .energy-pill { font-size: 11px; }
+
+        /* ---------- COMPACT HEALTH COPY ---------- */
+        .health-empty-copy {
+          min-width: 0;
+          flex: 1;
+        }
+        .health-empty-state strong {
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .health-empty-state {
+          min-height: 78px;
+          padding: 12px 14px;
+          gap: 10px;
+        }
+        .empty-icon { width: 38px; height: 38px; flex-basis: 38px; font-size: 18px; }
+        .health-form { padding: 14px; margin-top: 13px; border-radius: 17px; }
+        .health-form-head { margin-bottom: 9px; }
+        .health-form-title { gap: 8px; }
+        .health-form-orb { width: 27px; height: 27px; flex-basis: 27px; border-radius: 8px; font-size: 11px; }
+        .health-form-title strong { font-size: 12px; }
+        .health-form-title span:not(.health-form-orb) { font-size: 8px; }
+        .modern-field { min-height: 54px; padding: 7px 9px; gap: 8px; border-radius: 12px; }
+        .modern-field-icon { width: 29px; height: 29px; flex-basis: 29px; border-radius: 8px; font-size: 13px; }
+        .modern-field label { font-size: 8px; margin-bottom: 0; }
+        .modern-input-wrap input { height: 23px; font-size: 17px; }
+        .modern-input-wrap small { font-size: 8px; }
+        .health-calculate-btn { min-height: 54px; border-radius: 12px; }
+        .health-calculate-btn > span { font-size: 11px; }
+        .health-calculate-btn small { font-size: 7px; }
+
+        /* Result cards: cleaner, larger, no downward arrows */
+        .health-empty-state {
+          min-height: 122px;
+          padding: 17px;
+          gap: 14px;
+          border: 1px solid #d7e7f7;
+          border-radius: 17px;
+          background: linear-gradient(135deg, #ffffff 0%, #f4f9ff 100%);
+          box-shadow: 0 8px 22px rgba(45,93,145,.06);
+        }
+        .empty-icon {
+          width: 46px; height: 46px; flex-basis: 46px;
+          border-radius: 14px; font-size: 21px;
+        }
+
+        .health-result {
+          min-height: 108px;
+          margin-top: 10px;
+          padding: 14px 15px 12px;
+          border-radius: 17px;
+        }
+        .result-main { gap: 12px; }
+        .bmi-result .metric-value { font-size: 42px; }
+        .tdee-value { font-size: 38px; }
+
+        .food-tags i, .card-action, .info-strip b, .meal-item strong { font-size: 11px; }
+        .workout-copy h3 { font-size: 23px; }
+        .workout-copy p { font-size: 12px; }
+        .meal-item p { font-size: 10.5px; }
+        .primary-btn, .start-now-btn { font-size: 12px; }
+        .text-btn { font-size: 12px; }
+        .profile-name { font-size: 13px; }
+        .profile-chevron { font-size: 21px; }
+
         @media (max-width: 1050px) {
+          .health-input-row {
+            grid-template-columns: 1fr 1fr;
+          }
+
+          .health-calculate-btn {
+            grid-column: 1 / -1;
+          }
+
+
           .dashboard-sidebar {
             width: 200px;
           }
@@ -2065,6 +3011,11 @@ export default function Dashboard() {
         }
 
         @media (max-width: 760px) {
+          .food-scan-box { aspect-ratio: 4 / 3; }
+          .food-result-top strong { font-size: 16px; }
+          .calorie-warning { align-items: flex-start; flex-direction: column; }
+          .food-exercise-btn { width: 100%; }
+
           .dashboard-page {
             display: block;
           }
@@ -2134,7 +3085,7 @@ export default function Dashboard() {
             grid-template-columns: 1fr;
           }
 
-          .health-form {
+          .health-input-row {
             grid-template-columns: 1fr 1fr;
           }
 
@@ -2148,6 +3099,12 @@ export default function Dashboard() {
         }
 
         @media (max-width: 460px) {
+          .health-empty-state strong { white-space: normal; }
+          .food-scan-box { aspect-ratio: 1 / 1; }
+          .food-preview { aspect-ratio: 1 / 1; }
+          .food-result-top { align-items: flex-start; }
+          .food-kcal-badge { min-width: 68px; }
+
           .dashboard-header h1 {
             font-size: 24px;
           }
@@ -2170,8 +3127,16 @@ export default function Dashboard() {
             display: none;
           }
 
-          .health-form {
+          .health-input-row {
             grid-template-columns: 1fr;
+          }
+
+          .health-form-head {
+            align-items: flex-start;
+          }
+
+          .health-form-badge {
+            display: none;
           }
 
           .primary-btn {
@@ -2185,6 +3150,31 @@ export default function Dashboard() {
 
           .meal-item p {
             white-space: normal;
+          }
+
+          .meal-modal {
+            padding: 15px;
+          }
+
+          .meal-modal-top {
+            padding-bottom: 14px;
+          }
+
+          .meal-modal-heading h2 {
+            font-size: 20px;
+          }
+
+          .meal-modal-kcal {
+            font-size: 9px;
+            padding: 7px 10px;
+          }
+
+          .meal-ingredient-list {
+            grid-template-columns: 1fr;
+          }
+
+          .time-section p {
+            font-size: 14px;
           }
         }
       `}</style>
