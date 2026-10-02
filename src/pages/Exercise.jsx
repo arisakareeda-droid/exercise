@@ -484,122 +484,62 @@ export default function Exercise() {
     };
   }, [exerciseType, targetCount]);
 
-  // ---------------- UI ----------------
-  const labelStyle = { color: '#aaa', margin: '0 0 5px', fontSize: '14px' };
+  // ---------------- UI: FitTrack dashboard style ----------------
+  const exerciseName = exerciseType === 'squat' ? 'Squat' : exerciseType === 'jumping_jack' ? 'Jumping Jack' : 'ออกกำลังกาย';
+  const progress = Math.min(100, Math.round((counter / targetCount) * 100));
 
   return (
-    <div
-      style={{
-        padding: '20px',
-        maxWidth: '700px',
-        margin: '0 auto',
-        textAlign: 'center',
-        color: '#fff',
-        backgroundColor: '#121212',
-        minHeight: '100vh',
-        fontFamily: '"Kanit", sans-serif',
-      }}
-    >
-      <style>
-        {`
-          @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
-          * { font-family: "Kanit", sans-serif; }
-          button, input, textarea, select { font-family: "Kanit", sans-serif; }
-        `}
-      </style>
-
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '16px',
-          gap: '12px',
-          flexWrap: 'wrap',
-        }}
-      >
-        <button
-          onClick={() => navigate('/exercises')}
-          style={{
-            padding: '8px 16px',
-            background: '#333',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-          }}
-        >
-          ← กลับหน้าเลือกท่า
-        </button>
-
-        <h2 style={{ margin: 0, textTransform: 'uppercase', fontSize: '20px' }}>
-          ท่า: {exerciseType} (เป้าหมาย: {targetCount} ครั้ง)
-        </h2>
-      </div>
-
-      <div
-        style={{
-          background: '#1e1e1e',
-          padding: '16px',
-          borderRadius: '12px',
-          border: '1px solid #444',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            gap: '24px',
-            marginBottom: '16px',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-          }}
-        >
-          <div>
-            <p style={labelStyle}>ทำไปแล้ว</p>
-            <span style={{ fontSize: '32px', fontWeight: 'bold', color: '#007bff' }}>
-              {counter} / {targetCount}
-            </span>
+    <div className="exercise-shell">
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
+        * { box-sizing: border-box; }
+        .exercise-shell { min-height:100vh; color:#17365f; background:linear-gradient(135deg,#f4f8fe 0%,#edf4fc 55%,#f8fbff 100%); font-family:'Kanit',sans-serif; padding:28px; }
+        .exercise-shell * { font-family:'Kanit',sans-serif; }
+        .ex-wrap { max-width:1180px; margin:0 auto; }
+        .ex-header { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:6px 2px 22px; border-bottom:1px solid #dce8f5; margin-bottom:24px; }
+        .ex-brand { display:flex; align-items:center; gap:12px; }
+        .ex-mark { width:46px;height:46px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(145deg,#287ee8,#123c78);box-shadow:0 8px 20px #287ee833; }
+        .ex-brand-name {font-size:21px;font-weight:700;color:#123c78;line-height:1.1}.ex-brand-tag {font-size:11px;letter-spacing:1.5px;color:#7b93b2}
+        .ex-back {border:1px solid #d9e6f5;background:#fff;color:#315b8f;padding:10px 16px;border-radius:13px;cursor:pointer;font-size:14px;font-weight:500;box-shadow:0 5px 16px #1c4b7d0d;transition:.2s}.ex-back:hover {transform:translateY(-1px);border-color:#9dc3f0;background:#f9fcff}
+        .ex-heading {text-align:center;margin:0 0 22px}.ex-eyebrow {font-size:11px;letter-spacing:2px;color:#287ee8;font-weight:700}.ex-heading h1 {font-size:clamp(25px,3vw,36px);margin:3px 0;color:#123c78;font-weight:600}.ex-heading p {margin:0;color:#7188a5;font-size:14px}
+        .ex-layout {display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,.8fr);gap:22px;align-items:start}
+        .ex-panel {background:#fff;border:1px solid #e1ebf7;border-radius:22px;box-shadow:0 12px 32px #244e7c0d;padding:22px;min-width:0}
+        .ex-panel-title {display:flex;align-items:center;gap:11px;margin-bottom:16px}.ex-panel-icon {width:39px;height:39px;border-radius:13px;background:#eaf3ff;color:#287ee8;display:grid;place-items:center;font-size:19px}.ex-panel-title h2 {font-size:17px;margin:0;color:#173e70;font-weight:600}.ex-panel-title span {font-size:12px;color:#8195ae;display:block;margin-top:1px}
+        .ex-camera {background:#0d1e35;border-radius:17px;padding:9px;overflow:hidden;box-shadow:inset 0 0 0 1px #b9d6fa33}.ex-camera canvas {display:block;width:100%;max-width:520px;aspect-ratio:3/4;height:auto;object-fit:contain;border-radius:11px;margin:auto;background:#071426}
+        .ex-camera-foot {display:flex;justify-content:space-between;align-items:center;gap:10px;color:#c5d8f1;font-size:12px;padding:10px 5px 2px}.ex-live {display:inline-flex;align-items:center;gap:7px}.ex-live i {width:8px;height:8px;border-radius:50%;background:#36c98f;box-shadow:0 0 0 4px #36c98f25;display:inline-block}
+        .ex-stats {display:grid;grid-template-columns:1fr 1fr;gap:12px}.ex-stat {background:#f7faff;border:1px solid #e7eff9;border-radius:17px;padding:16px}.ex-stat-label {font-size:12px;color:#7890ae;display:flex;align-items:center;gap:7px}.ex-stat-value {font-size:31px;line-height:1.25;font-weight:700;color:#1769d2;margin-top:5px;letter-spacing:-.5px}.ex-stat-value small {font-size:12px;font-weight:500;color:#8195ae;letter-spacing:0}.ex-progress-wrap {margin:18px 0 20px}.ex-progress-top {display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#6d85a4;margin-bottom:8px}.ex-progress-track {height:9px;background:#eaf1fa;border-radius:20px;overflow:hidden}.ex-progress-fill {height:100%;border-radius:20px;background:linear-gradient(90deg,#56a0f7,#1769d2);transition:width .3s ease}
+        .ex-feedback {padding:14px 15px;border-radius:14px;background:#eff7ff;border:1px solid #dcecff;color:#245c9c;font-size:14px;line-height:1.5;display:flex;gap:10px;align-items:flex-start}.ex-feedback-icon {width:26px;height:26px;border-radius:9px;background:#dcecff;display:grid;place-items:center;flex:none}.ex-tip {margin-top:18px;padding-top:16px;border-top:1px solid #edf2f8}.ex-tip h3 {font-size:13px;margin:0 0 7px;color:#315b8f}.ex-tip p {font-size:12px;color:#8295ae;line-height:1.65;margin:0}.ex-debug {font-size:11px;color:#93a5bb;margin:12px 2px 0;text-align:center}
+        @media(max-width:820px){.exercise-shell{padding:17px}.ex-layout{grid-template-columns:1fr}.ex-panel{padding:17px}.ex-camera canvas{max-width:440px}}
+        @media(max-width:480px){.exercise-shell{padding:12px}.ex-header{margin-bottom:18px;padding-bottom:15px}.ex-brand-name{font-size:18px}.ex-mark{width:40px;height:40px}.ex-back{padding:9px 11px;font-size:12px}.ex-heading h1{font-size:25px}.ex-panel{padding:13px;border-radius:18px}.ex-stats{gap:8px}.ex-stat{padding:12px}.ex-stat-value{font-size:26px}}
+      `}</style>
+      <main className="ex-wrap">
+        <header className="ex-header">
+          <div className="ex-brand">
+            <div className="ex-mark" aria-label="FitTrack"><svg viewBox="0 0 32 32" width="25" height="25" aria-hidden="true"><path d="M8 3.5h17l-4.5 7H29L13 28v-11H4l4-13.5Z" fill="#a855f7" /></svg></div>
+            <div><div className="ex-brand-name">FitTrack</div><div className="ex-brand-tag">HEALTHY TODAY</div></div>
           </div>
-
-          <div>
-            <p style={labelStyle}>แคลอรี</p>
-            <span style={{ fontSize: '32px', fontWeight: 'bold', color: '#ffc107' }}>
-              {calories} kcal
-            </span>
-          </div>
-
-          <div>
-            <p style={labelStyle}>สถานะท่าทาง</p>
-            <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#28a745' }}>
-              {feedback}
-            </span>
-          </div>
+          <button className="ex-back" onClick={() => navigate('/exercises')}>← กลับหน้าเลือกท่า</button>
+        </header>
+        <section className="ex-heading"><div className="ex-eyebrow">SMART AI WORKOUT</div><h1>{exerciseName}</h1><p>ออกกำลังกายไปพร้อมระบบ AI ตรวจจับท่าทาง</p></section>
+        <div className="ex-layout">
+          <section className="ex-panel">
+            <div className="ex-panel-title"><div className="ex-panel-icon">◎</div><div><h2>กล้องตรวจจับท่าทาง</h2><span>จัดตำแหน่งให้เห็นร่างกายชัดเจน</span></div></div>
+            <video ref={videoRef} style={{display:'none'}} playsInline muted />
+            <div className="ex-camera"><canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H} /><div className="ex-camera-foot"><span className="ex-live"><i/> AI กำลังติดตาม</span><span>วางกล้องให้เห็นตัวเต็ม</span></div></div>
+            {SHOW_DEBUG && debug && <p className="ex-debug">{debug}</p>}
+          </section>
+          <aside className="ex-panel">
+            <div className="ex-panel-title"><div className="ex-panel-icon">✦</div><div><h2>ความคืบหน้าของคุณ</h2><span>ทำตามเป้าหมายในแต่ละเซสชัน</span></div></div>
+            <div className="ex-stats">
+              <div className="ex-stat"><div className="ex-stat-label">✓ ทำไปแล้ว</div><div className="ex-stat-value">{counter}<small> / {targetCount} ครั้ง</small></div></div>
+              <div className="ex-stat"><div className="ex-stat-label">♨ พลังงานที่ใช้</div><div className="ex-stat-value">{calories}<small> kcal</small></div></div>
+            </div>
+            <div className="ex-progress-wrap"><div className="ex-progress-top"><span>ความสำเร็จ</span><strong>{progress}%</strong></div><div className="ex-progress-track"><div className="ex-progress-fill" style={{width:`${progress}%`}}/></div></div>
+            <div className="ex-feedback"><span className="ex-feedback-icon">✧</span><span>{feedback}</span></div>
+            <div className="ex-tip"><h3>คำแนะนำในการใช้งาน</h3><p>• ยืนห่างจากกล้องพอให้เห็นร่างกายตามที่ระบบต้องใช้<br/>• ออกกำลังกายในบริเวณที่มีแสงสว่างเพียงพอ<br/>• ทำท่าช้า ๆ และต่อเนื่อง เพื่อให้ AI ตรวจจับได้ชัดเจน</p></div>
+          </aside>
         </div>
-
-        <video ref={videoRef} style={{ display: 'none' }} playsInline muted />
-
-        <canvas
-          ref={canvasRef}
-          width={CANVAS_W}
-          height={CANVAS_H}
-          style={{
-            width: '100%',
-            maxWidth: '420px',
-            aspectRatio: `${CANVAS_W} / ${CANVAS_H}`,
-            height: 'auto',
-            borderRadius: '8px',
-            border: '1px solid #444',
-            background: '#000',
-          }}
-        />
-
-        {SHOW_DEBUG && debug && (
-          <p style={{ color: '#888', fontSize: '12px', margin: '10px 0 0' }}>{debug}</p>
-        )}
-      </div>
+      </main>
     </div>
   );
 }
