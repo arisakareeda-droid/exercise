@@ -217,6 +217,37 @@ export default function ExerciseSelect() {
         * { box-sizing: border-box; }
         html { scroll-behavior: smooth; }
 
+        /* ป้องกันเส้นแบ่งแนวตั้ง/เส้นขอบที่ไม่ต้องการ */
+        .dashboard-page,
+        .dashboard-page::before,
+        .dashboard-page::after,
+        .dashboard-sidebar,
+        .dashboard-sidebar::before,
+        .dashboard-sidebar::after,
+        .dashboard-main,
+        .dashboard-main::before,
+        .dashboard-main::after,
+        .dashboard-content,
+        .dashboard-content::before,
+        .dashboard-content::after {
+          border-left: 0 !important;
+          border-right: 0 !important;
+          outline: 0 !important;
+        }
+
+        .dashboard-page::before,
+        .dashboard-page::after,
+        .dashboard-sidebar::before,
+        .dashboard-sidebar::after,
+        .dashboard-main::before,
+        .dashboard-main::after,
+        .dashboard-content::before,
+        .dashboard-content::after {
+          content: none !important;
+          display: none !important;
+          box-shadow: none !important;
+        }
+
         body {
           margin: 0;
           background: #eef4fb;
@@ -244,8 +275,9 @@ export default function ExerciseSelect() {
           flex-direction: column;
           z-index: 20;
           background: rgba(255,255,255,.93);
-          border-right: 1px solid #dbe7f4;
-          box-shadow: 8px 0 30px rgba(35,82,137,.045);
+          border: 0 !important;
+          border-right: 0 !important;
+          box-shadow: none !important;
           backdrop-filter: blur(18px);
         }
 
@@ -364,6 +396,8 @@ export default function ExerciseSelect() {
 
         /* MAIN */
         .dashboard-main {
+          border: 0 !important;
+          outline: 0 !important;
           width: calc(100% - 232px);
           margin-left: 232px;
           min-width: 0;
