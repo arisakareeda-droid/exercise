@@ -698,6 +698,8 @@ export default function Dashboard() {
           margin-left: 232px;
           min-width: 0;
           padding: 0 31px 36px;
+            border-right: none !important;
+  box-shadow: none;
         }
 
         .dashboard-header {
