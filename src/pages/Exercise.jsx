@@ -69,28 +69,28 @@ const REQUIRE_ALTERNATE = true;    // ต้องสลับซ้าย-ข�
 //  forward = ข้อมือยื่นเข้าหากล้องกี่เท่าของลำตัว (ใช้ z ช่วยตอนหันหน้าชกเข้าหากล้อง)
 //  height  = ข้อมือสูงกว่าไหล่กี่เท่าของลำตัว (กันนับตอนปล่อยแขนห้อยตรงๆ)
 // ---------------------------------------------------------------
-const PUNCH_REACH_OUT = 0.93;  // หันข้าง: แขนเหยียดตรงเกินนี้ (เทียบความยาวแขน)
+const PUNCH_REACH_OUT = 0.9;  // หันข้าง: แขนเหยียดตรงเกินนี้ (เดิม 0.93)
 const PUNCH_REACH_IN = 0.7;
-const PUNCH_FORWARD_OUT = 0.7;  // หันหน้าเข้ากล้อง: ข้อมือยื่นเข้าหากล้องเกินนี้ (เทียบความยาวลำตัว)
+const PUNCH_FORWARD_OUT = 0.5;  // หันหน้า: ข้อมือยื่นเข้าหากล้องเกินนี้ (เดิม 0.7)
 const PUNCH_FORWARD_IN = 0.3;
-const PUNCH_MIN_HEIGHT = -0.4;  // ข้อมือต่ำสุดที่ยังถือว่าอยู่ระดับอก
-const PUNCH_CONFIRM_FRAMES = 4;  // (เดิม 3)
-const PUNCH_ARM_COOLDOWN_MS = 400;  // (เดิม 250)
-const PUNCH_COOLDOWN_MS = 200;  // (เดิม 120)
-const MIN_VISIBILITY_PUNCH = 0.5;
-const PUNCH_MAX_HEIGHT = 0.3;  // ข้อมือสูงสุดเทียบไหล่ (เดิม 0.45)
-const PUNCH_SMOOTH = 3;            // เฉลี่ยสัญญาณกี่เฟรม ลดการสั่นของจุด
-const PUNCH_FRONT_RATIO = 0.45;     // ความกว้างไหล่/ความยาวลำตัว มากกว่านี้ = ยืนหันหน้าเข้ากล้อง
-const PUNCH_Z_STEP = 0.2;          // หันหน้า: ไหล่->ศอก->ข้อมือ ต้องยื่นเข้าหากล้องไล่ระดับ (ศอกยกอย่างเดียวไม่ผ่าน)
-const PUNCH_GUARD_ELBOW_MAX = 125; // ตอนตั้งการ์ด/ดึงหมัดกลับ ข้อศอกต้องงอไม่เกินนี้
-const PUNCH_ELBOW_MIN = 155;
+const PUNCH_MIN_HEIGHT = -0.45;  // ข้อมือต่ำสุดที่ยังถือว่าอยู่ระดับอก
+const PUNCH_CONFIRM_FRAMES = 2;  // ท่าเหยียดต้องต่อเนื่องกี่เฟรมถึงนับ (เดิม 4 หมัดเร็วจึงหลุด)
+const PUNCH_ARM_COOLDOWN_MS = 300;  // (เดิม 400)
+const PUNCH_COOLDOWN_MS = 120;  // (เดิม 200)
+const MIN_VISIBILITY_PUNCH = 0.4;  // กำปั้นพุ่งเข้าหากล้องมักมั่นใจต่ำชั่วขณะ จึงใช้เกณฑ์ที่ผ่อนกว่า (เดิม 0.5)
+const PUNCH_MAX_HEIGHT = 0.5;  // ข้อมือสูงสุดเทียบไหล่ (หมัดระดับหน้าอาจสูงกว่าไหล่)
+const PUNCH_SMOOTH = 2;  // เฉลี่ยกี่เฟรม (เดิม 3 หน่วงเกินไปสำหรับหมัดเร็ว)
+const PUNCH_Z_STEP = 0.1;  // หันหน้า: ไหล่->ศอก->ข้อมือ ไล่ระดับเข้าหากล้อง (เดิม 0.2)
+const PUNCH_ELBOW_MIN = 150;
+const PUNCH_FRONT_ON = 0.5;        // ความกว้างไหล่/ลำตัว มากกว่านี้ = หันหน้าเข้ากล้อง
+const PUNCH_FRONT_OFF = 0.35;      // น้อยกว่านี้ = หันข้าง (คั่นกลาง = คงโหมดเดิม กันสลับไปมาตอนลำตัวหมุน)
+const PUNCH_REARM_ELBOW = 135;     // ข้อศอกงอต่ำกว่านี้ = ดึงหมัดกลับแล้ว พร้อมนับหมัดต่อไป
+const PUNCH_REARM_FRAMES = 2;      // ต้องงออยู่กี่เฟรมถึงพร้อมนับครั้งต่อไป (กันค่าสั่นทำให้นับซ้ำ)  // ข้อศอกต้องเหยียดตรงอย่างน้อยกี่องศา (เดิม 155)
 // --- ตรวจ "เส้นทางของข้อมือ" จากท่าการ์ดจนถึงท่าเหยียด (หน่วย: เท่าของความยาวลำตัว) ---
-const PUNCH_TRAJ_FRAMES = 18;      // เก็บเส้นทางย้อนหลังสูงสุดกี่เฟรม (เริ่มใหม่ทุกครั้งที่ดึงหมัดกลับ)
-const PUNCH_TRAJ_MIN_FRAMES = 4;   // ต้องมีข้อมูลเส้นทางอย่างน้อยกี่เฟรม
-const PUNCH_MIN_TRAVEL = 0.25;     // ข้อมือต้องพุ่งไปด้านหน้าอย่างน้อยเท่านี้
-const PUNCH_MAX_DY = 0.25;         // ข้อมือขยับขึ้น/ลงเกินนี้ = อัปเปอร์คัต/ตวัดลง ไม่นับ
-const PUNCH_MAX_DLAT = 0.3;        // หันหน้า: ข้อมือเหวี่ยงไปด้านข้างเกินนี้ = ฮุก ไม่นับ
-const PUNCH_MAX_LAT = 0.55;        // หันหน้า: ข้อมือต้องอยู่แนวเดียวกับไหล่ของแขนข้างนั้น  // ข้อศอกต้องเหยียดตรงอย่างน้อยกี่องศา (ฮุก/อัปเปอร์คัตข้อศอกงอ)
+const PUNCH_TRAJ_FRAMES = 12;  // เก็บเส้นทางข้อมือย้อนหลังกี่เฟรม (ไม่ล้างตอนดึงหมัดกลับ หาจุดเริ่มหมัดเอง)
+const PUNCH_MAX_DY = 0.4;  // ข้อมือขยับขึ้น/ลงจากจุดเริ่มหมัดเกินนี้ = อัปเปอร์คัต ไม่นับ
+const PUNCH_MAX_DLAT = 0.5;  // หันหน้า: ข้อมือเหวี่ยงไปด้านข้างเกินนี้ = ฮุก ไม่นับ
+const PUNCH_MAX_LAT = 0.8;  // หันหน้า: ข้อมืออยู่ห่างแนวไหล่เกินนี้ = ฮุก ไม่นับ
 
 // ทั่วไป
 const MIN_VISIBILITY_DRAW = 0.4;
@@ -197,6 +197,9 @@ export default function Exercise() {
     let punchTraj = { L: [], R: [] };
     let punchTrajOk = { L: false, R: false };
     let punchWhy = { L: '', R: '' };
+    let punchRearm = { L: 0, R: 0 };
+    let punchFront = true;
+    let frontRatioBuf = [];
     let imgAspect = CANVAS_W / CANVAS_H;
 
     setCounter(0);
@@ -233,6 +236,8 @@ export default function Exercise() {
       punchBuf = { L: [], R: [] };
       punchTraj = { L: [], R: [] };
       punchTrajOk = { L: false, R: false };
+      punchRearm = { L: 0, R: 0 };
+      frontRatioBuf = [];
       baselineShoulderSpan = 0;
       baselineTorso = 0;
       readyFrames = 0;
@@ -671,6 +676,18 @@ export default function Exercise() {
     };
 
     // ---------------- PUNCHES ----------------
+    // ตัดสินว่ากำลังหันหน้าหรือหันข้างให้กล้อง (ใช้ร่วมกันทั้งสองแขน + กันค่าสลับไปมา)
+    const updatePunchView = (lm) => {
+      const v = MIN_VISIBILITY_PUNCH;
+      if (!isVisible(lm[11], v) || !isVisible(lm[12], v)) return;
+      const ratio = (Math.abs(lm[11].x - lm[12].x) * imgAspect) / getTorsoLength(lm);
+      frontRatioBuf.push(ratio);
+      if (frontRatioBuf.length > 8) frontRatioBuf.shift();
+      const r = average(frontRatioBuf);
+      if (r > PUNCH_FRONT_ON) punchFront = true;
+      else if (r < PUNCH_FRONT_OFF) punchFront = false;
+    };
+
     const getPunchSignal = (lm, shoulderIdx, elbowIdx, wristIdx, side) => {
       const v = MIN_VISIBILITY_PUNCH;
       const s = lm[shoulderIdx];
@@ -683,7 +700,6 @@ export default function Exercise() {
 
       const torso = getTorsoLength(lm);
       const other = lm[shoulderIdx === 11 ? 12 : 11];
-      const shoulderW = isVisible(other, v) ? Math.abs(s.x - other.x) * imgAspect : 0;
       // ทิศ "ออกนอกลำตัว" ของไหล่ข้างนี้ในแนวนอน
       const outSign = isVisible(other, v) ? Math.sign(s.x - other.x) || 1 : 1;
 
@@ -695,16 +711,15 @@ export default function Exercise() {
         // ไหล่->ศอก และ ศอก->ข้อมือ ต้องยื่นเข้าหากล้องทั้งคู่ (ใช้ค่าที่น้อยกว่า)
         zStep: Math.min((s.z ?? 0) - (e.z ?? 0), (e.z ?? 0) - (w.z ?? 0)) / torso,
         height: (s.y - w.y) / torso,
-        front: shoulderW / torso > PUNCH_FRONT_RATIO,
       };
 
       // เก็บเส้นทางข้อมือเทียบไหล่ เพื่อแยกหมัดตรงออกจากฮุก/อัปเปอร์คัต
       const tr = punchTraj[side];
       tr.push({
+        el3d: raw.elbow3d,
+        el2d: raw.elbow2d,
         lat: ((w.x - s.x) * imgAspect * outSign) / torso, // + = ข้อมืออยู่นอกไหล่, - = ข้ามเข้าหาลำตัว
         up: (s.y - w.y) / torso,                          // + = ข้อมือสูงกว่าไหล่
-        fwd: ((s.z ?? 0) - (w.z ?? 0)) / torso,           // + = ยื่นเข้าหากล้อง
-        ext: (Math.abs(w.x - s.x) * imgAspect) / torso,   // ระยะแนวนอนจากไหล่ (ใช้ตอนยืนหันข้าง)
       });
       if (tr.length > PUNCH_TRAJ_FRAMES) tr.shift();
 
@@ -720,42 +735,34 @@ export default function Exercise() {
         forward: avg('forward'),
         zStep: avg('zStep'),
         height: avg('height'),
-        front: raw.front,
+        front: punchFront,
       };
     };
 
-    // ตรวจว่าเส้นทางข้อมือตั้งแต่ท่าการ์ดจนถึงท่าเหยียดเป็น "หมัดตรง" หรือไม่
-    //  - พุ่งไปข้างหน้าเป็นหลัก ระดับความสูงแทบไม่เปลี่ยน (ถ้าตวัดขึ้น = อัปเปอร์คัต)
-    //  - ไม่เหวี่ยงไปด้านข้าง/เป็นวงโค้ง (ถ้าเหวี่ยง = ฮุก)
+    // ปฏิเสธเฉพาะเมื่อมี "หลักฐานชัดเจน" ว่าไม่ใช่หมัดตรง (อัปเปอร์คัต = ข้อมือยกขึ้นมาก,
+    // ฮุก = ข้อมือเหวี่ยงไปด้านข้าง) ถ้าข้อมูลไม่พอ ให้ถือว่าเป็นหมัดตรง เพื่อไม่ให้พลาดหมัดจริง
+    // จุดเริ่มหมัด = เฟรมที่งอข้อศอกมากที่สุดในช่วงที่ผ่านมา (ไม่ต้องรอให้ดึงหมัดกลับครบ)
     const checkStraightPath = (side, front) => {
       const tr = punchTraj[side];
-      if (tr.length < PUNCH_TRAJ_MIN_FRAMES) return { ok: false, why: '' };
+      if (tr.length < 3) return { ok: true, why: '' };
 
-      const mean = (arr, k) => average(arr.map((x) => x[k]));
-      const head = tr.slice(0, 2);
+      const key = front ? 'el3d' : 'el2d';
+      const search = tr.slice(0, tr.length - 2);
+      let oi = 0;
+      search.forEach((x, i) => {
+        if (x[key] < search[oi][key]) oi = i;
+      });
+      const o = search[oi];
+
       const tail = tr.slice(-2);
-      const d = (k) => mean(tail, k) - mean(head, k);
+      const endUp = average(tail.map((x) => x.up));
+      const endLat = average(tail.map((x) => x.lat));
 
-      const dUp = d('up');
-      if (Math.abs(dUp) > PUNCH_MAX_DY) {
+      if (Math.abs(endUp - o.up) > PUNCH_MAX_DY) {
         return { ok: false, why: 'ต้องเป็นหมัดตรงเท่านั้น ไม่ใช่อัปเปอร์คัต' };
       }
-
-      if (front) {
-        const dFwd = d('fwd');
-        const dLat = d('lat');
-        const endLat = mean(tail, 'lat');
-        if (Math.abs(dLat) > PUNCH_MAX_DLAT || Math.abs(endLat) > PUNCH_MAX_LAT) {
-          return { ok: false, why: 'ต้องเป็นหมัดตรงเท่านั้น ไม่ใช่ฮุก' };
-        }
-        if (dFwd < PUNCH_MIN_TRAVEL) {
-          return { ok: false, why: 'ชกตรงไปข้างหน้าให้สุดแขน' };
-        }
-      } else {
-        const dExt = d('ext');
-        if (dExt < PUNCH_MIN_TRAVEL) {
-          return { ok: false, why: 'ชกตรงไปข้างหน้าให้สุดแขน' };
-        }
+      if (front && (Math.abs(endLat - o.lat) > PUNCH_MAX_DLAT || Math.abs(endLat) > PUNCH_MAX_LAT)) {
+        return { ok: false, why: 'ต้องเป็นหมัดตรงเท่านั้น ไม่ใช่ฮุก' };
       }
       return { ok: true, why: '' };
     };
@@ -763,28 +770,25 @@ export default function Exercise() {
     const processPunch = (side, sig) => {
       if (sig === null) return;
 
-      // ข้อมืออยู่ช่วงอก-ไหล่ (ไม่ห้อยลง ไม่ชูสูง)
+      // ข้อมืออยู่ช่วงอก-ไหล่ (ไม่ห้อยลง ไม่ชูสูงเกินไป)
       const heightOk = sig.height > PUNCH_MIN_HEIGHT && sig.height < PUNCH_MAX_HEIGHT;
 
       // หันหน้าเข้ากล้อง: ข้อศอก(3D)เหยียดตรง + ข้อมือยื่นเข้าหากล้อง + ไหล่->ศอก->ข้อมือ ไล่ระดับเข้าหากล้อง
       // หันข้างให้กล้อง: ข้อศอก(2D)เหยียดตรง + แขนเหยียดสุด
+      const elbow = sig.front ? sig.elbow3d : sig.elbow2d;
       const straightPose = sig.front
-        ? sig.elbow3d > PUNCH_ELBOW_MIN &&
-          sig.forward > PUNCH_FORWARD_OUT &&
-          sig.zStep > PUNCH_Z_STEP
-        : sig.elbow2d > PUNCH_ELBOW_MIN && sig.reach > PUNCH_REACH_OUT;
-
+        ? elbow > PUNCH_ELBOW_MIN && sig.forward > PUNCH_FORWARD_OUT && sig.zStep > PUNCH_Z_STEP
+        : elbow > PUNCH_ELBOW_MIN && sig.reach > PUNCH_REACH_OUT;
       const extended = heightOk && straightPose;
 
-      // ตั้งการ์ด/ดึงหมัดกลับ: ข้อศอกต้องงอ และข้อมือกลับมาใกล้ไหล่
-      const guardElbow = sig.front ? sig.elbow3d : sig.elbow2d;
+      // ดึงหมัดกลับ: ข้อศอกงอ หรือข้อมือกลับมาใกล้ไหล่ หรือแขนลงต่ำ/ชูสูง
       const retracted =
         !heightOk ||
-        (sig.reach < PUNCH_REACH_IN &&
-          sig.forward < PUNCH_FORWARD_IN &&
-          guardElbow < PUNCH_GUARD_ELBOW_MAX);
+        elbow < PUNCH_REARM_ELBOW ||
+        (sig.reach < PUNCH_REACH_IN && sig.forward < PUNCH_FORWARD_IN);
 
       if (punchStage[side] === 'guard') {
+        punchRearm[side] = 0;
         if (extended) {
           // เฟรมแรกที่เห็นท่าเหยียด: ตัดสินจากเส้นทางข้อมือที่ผ่านมา แล้วล็อกผลไว้
           if (punchConfirm[side] === 0) {
@@ -813,23 +817,29 @@ export default function Exercise() {
           punchConfirm[side] = 0;
         }
       } else if (retracted) {
-        // ดึงหมัดกลับมาแล้ว พร้อมนับหมัดต่อไปของแขนข้างนี้ และเริ่มเก็บเส้นทางใหม่
-        punchStage[side] = 'guard';
-        punchConfirm[side] = 0;
-        punchTraj[side] = [];
+        // ดึงหมัดกลับมาแล้ว (ต้องต่อเนื่องสั้นๆ กันค่าสั่น) พร้อมนับหมัดต่อไปของแขนข้างนี้
+        punchRearm[side] += 1;
+        if (punchRearm[side] >= PUNCH_REARM_FRAMES) {
+          punchStage[side] = 'guard';
+          punchConfirm[side] = 0;
+          punchRearm[side] = 0;
+        }
+      } else {
+        punchRearm[side] = 0;
       }
     };
 
     const handlePunches = (lm) => {
+      updatePunchView(lm);
       const left = getPunchSignal(lm, 11, 13, 15, 'L');
       const right = getPunchSignal(lm, 12, 14, 16, 'R');
 
       const fmt = (s) =>
         s === null
           ? '-'
-          : `${s.front ? 'หน้า' : 'ข้าง'} reach ${s.reach.toFixed(2)} fwd ${s.forward.toFixed(2)} zStep ${s.zStep.toFixed(2)} สูง ${s.height.toFixed(2)} ศอก ${Math.round(s.front ? s.elbow3d : s.elbow2d)}°`;
+          : `ศอก ${Math.round(s.front ? s.elbow3d : s.elbow2d)}° reach ${s.reach.toFixed(2)} fwd ${s.forward.toFixed(2)} zStep ${s.zStep.toFixed(2)} สูง ${s.height.toFixed(2)}`;
       updateDebug(
-        `ซ้าย: ${fmt(left)}  |  ขวา: ${fmt(right)}  |  ${punchStage.L}/${punchStage.R}`
+        `[${punchFront ? 'หันหน้า' : 'หันข้าง'}] ซ้าย: ${fmt(left)}  |  ขวา: ${fmt(right)}  |  ${punchStage.L}/${punchStage.R}`
       );
 
       if (left === null && right === null) {
@@ -840,7 +850,7 @@ export default function Exercise() {
       if (!initialized) {
         if (holdReady(true)) {
           initialized = true;
-          updateFeedback('พร้อมแล้ว ตั้งการ์ดแล้วชกหมัดตรงได้เลย (ฮุก/อัปเปอร์คัตไม่นับ)');
+          updateFeedback('พร้อมแล้ว ชกหมัดตรงสลับซ้าย-ขวาได้เลย (ฮุก/อัปเปอร์คัตไม่นับ)');
         } else {
           updateFeedback('ตั้งการ์ดนิ่งๆ ก่อนเริ่มนับ');
         }
