@@ -37,9 +37,12 @@ const ARM_UP_THRESHOLD = 0.35;  // ข้อมือต้องสูงกว
 const ARM_DOWN_THRESHOLD = -0.5;  // แขนต้องลงต่ำจริง ทั้งสองแขน (เดิม -0.25)
 const FALLBACK_TORSO = 0.3;
 const REQUIRE_LEGS_SPREAD = true;  // บังคับให้ต้องกางขาด้วย (เดิม false)
-const LEG_SPREAD_RATIO = 1.4;  // (เดิม 1.2)
+const LEG_SPREAD_RATIO = 1.5;  // ระยะข้อเท้า / ความกว้างไหล่ ที่ถือว่า "กางขา" (เดิม 1.2)
 const JJ_COOLDOWN_MS = 800;  // (เดิม 600)
 const MIN_VISIBILITY_ARM = 0.5;
+const LEG_CLOSED_RATIO = 1.15;     // ข้อเท้าห่างน้อยกว่านี้ = เท้าชิด (ท่าเริ่มต้น/ท่ากลับ)
+const LEG_MAX_LEVEL_DIFF = 0.2;    // ข้อเท้า 2 ข้างต่างระดับเกินนี้ = ยกขาข้างเดียว ไม่นับ
+const JJ_BOTH_FRAMES = 3;          // ต้องเห็น "แขนอยู่สูง + ขากางกว้าง" พร้อมกันอย่างน้อยกี่เฟรม
 const JJ_MIN_UP_MS = 150;          // ต้องค้างแขนอยู่ข้างบนอย่างน้อยเท่านี้
 
 // ---------------------------------------------------------------
@@ -156,8 +159,11 @@ export default function Exercise() {
     // jumping jack
     let armBuffer = [];
     let skipNextCount = false;
-    let legsSpreadSeen = false;
     let legsVisibleInCycle = false;
+    let legsClosedSeen = false;     // เห็นเท้าชิดตอนอยู่ท่าแขนลง
+    let closedAtStart = false;      // เริ่มรอบนี้จากท่าเท้าชิดหรือไม่
+    let bothFrames = 0;             // จำนวนเฟรมที่แขนสูง + ขากางพร้อมกัน
+    let liftedOneLegSeen = false;
     let upSince = 0;
 
     // high knees (แยกสถานะซ้าย/ขวา)
@@ -205,6 +211,11 @@ export default function Exercise() {
       baselineTorso = 0;
       readyFrames = 0;
       lastHkSide = null;
+      legsClosedSeen = false;
+      closedAtStart = false;
+      bothFrames = 0;
+      liftedOneLegSeen = false;
+      legsVisibleInCycle = false;
       baselineSpan = 0;
       candidate = null;
       candidateFrames = 0;
@@ -427,20 +438,32 @@ export default function Exercise() {
       };
     };
 
-    const getLegsSpread = (lm) => {
+    const getLegsInfo = (lm) => {
       const v = MIN_VISIBILITY_ARM;
       if (!(isVisible(lm[27], v) && isVisible(lm[28], v) && isVisible(lm[11], v) && isVisible(lm[12], v))) {
         return null;
       }
       const shoulderW = Math.abs(lm[11].x - lm[12].x);
       if (shoulderW < 0.02) return null;
-      return Math.abs(lm[27].x - lm[28].x) / shoulderW > LEG_SPREAD_RATIO;
+      const ratio = Math.abs(lm[27].x - lm[28].x) / shoulderW;
+      const levelDiff = Math.abs(lm[27].y - lm[28].y) / getTorsoLength(lm);
+      const sameLevel = levelDiff < LEG_MAX_LEVEL_DIFF;
+      return {
+        ratio,
+        levelDiff,
+        closed: ratio < LEG_CLOSED_RATIO && sameLevel,
+        spread: ratio > LEG_SPREAD_RATIO && sameLevel,
+        oneLegLifted: !sameLevel,
+      };
     };
 
     const handleJumpingJack = (lm) => {
       const arms = getSmoothedArms(lm);
+      const legs = getLegsInfo(lm);
       updateDebug(
-        `แขน(ต่ำ/สูง): ${arms === null ? '-' : arms.lo.toFixed(2) + ' / ' + arms.hi.toFixed(2)}  |  สถานะ: ${stage ?? '-'}`
+        `แขน(ต่ำ/สูง): ${arms === null ? '-' : arms.lo.toFixed(2) + ' / ' + arms.hi.toFixed(2)}  |  ขา(ห่าง/ต่างระดับ): ${
+          legs === null ? '-' : legs.ratio.toFixed(2) + ' / ' + legs.levelDiff.toFixed(2)
+        }  |  สถานะ: ${stage ?? '-'}`
       );
 
       if (arms === null) {
@@ -453,35 +476,43 @@ export default function Exercise() {
       const armsDown = arms.hi < ARM_DOWN_THRESHOLD; // ลดต่ำทั้งสองแขน
 
       if (!initialized) {
-        // เริ่มนับเมื่อผู้ใช้ยืนแขนลงนิ่งๆ ชัดเจน
-        if (holdReady(armsDown)) {
+        // เริ่มนับเมื่อยืนเท้าชิด แขนลงนิ่งๆ ชัดเจน
+        const legsReady = !REQUIRE_LEGS_SPREAD || (legs !== null && legs.closed);
+        if (holdReady(armsDown && legsReady)) {
           stage = 'down';
           initialized = true;
+          legsClosedSeen = true;
           candidate = null;
           candidateFrames = 0;
-          updateFeedback('พร้อมแล้ว กระโดดยกแขนขึ้นได้เลย');
+          updateFeedback('พร้อมแล้ว กระโดดกางแขนขาออกพร้อมกันได้เลย');
+        } else if (REQUIRE_LEGS_SPREAD && legs === null) {
+          updateFeedback('ถอยให้เห็นขาทั้งสองข้างด้วย');
         } else {
-          updateFeedback('ยืนตรง ลดแขนลงนิ่งๆ ก่อนเริ่มนับ');
+          updateFeedback('ยืนเท้าชิด ลดแขนลงนิ่งๆ ก่อนเริ่มนับ');
         }
         return;
       }
 
-      if (stage === 'up') {
-        const spread = getLegsSpread(lm);
-        if (spread !== null) {
-          legsVisibleInCycle = true;
-          if (spread) legsSpreadSeen = true;
-        }
+      // เก็บข้อมูลระหว่างรอบ
+      if (stage === 'down' && legs && legs.closed) legsClosedSeen = true;
+      if (stage === 'up' && legs) {
+        legsVisibleInCycle = true;
+        if (legs.oneLegLifted) liftedOneLegSeen = true;
+        // แขนสูง + ขากางกว้าง (ข้อเท้าอยู่ระดับเดียวกัน) ต้องเกิดพร้อมกัน
+        if (armsUp && legs.spread) bothFrames += 1;
       }
 
       if (armsUp) {
         if (confirm('up', JJ_CONFIRM_FRAMES) && stage !== 'up') {
           stage = 'up';
           upSince = now;
+          closedAtStart = legsClosedSeen;   // รอบนี้เริ่มจากเท้าชิดหรือไม่
+          legsClosedSeen = false;
+          bothFrames = 0;
+          liftedOneLegSeen = false;
+          legsVisibleInCycle = false;
           candidate = null;
           candidateFrames = 0;
-          legsSpreadSeen = false;
-          legsVisibleInCycle = false;
           updateFeedback('ยอดเยี่ยม! หุบแขนขาลง');
         }
       } else if (armsDown) {
@@ -489,15 +520,21 @@ export default function Exercise() {
           stage = 'down';
           candidate = null;
           candidateFrames = 0;
-          const legsOk = !REQUIRE_LEGS_SPREAD || (legsVisibleInCycle && legsSpreadSeen);
+          const bothOk = bothFrames >= JJ_BOTH_FRAMES;
+          const legsOk =
+            !REQUIRE_LEGS_SPREAD || (closedAtStart && legsVisibleInCycle && bothOk);
           const heldOk = now - upSince >= JJ_MIN_UP_MS;
           if (legsOk && heldOk) {
             tryCountRep(JJ_COOLDOWN_MS);
             updateFeedback('นับแล้ว! กระโดดกางแขนขาออกอีกครั้ง');
           } else if (!legsVisibleInCycle) {
             updateFeedback('ถอยให้เห็นขาทั้งสองข้างด้วย');
-          } else if (!legsSpreadSeen) {
-            updateFeedback('กางขาให้กว้างขึ้นด้วย');
+          } else if (!closedAtStart) {
+            updateFeedback('เริ่มจากยืนเท้าชิดก่อน แล้วกางแขนขาพร้อมกัน');
+          } else if (!bothOk && liftedOneLegSeen) {
+            updateFeedback('กางขาสองข้างพร้อมกัน อย่ายกขาข้างเดียว');
+          } else if (!bothOk) {
+            updateFeedback('กางขาให้กว้างพร้อมกับยกแขน');
           } else {
             updateFeedback('เร็วเกินไป ยกแขนให้สุดก่อนหุบลง');
           }
