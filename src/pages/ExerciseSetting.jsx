@@ -8,21 +8,28 @@ export default function ExerciseSetting() {
   const exerciseType = searchParams.get("exercise") || "squat";
   const [targetCount, setTargetCount] = useState(10);
 
-  const isSquat = exerciseType === "squat";
+  const exerciseInfoMap = {
+    squat: {
+      name: "Squat",
+      thaiName: "ลุกนั่ง",
+      icon: "🏋️‍♂️",
+      description: "บริหารกล้ามเนื้อขาและสะโพก",
+    },
+    jumping_jack: {
+      name: "Jumping Jack",
+      thaiName: "กระโดดตบ",
+      icon: "⭐",
+      description: "ช่วยเพิ่มการเผาผลาญและความแข็งแรง",
+    },
+    high_knees: {
+      name: "High Knees",
+      thaiName: "ยกเข่าสูง",
+      icon: "🏃",
+      description: "เพิ่มอัตราการเต้นของหัวใจและฝึกกล้ามเนื้อต้นขา",
+    },
+  };
 
-  const exerciseInfo = isSquat
-    ? {
-        name: "Squat",
-        thaiName: "ลุกนั่ง",
-        icon: "🏋️‍♂️",
-        description: "บริหารกล้ามเนื้อขาและสะโพก",
-      }
-    : {
-        name: "Jumping Jack",
-        thaiName: "กระโดดตบ",
-        icon: "⭐",
-        description: "ช่วยเพิ่มการเผาผลาญและความแข็งแรง",
-      };
+  const exerciseInfo = exerciseInfoMap[exerciseType] || exerciseInfoMap.squat;
 
   const handleStartSession = () => {
     const count = Math.max(1, Math.min(100, Number(targetCount) || 1));

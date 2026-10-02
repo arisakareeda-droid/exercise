@@ -13,6 +13,11 @@ const ARM_DOWN_THRESHOLD = -0.05;
 const REP_COOLDOWN_MS = 600;
 const MIN_VISIBILITY = 0.65;
 
+// HIGH KNEES: lift = (hip.y - knee.y) / ความยาวลำตัว  (0 = เข่าระดับสะโพก)
+const HK_UP_THRESHOLD = -0.2;
+const HK_DOWN_THRESHOLD = -0.5;
+const HK_LEG_COOLDOWN_MS = 350;
+
 export default function ExerciseSession() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -24,6 +29,8 @@ export default function ExerciseSession() {
   const [counter, setCounter] = useState(0);
   const [feedback, setFeedback] = useState("เตรียมตัวให้พร้อม");
   const stageRef = useRef("up");
+  const hkStageRef = useRef({ L: "down", R: "down" });
+  const hkLastRef = useRef({ L: 0, R: 0 });
 
   const calculateAngle = (a, b, c) => {
     const radians =
@@ -117,6 +124,41 @@ export default function ExerciseSession() {
           }
         }
 
+        // --- เงื่อนไขท่า HIGH KNEES ---
+        else if (exerciseType === "high_knees") {
+          const shoulderMid = lm[11] && lm[12] ? (lm[11].y + lm[12].y) / 2 : null;
+          const hipMid = lm[23] && lm[24] ? (lm[23].y + lm[24].y) / 2 : null;
+          const torso =
+            shoulderMid !== null && hipMid !== null && Math.abs(hipMid - shoulderMid) > 0.05
+              ? Math.abs(hipMid - shoulderMid)
+              : 0.3;
+
+          const legs = [
+            { side: "L", hip: lm[23], knee: lm[25] },
+            { side: "R", hip: lm[24], knee: lm[26] },
+          ];
+
+          legs.forEach(({ side, hip, knee }) => {
+            if (!hip || !knee) return;
+            if ((hip.visibility ?? 1) < 0.4 || (knee.visibility ?? 1) < 0.4) return;
+
+            const lift = (hip.y - knee.y) / torso;
+            const stage = hkStageRef.current[side];
+
+            if (stage === "down" && lift > HK_UP_THRESHOLD) {
+              hkStageRef.current[side] = "up";
+              const now = Date.now();
+              if (now - hkLastRef.current[side] >= HK_LEG_COOLDOWN_MS) {
+                hkLastRef.current[side] = now;
+                setCounter((prev) => prev + 1);
+                setFeedback("ยอดเยี่ยม! ยกเข่าอีกข้าง");
+              }
+            } else if (stage === "up" && lift < HK_DOWN_THRESHOLD) {
+              hkStageRef.current[side] = "down";
+            }
+          });
+        }
+
         // --- เงื่อนไขท่า JUMPING JACK ---
         else if (exerciseType === "jumping_jack") {
           const shoulderL = lm[11],
@@ -167,8 +209,12 @@ export default function ExerciseSession() {
     };
   }, [exerciseType]);
 
-  const exerciseName =
-    exerciseType === "jumping_jack" ? "Jumping Jack (กระโดดตบ)" : "Squat (ลุกนั่ง)";
+  const exerciseNames = {
+    squat: "Squat (ลุกนั่ง)",
+    jumping_jack: "Jumping Jack (กระโดดตบ)",
+    high_knees: "High Knees (ยกเข่าสูง)",
+  };
+  const exerciseName = exerciseNames[exerciseType] || exerciseNames.squat;
 
   return (
     <>

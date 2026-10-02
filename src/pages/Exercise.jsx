@@ -37,6 +37,19 @@ const LEG_SPREAD_RATIO = 1.2;
 const JJ_COOLDOWN_MS = 600;
 const MIN_VISIBILITY_ARM = 0.4;
 
+// ---------------------------------------------------------------
+// HIGH KNEES (ยกเข่าสูง): นับทีละข้างเมื่อเข่ายกขึ้นมาใกล้ระดับสะโพก
+// ค่า lift normalize ด้วยความยาวลำตัว: 0 = เข่าอยู่ระดับสะโพก, ติดลบ = เข่าต่ำกว่าสะโพก
+//  ยืนปกติ ~ -0.85  |  ยกเข่าสูงถึงระดับสะโพก ~ 0
+// ---------------------------------------------------------------
+const HK_UP_THRESHOLD = -0.2;      // เข่าสูงกว่าค่านี้ = ยกแล้ว (ยิ่งใกล้ 0 ต้องยกสูงขึ้น)
+const HK_DOWN_THRESHOLD = -0.5;    // เข่าต่ำกว่าค่านี้ = วางลงแล้ว
+const HK_CONFIRM_FRAMES = 2;
+const HK_SMOOTH = 2;
+const HK_LEG_COOLDOWN_MS = 350;    // กันนับซ้ำของเข่าข้างเดียวกัน
+const HK_COOLDOWN_MS = 150;        // กันนับซ้ำรวมทั้งสองข้าง
+const MIN_VISIBILITY_HK = 0.4;
+
 // ทั่วไป
 const MIN_VISIBILITY_DRAW = 0.4;
 const POSE_LOST_RESET_FRAMES = 15;
@@ -103,6 +116,12 @@ export default function Exercise() {
     let legsSpreadSeen = false;
     let legsVisibleInCycle = false;
 
+    // high knees (แยกสถานะซ้าย/ขวา)
+    let hkBuffer = { L: [], R: [] };
+    let hkStage = { L: 'down', R: 'down' };
+    let hkConfirm = { L: 0, R: 0 };
+    let hkLast = { L: 0, R: 0 };
+
     setCounter(0);
     setCalories(0);
     setDebug('');
@@ -125,6 +144,9 @@ export default function Exercise() {
       angleBuffer = [];
       spanBuffer = [];
       armBuffer = [];
+      hkBuffer = { L: [], R: [] };
+      hkStage = { L: 'down', R: 'down' };
+      hkConfirm = { L: 0, R: 0 };
       baselineSpan = 0;
       candidate = null;
       candidateFrames = 0;
@@ -139,7 +161,8 @@ export default function Exercise() {
       lastRepTime = now;
 
       count += 1;
-      const caloriesPerRep = exerciseType === 'squat' ? 0.32 : 0.2;
+      const caloriesPerRepMap = { squat: 0.32, jumping_jack: 0.2, high_knees: 0.1 };
+      const caloriesPerRep = caloriesPerRepMap[exerciseType] ?? 0.2;
       const totalCal = Number((count * caloriesPerRep).toFixed(2));
       setCounter(count);
       setCalories(totalCal);
@@ -361,6 +384,78 @@ export default function Exercise() {
       }
     };
 
+    // ---------------- HIGH KNEES ----------------
+    const getKneeLift = (lm, hipIdx, kneeIdx, side) => {
+      const v = MIN_VISIBILITY_HK;
+      if (!isVisible(lm[hipIdx], v) || !isVisible(lm[kneeIdx], v)) return null;
+      const torso = getTorsoLength(lm);
+      const lift = (lm[hipIdx].y - lm[kneeIdx].y) / torso;
+      hkBuffer[side].push(lift);
+      if (hkBuffer[side].length > HK_SMOOTH) hkBuffer[side].shift();
+      return average(hkBuffer[side]);
+    };
+
+    const processKnee = (side, lift) => {
+      if (lift === null) return;
+
+      if (hkStage[side] === 'down') {
+        if (lift > HK_UP_THRESHOLD) {
+          hkConfirm[side] += 1;
+          if (hkConfirm[side] >= HK_CONFIRM_FRAMES) {
+            hkStage[side] = 'up';
+            hkConfirm[side] = 0;
+            const now = Date.now();
+            if (now - hkLast[side] >= HK_LEG_COOLDOWN_MS) {
+              hkLast[side] = now;
+              if (tryCountRep(HK_COOLDOWN_MS) && !finished) {
+                updateFeedback('นับแล้ว! ยกเข่าอีกข้างต่อเลย');
+              }
+            }
+          }
+        } else {
+          hkConfirm[side] = 0;
+        }
+      } else if (lift < HK_DOWN_THRESHOLD) {
+        // วางเท้าลงแล้ว พร้อมนับครั้งต่อไปของเข่าข้างนี้
+        hkStage[side] = 'down';
+        hkConfirm[side] = 0;
+      }
+    };
+
+    const handleHighKnees = (lm) => {
+      const left = getKneeLift(lm, 23, 25, 'L');
+      const right = getKneeLift(lm, 24, 26, 'R');
+
+      updateDebug(
+        `เข่าซ้าย: ${left === null ? '-' : left.toFixed(2)}  |  เข่าขวา: ${
+          right === null ? '-' : right.toFixed(2)
+        }  |  ซ้าย: ${hkStage.L}  ขวา: ${hkStage.R}`
+      );
+
+      if (left === null && right === null) {
+        updateFeedback('ถอยให้เห็นสะโพกและเข่าชัดเจน');
+        return;
+      }
+
+      if (!initialized) {
+        // เริ่มนับเมื่อยืนตรง เข่าทั้งสองข้างอยู่ต่ำ
+        const leftDown = left === null || left < HK_DOWN_THRESHOLD;
+        const rightDown = right === null || right < HK_DOWN_THRESHOLD;
+        if (leftDown && rightDown) {
+          initialized = true;
+          hkStage = { L: 'down', R: 'down' };
+          hkConfirm = { L: 0, R: 0 };
+          updateFeedback('พร้อมแล้ว วิ่งอยู่กับที่ ยกเข่าสูงได้เลย');
+        } else {
+          updateFeedback('ยืนตรงก่อนเริ่มนับ');
+        }
+        return;
+      }
+
+      processKnee('L', left);
+      processKnee('R', right);
+    };
+
     // ---------------- วาดภาพ (cover-crop ลงแคนวาสแนวตั้ง) ----------------
     const drawSkeleton = (ctx, lm, map) => {
       if (window.POSE_CONNECTIONS) {
@@ -422,6 +517,7 @@ export default function Exercise() {
         if (!finished) {
           if (exerciseType === 'squat') handleSquat(lm);
           else if (exerciseType === 'jumping_jack') handleJumpingJack(lm);
+          else if (exerciseType === 'high_knees') handleHighKnees(lm);
           else updateFeedback('ไม่รู้จักท่านี้');
         }
       } else {
@@ -485,7 +581,12 @@ export default function Exercise() {
   }, [exerciseType, targetCount]);
 
   // ---------------- UI: FitTrack dashboard style ----------------
-  const exerciseName = exerciseType === 'squat' ? 'Squat' : exerciseType === 'jumping_jack' ? 'Jumping Jack' : 'ออกกำลังกาย';
+  const exerciseNames = {
+    squat: 'Squat',
+    jumping_jack: 'Jumping Jack',
+    high_knees: 'High Knees',
+  };
+  const exerciseName = exerciseNames[exerciseType] || 'ออกกำลังกาย';
   const progress = Math.min(100, Math.round((counter / targetCount) * 100));
 
   return (

@@ -27,6 +27,17 @@ export default function ExerciseSelect() {
       light: "#eaf4ff",
       shadow: "rgba(24,119,242,.18)",
     },
+    {
+      id: "high_knees",
+      icon: "🏃",
+      name: "High Knees",
+      thaiName: "ยกเข่าสูง",
+      video: "/high_knees.mp4",
+      description: "วิ่งอยู่กับที่พร้อมยกเข่าสูง เพิ่มความเร็วหัวใจและฝึกกล้ามเนื้อต้นขา",
+      color: "#4b9af5",
+      light: "#eaf4ff",
+      shadow: "rgba(24,119,242,.18)",
+    },
   ];
 
   return (
