@@ -552,10 +552,20 @@ export default function Dashboard() {
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Anuphan:wght@400;500;600;700&display=swap');
 
         * { box-sizing: border-box; }
-        html { scroll-behavior: smooth; }
+        html {
+          scroll-behavior: smooth;
+          width: 100%;
+          max-width: 100%;
+          margin: 0;
+          overflow-x: hidden;
+        }
 
         body {
+          width: 100%;
+          max-width: 100%;
           margin: 0;
+          overflow-x: hidden;
+          border: 0;
           background: #eef4fb;
           color: #173b73;
           font-family: "Anuphan", sans-serif;
@@ -563,8 +573,20 @@ export default function Dashboard() {
 
         button, input { font-family: inherit; }
 
-        .dashboard-page {
+        #root {
+          width: 100%;
           min-height: 100vh;
+          margin: 0;
+          border: 0;
+        }
+
+        .dashboard-page {
+          width: 100%;
+          max-width: 100%;
+          min-height: 100vh;
+          margin: 0;
+          border: 0;
+          overflow-x: hidden;
           display: flex;
           background:
             radial-gradient(circle at 70% 10%, rgba(87,153,255,.12), transparent 27%),
@@ -694,11 +716,21 @@ export default function Dashboard() {
         /* ---------- MAIN ---------- */
 
         .dashboard-main {
-          width: calc(100% - 232px);
+          flex: 1 1 auto;
+          width: auto;
+          max-width: 100%;
           margin-left: 232px;
           min-width: 0;
           padding: 0 31px 36px;
-          
+          border: 0;
+          outline: 0;
+        }
+
+        .dashboard-main,
+        .dashboard-content,
+        .dashboard-footer {
+          border-right: 0 !important;
+          outline: 0;
         }
 
         .dashboard-header {
