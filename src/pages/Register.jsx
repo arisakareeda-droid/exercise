@@ -1,43 +1,39 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { auth, db } from "../firebase";
+import { doc, setDoc } from "firebase/firestore";
 
 export default function Register() {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   const navigate = useNavigate();
 
   const handleRegister = async (e) => {
     e.preventDefault();
+    setError("");
 
-    setError('');
-
-    // ตรวจสอบชื่อ
     if (!name.trim()) {
-      setError('กรุณากรอกชื่อของคุณ');
+      setError("กรุณากรอกชื่อของคุณ");
       return;
     }
 
-    // ตรวจสอบรหัสผ่าน
     if (password.length < 6) {
-      setError('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
+      setError("รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร");
       return;
     }
 
-    // ตรวจสอบรหัสผ่านซ้ำ
     if (password !== confirmPassword) {
-      setError('รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน');
+      setError("รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน");
       return;
     }
 
@@ -45,1119 +41,656 @@ export default function Register() {
 
     try {
       // 1. สร้างบัญชีใน Firebase Authentication
-      const userCredential =
-        await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
-
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
       const user = userCredential.user;
 
       // 2. บันทึกข้อมูลผู้ใช้ลง Firestore
-      await setDoc(doc(db, 'users', user.uid), {
+      await setDoc(doc(db, "users", user.uid), {
         name: name.trim(),
         email: email,
         createdAt: new Date(),
       });
 
-      // สมัครสำเร็จ
-      navigate('/dashboard');
-
-    } catch (error) {
-
-      if (error.code === 'auth/email-already-in-use') {
-        setError('อีเมลนี้มีบัญชีอยู่แล้ว กรุณาใช้อีเมลอื่น');
-      } else if (error.code === 'auth/invalid-email') {
-        setError('รูปแบบอีเมลไม่ถูกต้อง');
-      } else if (error.code === 'auth/weak-password') {
-        setError('รหัสผ่านไม่ปลอดภัย กรุณาใช้รหัสผ่านที่มีอย่างน้อย 6 ตัวอักษร');
+      navigate("/dashboard");
+    } catch (err) {
+      if (err.code === "auth/email-already-in-use") {
+        setError("อีเมลนี้มีบัญชีอยู่แล้ว กรุณาใช้อีเมลอื่น");
+      } else if (err.code === "auth/invalid-email") {
+        setError("รูปแบบอีเมลไม่ถูกต้อง");
+      } else if (err.code === "auth/weak-password") {
+        setError("รหัสผ่านไม่ปลอดภัย กรุณาใช้รหัสผ่านที่มีอย่างน้อย 6 ตัวอักษร");
       } else {
-        setError('ไม่สามารถสมัครสมาชิกได้ กรุณาลองใหม่อีกครั้ง');
+        setError("ไม่สามารถสมัครสมาชิกได้ กรุณาลองใหม่อีกครั้ง");
       }
-
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <>
-      <style>{`
+  const strengthLevel =
+    password.length >= 10 ? 4 : password.length >= 8 ? 3 : password.length >= 6 ? 2 : 1;
+  const strengthText = ["", "สั้นเกินไป", "พอใช้", "ดี", "แข็งแรง"][strengthLevel];
 
-        * {
-          box-sizing: border-box;
+  const logoSvg = (
+    <svg viewBox="0 0 32 32" width="27" height="30" aria-hidden="true" focusable="false">
+      <path
+        d="M8 3.5h17l-4.5 7H29L13 28v-11H4l4-13.5Z"
+        fill="#a855f7"
+        stroke="#fff"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+
+  return (
+    <div className="register-page">
+      <div className="register-container">
+        {/* LEFT */}
+        <div className="register-banner">
+          <div className="brand-block">
+            <div className="brand-mark" aria-label="FitTrack">
+              {logoSvg}
+            </div>
+            <div>
+              <div className="brand-name">FitTrack</div>
+              <div className="brand-tagline">Healthy Today</div>
+            </div>
+          </div>
+
+          <h1>ระบบออกกำลังกายอัจฉริยะ</h1>
+          <p className="register-banner-description">
+            เริ่มต้นสร้างเป้าหมายสุขภาพ
+            <br />
+            และดูแลตัวเองไปพร้อมกับเรา
+          </p>
+
+          <div className="register-feature">
+            <span className="register-feature-icon">✓</span>
+            <p>บันทึกข้อมูลการออกกำลังกาย</p>
+          </div>
+          <div className="register-feature">
+            <span className="register-feature-icon">✓</span>
+            <p>ติดตามความก้าวหน้าของคุณ</p>
+          </div>
+          <div className="register-feature">
+            <span className="register-feature-icon">✓</span>
+            <p>วางแผนการออกกำลังกายได้ง่าย</p>
+          </div>
+        </div>
+
+        {/* RIGHT */}
+        <div className="register-card">
+          <div className="register-header">
+            <div className="brand-mark register-mobile-logo">{logoSvg}</div>
+            <h2>สร้างบัญชีใหม่</h2>
+            <p>สมัครสมาชิกเพื่อเริ่มต้นดูแลสุขภาพของคุณ</p>
+          </div>
+
+          <form onSubmit={handleRegister}>
+            {/* NAME */}
+            <div className="compact-field">
+              <label htmlFor="name">ชื่อ</label>
+              <div className="input-wrap">
+                <span className="input-icon">👤</span>
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="กรอกชื่อของคุณ"
+                  autoComplete="name"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* EMAIL */}
+            <div className="compact-field">
+              <label htmlFor="register-email">อีเมล</label>
+              <div className="input-wrap">
+                <span className="input-icon">✉</span>
+                <input
+                  id="register-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="กรอกอีเมลของคุณ"
+                  autoComplete="email"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* PASSWORD */}
+            <div className="compact-field">
+              <label htmlFor="register-password">รหัสผ่าน</label>
+              <div className="input-wrap">
+                <span className="input-icon">🔒</span>
+                <input
+                  id="register-password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="อย่างน้อย 6 ตัวอักษร"
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                >
+                  {showPassword ? "🙈" : "👁️"}
+                </button>
+              </div>
+
+              {password.length > 0 && (
+                <div className="password-strength">
+                  <div className="strength-bars">
+                    {[1, 2, 3, 4].map((n) => (
+                      <div
+                        key={n}
+                        className={`strength-bar ${n <= strengthLevel ? "active" : ""} level-${strengthLevel}`}
+                      />
+                    ))}
+                  </div>
+                  <span className="strength-text">{strengthText}</span>
+                </div>
+              )}
+            </div>
+
+            {/* CONFIRM PASSWORD */}
+            <div className="compact-field">
+              <label htmlFor="confirm-password">ยืนยันรหัสผ่าน</label>
+              <div className="input-wrap">
+                <span className="input-icon">🔐</span>
+                <input
+                  id="confirm-password"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="กรอกรหัสผ่านอีกครั้ง"
+                  autoComplete="new-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  aria-label={showConfirmPassword ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+                >
+                  {showConfirmPassword ? "🙈" : "👁️"}
+                </button>
+              </div>
+            </div>
+
+            {error && (
+              <div className="register-error">
+                <span>⚠️</span>
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button type="submit" className="primary-btn" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="register-spinner"></span>
+                  กำลังสมัครสมาชิก...
+                </>
+              ) : (
+                <>สมัครสมาชิก</>
+              )}
+            </button>
+          </form>
+
+          <div className="register-divider">
+            <span>หรือ</span>
+          </div>
+
+          <p className="register-login-text">
+            มีบัญชีอยู่แล้ว? <Link to="/login">เข้าสู่ระบบ</Link>
+          </p>
+
+          <p className="register-footer">© 2026 FitTrack</p>
+        </div>
+      </div>
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Anuphan:wght@400;500;600;700&display=swap');
+
+        * { box-sizing: border-box; }
+        html {
+          width: 100%;
+          max-width: 100%;
+          margin: 0;
+          overflow-x: hidden;
         }
 
-        /* =========================
-           PAGE
-        ========================= */
+        body {
+          width: 100%;
+          max-width: 100%;
+          margin: 0;
+          overflow-x: hidden;
+          border: 0;
+          background: #eef4fb;
+          color: #173b73;
+          font-family: "Anuphan", sans-serif;
+        }
+
+        button, input { font-family: inherit; }
+
+        #root {
+          width: 100%;
+          min-height: 100vh;
+          margin: 0;
+          border: 0;
+        }
 
         .register-page {
+          width: 100%;
           min-height: 100vh;
-
-          display: flex;
-          justify-content: center;
-          align-items: center;
-
           padding: 30px;
-
-          position: relative;
-          overflow: hidden;
-
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow-x: hidden;
+          font-family: "Anuphan", sans-serif;
           background:
-            linear-gradient(
-              135deg,
-              #f0fdf4 0%,
-              #ecfdf5 45%,
-              #ffffff 100%
-            );
-
-          font-family:
-            "Noto Sans Thai",
-            "Segoe UI",
-            sans-serif;
+            radial-gradient(circle at 70% 10%, rgba(87,153,255,.12), transparent 27%),
+            linear-gradient(135deg, #f9fcff 0%, #eef5ff 48%, #f7fbff 100%);
         }
 
-        /* =========================
-           BACKGROUND
-        ========================= */
-
-        .register-circle {
-          position: absolute;
-
-          border-radius: 50%;
-
-          pointer-events: none;
-
-          opacity: 0.5;
-        }
-
-        .register-circle-1 {
-          width: 480px;
-          height: 480px;
-
-          top: -240px;
-          right: -150px;
-
-          background: #bbf7d0;
-        }
-
-        .register-circle-2 {
-          width: 380px;
-          height: 380px;
-
-          bottom: -200px;
-          left: -160px;
-
-          background: #d1fae5;
-        }
-
-        /* =========================
-           MAIN CARD
-        ========================= */
+        /* ---------- MAIN CARD ---------- */
 
         .register-container {
+          position: relative;
           width: 100%;
           max-width: 980px;
-
-          min-height: 650px;
-
+          min-height: 640px;
           display: grid;
-
-          grid-template-columns: 44% 56%;
-
-          position: relative;
-          z-index: 2;
-
-          background: #ffffff;
-
-          border-radius: 30px;
-
+          grid-template-columns: 42% 58%;
           overflow: hidden;
-
-          box-shadow:
-            0 25px 70px rgba(0, 0, 0, 0.10),
-            0 10px 30px rgba(16, 185, 129, 0.08);
+          border: 1px solid #dbe8f5;
+          border-radius: 19px;
+          background: rgba(255,255,255,.94);
+          box-shadow: 0 15px 40px rgba(35,82,137,.09);
         }
 
-        /* =========================
-           LEFT SIDE
-        ========================= */
+        .register-container::before {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 3px;
+          z-index: 3;
+          background: linear-gradient(90deg, #1877f2, #74b3ff, transparent);
+        }
+
+        /* ---------- LEFT ---------- */
 
         .register-banner {
+          padding: 48px 40px;
           display: flex;
-
-          align-items: center;
-
-          padding: 55px;
-
-          color: #ffffff;
-
-          background:
-            linear-gradient(
-              145deg,
-              #047857,
-              #059669 50%,
-              #10b981 100%
-            );
-        }
-
-        .register-banner-content {
-          width: 100%;
-        }
-
-        .register-brand-icon {
-          width: 75px;
-          height: 75px;
-
-          display: flex;
-
-          align-items: center;
+          flex-direction: column;
           justify-content: center;
+          background: rgba(255,255,255,.93);
+          border-right: 1px solid #dbe7f4;
+        }
 
-          margin-bottom: 25px;
+        .brand-block {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 0 0 30px;
+        }
 
-          border-radius: 22px;
+        .brand-mark {
+          width: 42px;
+          height: 42px;
+          flex: 0 0 42px;
+          display: grid;
+          place-items: center;
+          border-radius: 13px;
+          color: #fff;
+          background: linear-gradient(145deg, #5b9cf6, #1769dc);
+          box-shadow: 0 9px 20px rgba(24,119,242,.22);
+        }
 
-          background:
-            rgba(255, 255, 255, 0.17);
+        .brand-name {
+          color: #123c78;
+          font-family: "Kanit", sans-serif;
+          font-size: 22px;
+          font-weight: 600;
+          line-height: 1.1;
+          letter-spacing: -.15px;
+        }
 
-          font-size: 36px;
-
-          backdrop-filter: blur(10px);
+        .brand-tagline {
+          margin-top: 3px;
+          color: #8aa0b9;
+          font-size: 9px;
+          letter-spacing: .5px;
         }
 
         .register-banner h1 {
-          margin: 0 0 12px;
+          margin: 0;
+          font-family: "Kanit", sans-serif;
+          font-size: clamp(27px, 3vw, 34px);
+          font-weight: 600;
+          line-height: 1.25;
+          letter-spacing: -.35px;
+          color: #11396f;
+          background: linear-gradient(90deg, #123c78 0%, #1877f2 48%, #2f68bd 100%);
+          background-size: 200% 100%;
+          background-position: 0% 50%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: titleWink 3.6s ease-in-out infinite;
+        }
 
-          font-size: 40px;
-
-          font-weight: 800;
-
-          letter-spacing: -1px;
+        @keyframes titleWink {
+          0%, 65%, 100% { background-position: 0% 50%; }
+          78% { background-position: 100% 50%; }
         }
 
         .register-banner-description {
-          margin: 0 0 38px;
-
-          color:
-            rgba(255, 255, 255, 0.9);
-
-          font-size: 16px;
-
-          line-height: 1.8;
+          margin: 10px 0 30px;
+          color: #68809f;
+          font-size: 14px;
+          line-height: 1.7;
         }
-
-        /* Features */
 
         .register-feature {
           display: flex;
-
           align-items: center;
-
-          gap: 13px;
-
-          margin-bottom: 20px;
+          gap: 12px;
+          margin-bottom: 14px;
+          padding: 11px 14px;
+          border-radius: 15px;
+          background: #e7f1ff;
         }
 
         .register-feature-icon {
-          width: 27px;
-          height: 27px;
-
-          display: flex;
-
-          align-items: center;
-          justify-content: center;
-
-          flex-shrink: 0;
-
-          border-radius: 50%;
-
-          background:
-            rgba(255, 255, 255, 0.2);
-
-          font-size: 13px;
+          width: 31px;
+          height: 31px;
+          flex: 0 0 31px;
+          display: grid;
+          place-items: center;
+          border-radius: 10px;
+          color: #fff;
+          font-size: 14px;
+          background: linear-gradient(145deg, #4d97f5, #1769dc);
+          box-shadow: 0 5px 12px rgba(24,119,242,.2);
         }
 
         .register-feature p {
           margin: 0;
-
-          font-size: 14px;
-
-          color:
-            rgba(255, 255, 255, 0.95);
+          color: #1558a9;
+          font-size: 13px;
         }
 
-        /* =========================
-           RIGHT SIDE
-        ========================= */
+        /* ---------- RIGHT ---------- */
 
         .register-card {
+          padding: 42px 56px;
           display: flex;
-
           flex-direction: column;
-
           justify-content: center;
-
-          padding: 45px 65px;
-
-          background: #ffffff;
         }
 
-        /* Header */
-
-        .register-header {
-          margin-bottom: 25px;
-        }
+        .register-header { margin-bottom: 22px; }
 
         .register-mobile-logo {
           display: none;
+          margin-bottom: 14px;
         }
 
         .register-header h2 {
-          margin: 0 0 8px;
-
-          color: #111827;
-
-          font-size: 29px;
-
-          font-weight: 750;
+          margin: 0 0 6px;
+          color: #153d78;
+          font-family: "Kanit", sans-serif;
+          font-size: 26px;
+          font-weight: 600;
+          letter-spacing: -.15px;
         }
 
         .register-header p {
           margin: 0;
-
-          color: #6b7280;
-
-          font-size: 14px;
-
+          color: #8095ad;
+          font-size: 13px;
           line-height: 1.6;
         }
 
-        /* =========================
-           FORM
-        ========================= */
+        .compact-field { margin-bottom: 14px; }
 
-        .register-form-group {
-          margin-bottom: 17px;
-        }
-
-        .register-form-group label {
+        .compact-field label {
           display: block;
-
-          margin-bottom: 7px;
-
-          color: #374151;
-
-          font-size: 13px;
-
+          margin-bottom: 5px;
+          color: #6d8199;
+          font-size: 11.5px;
           font-weight: 600;
         }
 
-        /* Input */
+        .input-wrap { position: relative; }
 
-        .register-input-wrapper {
-          position: relative;
-
-          display: flex;
-
-          align-items: center;
-        }
-
-        .register-input-icon {
+        .input-icon {
           position: absolute;
-
-          left: 15px;
-
-          color: #9ca3af;
-
-          font-size: 16px;
-
+          left: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #6d8aab;
+          font-size: 14px;
           pointer-events: none;
         }
 
-        .register-input-wrapper input {
+        .input-wrap input {
           width: 100%;
-
-          height: 49px;
-
-          padding:
-            0 45px;
-
-          border:
-            1.5px solid #e5e7eb;
-
-          border-radius: 12px;
-
+          height: 44px;
+          padding: 7px 44px 7px 38px;
           outline: none;
-
-          background: #f9fafb;
-
-          color: #111827;
-
-          font-size: 14px;
-
-          transition:
-            all 0.2s ease;
+          border: 1px solid #d6e2ee;
+          border-radius: 9px;
+          color: #173b73;
+          background: #fff;
+          font-size: 13px;
+          transition: .2s ease;
         }
 
-        .register-input-wrapper input::placeholder {
-          color: #9ca3af;
+        .input-wrap input::placeholder { color: #a6b5c6; }
+
+        .input-wrap input:focus {
+          border-color: #1877f2;
+          box-shadow: 0 0 0 3px rgba(24,119,242,.08);
         }
 
-        .register-input-wrapper input:focus {
-          border-color: #10b981;
-
-          background: #ffffff;
-
-          box-shadow:
-            0 0 0 4px
-            rgba(16, 185, 129, 0.10);
-        }
-
-        /* Password toggle */
-
-        .register-password-toggle {
+        .password-toggle {
           position: absolute;
-
-          right: 11px;
-
-          border: none;
-
+          right: 6px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 34px;
+          height: 34px;
+          border: 0;
+          border-radius: 8px;
           background: transparent;
-
           cursor: pointer;
-
-          font-size: 16px;
-
-          opacity: 0.6;
-
-          transition: 0.2s;
+          font-size: 15px;
+          transition: .2s ease;
         }
 
-        .register-password-toggle:hover {
-          opacity: 1;
-        }
+        .password-toggle:hover { background: #edf5ff; }
 
-        /* =========================
-           PASSWORD STRENGTH
-        ========================= */
+        /* password strength */
 
         .password-strength {
           display: flex;
-
           align-items: center;
-
-          gap: 8px;
-
-          margin-top: 7px;
+          gap: 10px;
+          margin-top: 8px;
         }
 
         .strength-bars {
-          display: flex;
-
-          gap: 4px;
-
           flex: 1;
+          display: flex;
+          gap: 5px;
         }
 
         .strength-bar {
-          height: 4px;
-
           flex: 1;
-
-          border-radius: 10px;
-
-          background: #e5e7eb;
-
-          transition: 0.2s;
+          height: 5px;
+          border-radius: 999px;
+          background: #e4ecf5;
+          transition: background .2s ease;
         }
 
-        .strength-bar.active {
-          background: #10b981;
-        }
+        .strength-bar.active.level-1 { background: #ef6b6b; }
+        .strength-bar.active.level-2 { background: #f5b04a; }
+        .strength-bar.active.level-3 { background: #74b3ff; }
+        .strength-bar.active.level-4 { background: #1877f2; }
 
         .strength-text {
-          min-width: 55px;
-
+          min-width: 62px;
+          color: #8095ad;
+          font-size: 10.5px;
           text-align: right;
-
-          color: #6b7280;
-
-          font-size: 10px;
         }
 
-        /* =========================
-           ERROR
-        ========================= */
+        /* error */
 
         .register-error {
           display: flex;
-
           align-items: center;
-
           gap: 8px;
-
-          margin-bottom: 17px;
-
-          padding: 11px 13px;
-
-          border:
-            1px solid #fecaca;
-
-          border-radius: 10px;
-
-          background: #fef2f2;
-
-          color: #dc2626;
-
+          margin-bottom: 14px;
+          padding: 10px 12px;
+          border: 1px solid #ffd0d0;
+          border-radius: 9px;
+          color: #b42323;
+          background: #fff0f0;
           font-size: 12px;
-
-          line-height: 1.5;
         }
 
-        /* =========================
-           BUTTON
-        ========================= */
+        /* button */
 
-        .register-button {
+        .primary-btn {
           width: 100%;
-
-          height: 51px;
-
+          height: 46px;
           display: flex;
-
           align-items: center;
           justify-content: center;
-
-          gap: 10px;
-
-          margin-top: 5px;
-
-          border: none;
-
-          border-radius: 13px;
-
-          background:
-            linear-gradient(
-              135deg,
-              #059669,
-              #10b981
-            );
-
-          color: #ffffff;
-
-          font-size: 15px;
-
-          font-weight: 700;
-
+          gap: 9px;
+          border: 0;
+          border-radius: 9px;
+          color: #fff;
+          background: linear-gradient(135deg, #1877f2, #0d5dcc);
+          box-shadow: 0 7px 15px rgba(24,119,242,.18);
           cursor: pointer;
-
-          box-shadow:
-            0 8px 20px
-            rgba(16, 185, 129, 0.25);
-
-          transition:
-            transform 0.2s ease,
-            box-shadow 0.2s ease;
+          font-size: 13px;
+          font-weight: 700;
+          transition: .2s ease;
+          will-change: transform;
         }
 
-        .register-button:hover:not(:disabled) {
-          transform:
-            translateY(-2px);
-
-          box-shadow:
-            0 12px 25px
-            rgba(16, 185, 129, 0.30);
+        .primary-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 20px rgba(24,119,242,.25);
         }
 
-        .register-button:active:not(:disabled) {
-          transform:
-            translateY(0);
-        }
+        .primary-btn:active:not(:disabled) { transform: translateY(1px) scale(.98); }
 
-        .register-button:disabled {
-          opacity: 0.7;
-
+        .primary-btn:disabled {
+          opacity: .7;
           cursor: not-allowed;
         }
 
-        /* Loading */
-
         .register-spinner {
-          width: 17px;
-          height: 17px;
-
-          border:
-            2px solid
-            rgba(255, 255, 255, 0.4);
-
-          border-top-color:
-            #ffffff;
-
+          width: 15px;
+          height: 15px;
+          border: 2px solid rgba(255,255,255,.4);
+          border-top-color: #fff;
           border-radius: 50%;
-
-          animation:
-            registerSpin 0.7s
-            linear infinite;
+          animation: spin .7s linear infinite;
         }
 
-        @keyframes registerSpin {
-          to {
-            transform:
-              rotate(360deg);
-          }
-        }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* =========================
-           DIVIDER
-        ========================= */
+        /* divider + footer */
 
         .register-divider {
-          display: flex;
+          position: relative;
+          margin: 20px 0 16px;
+          text-align: center;
+        }
 
-          align-items: center;
+        .register-divider::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          right: 0;
+          top: 50%;
+          height: 1px;
+          background: #e4ecf5;
+        }
 
-          gap: 14px;
-
-          margin: 22px 0;
-
-          color: #9ca3af;
-
+        .register-divider span {
+          position: relative;
+          padding: 0 12px;
+          color: #8095ad;
+          background: #fff;
           font-size: 11px;
         }
 
-        .register-divider::before,
-        .register-divider::after {
-          content: "";
-
-          flex: 1;
-
-          height: 1px;
-
-          background: #e5e7eb;
-        }
-
-        /* =========================
-           LOGIN LINK
-        ========================= */
-
         .register-login-text {
           margin: 0;
-
-          text-align: center;
-
-          color: #6b7280;
-
+          color: #68809f;
           font-size: 13px;
+          text-align: center;
         }
 
         .register-login-text a {
-          margin-left: 5px;
-
-          color: #059669;
-
+          margin-left: 6px;
+          color: #1877f2;
           font-weight: 700;
-
           text-decoration: none;
-
-          transition: 0.2s;
         }
 
-        .register-login-text a:hover {
-          color: #047857;
-
-          text-decoration: underline;
-        }
-
-        /* =========================
-           FOOTER
-        ========================= */
+        .register-login-text a:hover { text-decoration: underline; }
 
         .register-footer {
-          margin:
-            25px 0 0;
-
-          text-align: center;
-
-          color: #d1d5db;
-
+          margin: 22px 0 0;
+          color: #a6b5c6;
           font-size: 10px;
+          text-align: center;
         }
 
-        /* =========================
-           TABLET
-        ========================= */
+        /* ---------- RESPONSIVE ---------- */
 
-        @media (max-width: 800px) {
-
-          .register-page {
-            padding: 20px;
-          }
-
+        @media (max-width: 860px) {
           .register-container {
-            max-width: 520px;
-
+            max-width: 480px;
             grid-template-columns: 1fr;
-
-            min-height: auto;
-
-            border-radius: 24px;
           }
 
-          .register-banner {
-            display: none;
-          }
-
-          .register-card {
-            padding: 40px 35px;
-          }
-
-          .register-mobile-logo {
-            width: 55px;
-            height: 55px;
-
-            display: flex;
-
-            align-items: center;
-            justify-content: center;
-
-            margin-bottom: 16px;
-
-            border-radius: 16px;
-
-            background: #ecfdf5;
-
-            font-size: 27px;
-          }
-
-          .register-header h2 {
-            font-size: 27px;
-          }
+          .register-banner { display: none; }
+          .register-card { padding: 34px 28px; }
+          .register-mobile-logo { display: grid; }
         }
 
-        /* =========================
-           MOBILE
-        ========================= */
-
-        @media (max-width: 450px) {
-
-          .register-page {
-            padding: 12px;
-          }
-
-          .register-container {
-            border-radius: 20px;
-          }
-
-          .register-card {
-            padding: 32px 23px;
-          }
-
-          .register-header {
-            margin-bottom: 23px;
-          }
-
-          .register-header h2 {
-            font-size: 24px;
-          }
-
-          .register-header p {
-            font-size: 12px;
-          }
-
-          .register-form-group {
-            margin-bottom: 15px;
-          }
-
-          .register-input-wrapper input {
-            height: 48px;
-          }
-
-          .register-button {
-            height: 50px;
-          }
+        @media (max-width: 460px) {
+          .register-page { padding: 14px; }
+          .register-card { padding: 28px 18px; }
+          .register-header h2 { font-size: 22px; }
         }
-
       `}</style>
-
-      <div className="register-page">
-
-        {/* Background */}
-        <div className="register-circle register-circle-1"></div>
-        <div className="register-circle register-circle-2"></div>
-
-        <div className="register-container">
-
-          {/* =================================
-              LEFT
-          ================================= */}
-
-          <div className="register-banner">
-
-            <div className="register-banner-content">
-
-              <div className="register-brand-icon">
-                🏃‍♀️
-              </div>
-
-              <h1>
-                FitTrack
-              </h1>
-
-              <p className="register-banner-description">
-                เริ่มต้นสร้างเป้าหมายสุขภาพ
-                <br />
-                และดูแลตัวเองไปพร้อมกับเรา
-              </p>
-
-              <div className="register-feature">
-
-                <div className="register-feature-icon">
-                  ✓
-                </div>
-
-                <p>
-                  บันทึกข้อมูลการออกกำลังกาย
-                </p>
-
-              </div>
-
-              <div className="register-feature">
-
-                <div className="register-feature-icon">
-                  ✓
-                </div>
-
-                <p>
-                  ติดตามความก้าวหน้าของคุณ
-                </p>
-
-              </div>
-
-              <div className="register-feature">
-
-                <div className="register-feature-icon">
-                  ✓
-                </div>
-
-                <p>
-                  วางแผนการออกกำลังกายได้ง่าย
-                </p>
-
-              </div>
-
-            </div>
-
-          </div>
-
-          {/* =================================
-              RIGHT
-          ================================= */}
-
-          <div className="register-card">
-
-            <div className="register-header">
-
-              <div className="register-mobile-logo">
-                🏃‍♀️
-              </div>
-
-              <h2>
-                สร้างบัญชีใหม่
-              </h2>
-
-              <p>
-                สมัครสมาชิกเพื่อเริ่มต้นดูแลสุขภาพของคุณ
-              </p>
-
-            </div>
-
-            <form onSubmit={handleRegister}>
-
-              {/* NAME */}
-              <div className="register-form-group">
-
-                <label htmlFor="name">
-                  ชื่อ
-                </label>
-
-                <div className="register-input-wrapper">
-
-                  <span className="register-input-icon">
-                    👤
-                  </span>
-
-                  <input
-                    id="name"
-                    type="text"
-                    value={name}
-                    onChange={(e) =>
-                      setName(e.target.value)
-                    }
-                    placeholder="กรอกชื่อของคุณ"
-                    autoComplete="name"
-                    required
-                  />
-
-                </div>
-
-              </div>
-
-              {/* EMAIL */}
-              <div className="register-form-group">
-
-                <label htmlFor="register-email">
-                  อีเมล
-                </label>
-
-                <div className="register-input-wrapper">
-
-                  <span className="register-input-icon">
-                    ✉
-                  </span>
-
-                  <input
-                    id="register-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) =>
-                      setEmail(e.target.value)
-                    }
-                    placeholder="กรอกอีเมลของคุณ"
-                    autoComplete="email"
-                    required
-                  />
-
-                </div>
-
-              </div>
-
-              {/* PASSWORD */}
-              <div className="register-form-group">
-
-                <label htmlFor="register-password">
-                  รหัสผ่าน
-                </label>
-
-                <div className="register-input-wrapper">
-
-                  <span className="register-input-icon">
-                    🔒
-                  </span>
-
-                  <input
-                    id="register-password"
-                    type={
-                      showPassword
-                        ? 'text'
-                        : 'password'
-                    }
-                    value={password}
-                    onChange={(e) =>
-                      setPassword(e.target.value)
-                    }
-                    placeholder="อย่างน้อย 6 ตัวอักษร"
-                    autoComplete="new-password"
-                    minLength={6}
-                    required
-                  />
-
-                  <button
-                    type="button"
-                    className="register-password-toggle"
-                    onClick={() =>
-                      setShowPassword(
-                        !showPassword
-                      )
-                    }
-                  >
-                    {showPassword
-                      ? '🙈'
-                      : '👁️'}
-                  </button>
-
-                </div>
-
-                {/* Password strength */}
-                {password.length > 0 && (
-                  <div className="password-strength">
-
-                    <div className="strength-bars">
-
-                      <div
-                        className={
-                          `strength-bar ${
-                            password.length >= 1
-                              ? 'active'
-                              : ''
-                          }`
-                        }
-                      />
-
-                      <div
-                        className={
-                          `strength-bar ${
-                            password.length >= 6
-                              ? 'active'
-                              : ''
-                          }`
-                        }
-                      />
-
-                      <div
-                        className={
-                          `strength-bar ${
-                            password.length >= 8
-                              ? 'active'
-                              : ''
-                          }`
-                        }
-                      />
-
-                      <div
-                        className={
-                          `strength-bar ${
-                            password.length >= 10
-                              ? 'active'
-                              : ''
-                          }`
-                        }
-                      />
-
-                    </div>
-
-                    <span className="strength-text">
-                      {password.length < 6
-                        ? 'สั้นเกินไป'
-                        : password.length < 8
-                        ? 'พอใช้'
-                        : password.length < 10
-                        ? 'ดี'
-                        : 'แข็งแรง'}
-                    </span>
-
-                  </div>
-                )}
-
-              </div>
-
-              {/* CONFIRM PASSWORD */}
-              <div className="register-form-group">
-
-                <label htmlFor="confirm-password">
-                  ยืนยันรหัสผ่าน
-                </label>
-
-                <div className="register-input-wrapper">
-
-                  <span className="register-input-icon">
-                    🔐
-                  </span>
-
-                  <input
-                    id="confirm-password"
-                    type={
-                      showConfirmPassword
-                        ? 'text'
-                        : 'password'
-                    }
-                    value={confirmPassword}
-                    onChange={(e) =>
-                      setConfirmPassword(
-                        e.target.value
-                      )
-                    }
-                    placeholder="กรอกรหัสผ่านอีกครั้ง"
-                    autoComplete="new-password"
-                    required
-                  />
-
-                  <button
-                    type="button"
-                    className="register-password-toggle"
-                    onClick={() =>
-                      setShowConfirmPassword(
-                        !showConfirmPassword
-                      )
-                    }
-                  >
-                    {showConfirmPassword
-                      ? '🙈'
-                      : '👁️'}
-                  </button>
-
-                </div>
-
-              </div>
-
-              {/* ERROR */}
-              {error && (
-                <div className="register-error">
-
-                  <span>
-                    ⚠️
-                  </span>
-
-                  <span>
-                    {error}
-                  </span>
-
-                </div>
-              )}
-
-              {/* REGISTER BUTTON */}
-              <button
-                type="submit"
-                className="register-button"
-                disabled={loading}
-              >
-
-                {loading ? (
-                  <>
-                    <span className="register-spinner"></span>
-                    กำลังสมัครสมาชิก...
-                  </>
-                ) : (
-                  <>
-                    สมัครสมาชิก
-                    <span>
-                      →
-                    </span>
-                  </>
-                )}
-
-              </button>
-
-            </form>
-
-            {/* DIVIDER */}
-            <div className="register-divider">
-              <span>หรือ</span>
-            </div>
-
-            {/* LOGIN */}
-            <p className="register-login-text">
-
-              มีบัญชีอยู่แล้ว?
-
-              <Link to="/login">
-                เข้าสู่ระบบ
-              </Link>
-
-            </p>
-
-            {/* FOOTER */}
-            <p className="register-footer">
-              © 2026 FitTrack
-            </p>
-
-          </div>
-
-        </div>
-
-      </div>
-    </>
+    </div>
   );
 }

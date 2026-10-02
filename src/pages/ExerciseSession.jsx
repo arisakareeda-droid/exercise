@@ -161,7 +161,13 @@ export default function ExerciseSession() {
       camera.start();
     }
 
-    const exerciseName =
+    return () => {
+      if (camera) camera.stop();
+      pose.close();
+    };
+  }, [exerciseType]);
+
+  const exerciseName =
     exerciseType === "jumping_jack" ? "Jumping Jack (กระโดดตบ)" : "Squat (ลุกนั่ง)";
 
   return (
