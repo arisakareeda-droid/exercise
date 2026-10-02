@@ -244,8 +244,9 @@ export default function ExerciseSelect() {
           flex-direction: column;
           z-index: 20;
           background: rgba(255,255,255,.93);
-          border-right: 0;
-          box-shadow: 8px 0 30px rgba(35,82,137,.045);
+          border: 0 !important;
+          border-right: 0 !important;
+          box-shadow: none !important;
           backdrop-filter: blur(18px);
         }
 
@@ -364,6 +365,8 @@ export default function ExerciseSelect() {
 
         /* MAIN */
         .dashboard-main {
+          border: 0 !important;
+          outline: 0 !important;
           width: calc(100% - 232px);
           margin-left: 232px;
           min-width: 0;
