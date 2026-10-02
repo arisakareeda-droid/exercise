@@ -244,7 +244,7 @@ export default function ExerciseSelect() {
           flex-direction: column;
           z-index: 20;
           background: rgba(255,255,255,.93);
-          border-right: 1px solid #dbe7f4;
+          border-right: 0;
           box-shadow: 8px 0 30px rgba(35,82,137,.045);
           backdrop-filter: blur(18px);
         }
