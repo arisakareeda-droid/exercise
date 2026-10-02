@@ -81,16 +81,22 @@ const MIN_VISIBILITY_PUNCH = 0.4;  // กำปั้นพุ่งเข้า
 const PUNCH_MAX_HEIGHT = 0.5;  // ข้อมือสูงสุดเทียบไหล่ (หมัดระดับหน้าอาจสูงกว่าไหล่)
 const PUNCH_SMOOTH = 2;  // เฉลี่ยกี่เฟรม (เดิม 3 หน่วงเกินไปสำหรับหมัดเร็ว)
 const PUNCH_Z_STEP = 0.1;  // หันหน้า: ไหล่->ศอก->ข้อมือ ไล่ระดับเข้าหากล้อง (เดิม 0.2)
-const PUNCH_ELBOW_MIN = 150;
+const PUNCH_ELBOW_MIN = 160;       // ข้อศอกต้องเหยียดตรงอย่างน้อยกี่องศา (เดิม 150 → เข้มขึ้น กันฮุก/อัปเปอร์คัตที่แขนยังงอ)
 const PUNCH_FRONT_ON = 0.5;        // ความกว้างไหล่/ลำตัว มากกว่านี้ = หันหน้าเข้ากล้อง
 const PUNCH_FRONT_OFF = 0.35;      // น้อยกว่านี้ = หันข้าง (คั่นกลาง = คงโหมดเดิม กันสลับไปมาตอนลำตัวหมุน)
 const PUNCH_REARM_ELBOW = 135;     // ข้อศอกงอต่ำกว่านี้ = ดึงหมัดกลับแล้ว พร้อมนับหมัดต่อไป
-const PUNCH_REARM_FRAMES = 2;      // ต้องงออยู่กี่เฟรมถึงพร้อมนับครั้งต่อไป (กันค่าสั่นทำให้นับซ้ำ)  // ข้อศอกต้องเหยียดตรงอย่างน้อยกี่องศา (เดิม 155)
+const PUNCH_REARM_FRAMES = 2;      // ต้องงออยู่กี่เฟรมถึงพร้อมนับครั้งต่อไป (กันค่าสั่นทำให้นับซ้ำ)
 // --- ตรวจ "เส้นทางของข้อมือ" จากท่าการ์ดจนถึงท่าเหยียด (หน่วย: เท่าของความยาวลำตัว) ---
 const PUNCH_TRAJ_FRAMES = 12;  // เก็บเส้นทางข้อมือย้อนหลังกี่เฟรม (ไม่ล้างตอนดึงหมัดกลับ หาจุดเริ่มหมัดเอง)
-const PUNCH_MAX_DY = 0.4;  // ข้อมือขยับขึ้น/ลงจากจุดเริ่มหมัดเกินนี้ = อัปเปอร์คัต ไม่นับ
-const PUNCH_MAX_DLAT = 0.5;  // หันหน้า: ข้อมือเหวี่ยงไปด้านข้างเกินนี้ = ฮุก ไม่นับ
-const PUNCH_MAX_LAT = 0.8;  // หันหน้า: ข้อมืออยู่ห่างแนวไหล่เกินนี้ = ฮุก ไม่นับ
+const PUNCH_MAX_DY = 0.3;  // ตลอดเส้นทางหมัด ข้อมือขึ้น/ลงจากจุดเริ่มเกินนี้ = อัปเปอร์คัต/ฮุกยกศอก ไม่นับ (เดิม 0.4 และเช็กแค่จุดจบ)
+const PUNCH_MAX_DLAT = 0.35;  // หันหน้า: ตลอดเส้นทาง ข้อมือเหวี่ยงไปด้านข้างเกินนี้ = ฮุก ไม่นับ (เดิม 0.5)
+const PUNCH_MAX_LAT = 0.6;  // หันหน้า: ข้อมืออยู่ห่างแนวไหล่เกินนี้ = ฮุก ไม่นับ (เดิม 0.8)
+const PUNCH_TRAJ_MIN_FRAMES = 4;   // ข้อมูลเส้นทางน้อยกว่านี้ = ตัดสินไม่ได้ → ไม่นับ (เดิมถือว่าเป็นหมัดตรง)
+const PUNCH_START_ELBOW_MAX = 140; // จุดเริ่มหมัดต้องเป็นท่าการ์ด (ศอกงอ) ไม่ใช่แขนเหยียดอยู่แล้วแล้วเหวี่ยง
+const PUNCH_MIN_DFWD = 0.2;        // หันหน้า: ข้อมือต้องยื่นเข้าหากล้องเพิ่มจากจุดเริ่มอย่างน้อยเท่านี้ (หมัดตรง = พุ่งไปข้างหน้า)
+const PUNCH_MIN_TRAVEL = 0.3;      // หันข้าง: ข้อมือต้องเคลื่อนไปข้างหน้าอย่างน้อยเท่านี้ (เท่าของลำตัว)
+const PUNCH_MAX_SLOPE = 0.45;      // หันข้าง: ทิศหมัดเอียงขึ้น/ลงได้ไม่เกินสัดส่วนนี้ของระยะที่พุ่งไป (~24°) เกิน = อัปเปอร์คัต
+const PUNCH_MAX_BOW = 0.25;        // หันข้าง: เส้นทางโค้งออกจากเส้นตรงได้ไม่เกินสัดส่วนนี้ของระยะที่พุ่งไป เกิน = ฮุก (วงสวิง)
 
 // ทั่วไป
 const MIN_VISIBILITY_DRAW = 0.4;
@@ -720,6 +726,8 @@ export default function Exercise() {
         el2d: raw.elbow2d,
         lat: ((w.x - s.x) * imgAspect * outSign) / torso, // + = ข้อมืออยู่นอกไหล่, - = ข้ามเข้าหาลำตัว
         up: (s.y - w.y) / torso,                          // + = ข้อมือสูงกว่าไหล่
+        fwd: ((s.z ?? 0) - (w.z ?? 0)) / torso,           // + = ข้อมือยื่นเข้าหากล้อง
+        xh: ((w.x - s.x) * imgAspect) / torso,            // ตำแหน่งข้อมือแนวนอนเทียบไหล่ (ใช้ตอนหันข้าง)
       });
       if (tr.length > PUNCH_TRAJ_FRAMES) tr.shift();
 
@@ -739,12 +747,17 @@ export default function Exercise() {
       };
     };
 
-    // ปฏิเสธเฉพาะเมื่อมี "หลักฐานชัดเจน" ว่าไม่ใช่หมัดตรง (อัปเปอร์คัต = ข้อมือยกขึ้นมาก,
-    // ฮุก = ข้อมือเหวี่ยงไปด้านข้าง) ถ้าข้อมูลไม่พอ ให้ถือว่าเป็นหมัดตรง เพื่อไม่ให้พลาดหมัดจริง
+    // ตรวจว่าเป็น "หมัดตรง" เท่านั้น: ข้อมือต้องพุ่งออกไปข้างหน้าเป็นเส้นตรงจากท่าการ์ด
+    //  - อัปเปอร์คัต = ข้อมือยกขึ้น/ลงระหว่างทาง
+    //  - ฮุก = ข้อมือเหวี่ยงไปด้านข้าง/วิ่งเป็นวงโค้ง หรือแขนเหยียดอยู่แล้วเหวี่ยงมา
+    // ตรวจ "ตลอดเส้นทาง" ไม่ใช่แค่จุดเริ่มกับจุดจบ และถ้าข้อมูลไม่พอจะไม่นับ
     // จุดเริ่มหมัด = เฟรมที่งอข้อศอกมากที่สุดในช่วงที่ผ่านมา (ไม่ต้องรอให้ดึงหมัดกลับครบ)
+    const NOT_STRAIGHT_UPPERCUT = 'ต้องเป็นหมัดตรงเท่านั้น ไม่ใช่อัปเปอร์คัต';
+    const NOT_STRAIGHT_HOOK = 'ต้องเป็นหมัดตรงเท่านั้น ไม่ใช่ฮุก';
+
     const checkStraightPath = (side, front) => {
       const tr = punchTraj[side];
-      if (tr.length < 3) return { ok: true, why: '' };
+      if (tr.length < PUNCH_TRAJ_MIN_FRAMES) return { ok: false, why: '' };
 
       const key = front ? 'el3d' : 'el2d';
       const search = tr.slice(0, tr.length - 2);
@@ -754,15 +767,50 @@ export default function Exercise() {
       });
       const o = search[oi];
 
+      // ต้องเริ่มจากท่าการ์ด (ศอกงอ) ถ้าแขนเหยียดอยู่แล้วเหวี่ยง = ไม่ใช่หมัดตรง
+      if (o[key] > PUNCH_START_ELBOW_MAX) {
+        return { ok: false, why: 'ต้องเริ่มจากท่าการ์ด แล้วชกตรงออกไป' };
+      }
+
+      const path = tr.slice(oi);
       const tail = tr.slice(-2);
       const endUp = average(tail.map((x) => x.up));
       const endLat = average(tail.map((x) => x.lat));
+      const endFwd = average(tail.map((x) => x.fwd));
 
-      if (Math.abs(endUp - o.up) > PUNCH_MAX_DY) {
-        return { ok: false, why: 'ต้องเป็นหมัดตรงเท่านั้น ไม่ใช่อัปเปอร์คัต' };
-      }
-      if (front && (Math.abs(endLat - o.lat) > PUNCH_MAX_DLAT || Math.abs(endLat) > PUNCH_MAX_LAT)) {
-        return { ok: false, why: 'ต้องเป็นหมัดตรงเท่านั้น ไม่ใช่ฮุก' };
+      // อัปเปอร์คัต: ข้อมือขึ้น/ลงจากจุดเริ่มเกินกำหนด ณ จุดใดจุดหนึ่งของเส้นทาง
+      const maxDy = Math.max(...path.map((x) => Math.abs(x.up - o.up)));
+      if (maxDy > PUNCH_MAX_DY) return { ok: false, why: NOT_STRAIGHT_UPPERCUT };
+
+      if (front) {
+        // ฮุก: ข้อมือเหวี่ยงไปด้านข้างเกินกำหนด ณ จุดใดจุดหนึ่ง หรืออยู่ห่างแนวไหล่เกินไป
+        const maxDlat = Math.max(...path.map((x) => Math.abs(x.lat - o.lat)));
+        if (maxDlat > PUNCH_MAX_DLAT || Math.abs(endLat) > PUNCH_MAX_LAT) {
+          return { ok: false, why: NOT_STRAIGHT_HOOK };
+        }
+        // หมัดตรงต้องพุ่งเข้าหากล้อง (ข้อมือยื่นออกมาจากจุดเริ่มชัดเจน)
+        if (endFwd - o.fwd < PUNCH_MIN_DFWD) {
+          return { ok: false, why: 'ต้องเป็นหมัดตรงเท่านั้น ชกพุ่งตรงไปข้างหน้า' };
+        }
+      } else {
+        // หันข้าง: ดูเส้นทางข้อมือในระนาบภาพ (แนวนอน x แนวตั้ง)
+        const p0 = { a: o.xh, b: o.up };
+        const p1 = { a: path[path.length - 1].xh, b: path[path.length - 1].up };
+        const dx = p1.a - p0.a;
+        const dy = p1.b - p0.b;
+        const L = Math.hypot(dx, dy);
+        if (L < PUNCH_MIN_TRAVEL) {
+          return { ok: false, why: 'ต้องเป็นหมัดตรงเท่านั้น ชกพุ่งตรงไปข้างหน้า' };
+        }
+        // ทิศหมัดเอียงขึ้น/ลงมากเกินไป = อัปเปอร์คัต
+        if (Math.abs(endUp - o.up) / L > PUNCH_MAX_SLOPE || Math.abs(dy) / L > PUNCH_MAX_SLOPE) {
+          return { ok: false, why: NOT_STRAIGHT_UPPERCUT };
+        }
+        // เส้นทางโค้งออกจากเส้นตรงมากเกินไป = ฮุก/วงสวิง
+        const bow = Math.max(
+          ...path.map((x) => Math.abs((x.xh - p0.a) * dy - (x.up - p0.b) * dx) / L)
+        );
+        if (bow / L > PUNCH_MAX_BOW) return { ok: false, why: NOT_STRAIGHT_HOOK };
       }
       return { ok: true, why: '' };
     };
