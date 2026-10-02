@@ -112,6 +112,19 @@ export default function ExerciseSelect() {
       <main className="dashboard-main">
         {/* Header — รูปแบบเดียวกับ Dashboard */}
         <header className="dashboard-header">
+          <div className="header-back">
+            <button
+              className="back-pill"
+              type="button"
+              onClick={() => navigate("/dashboard")}
+              title="กลับไปหน้า Dashboard"
+              aria-label="ย้อนกลับไปหน้า Dashboard"
+            >
+              <span className="back-arrow">‹</span>
+              <span className="back-text">ย้อนกลับ</span>
+            </button>
+          </div>
+
           <div className="header-copy">
             <div className="logo">FITTRACK</div>
             <h1>ระบบออกกำลังกายอัจฉริยะ</h1>
@@ -507,6 +520,48 @@ export default function ExerciseSelect() {
           position: absolute;
           right: 0;
           top: 33px;
+        }
+
+        .header-back {
+          position: absolute;
+          left: 0;
+          top: 33px;
+        }
+
+        .back-pill {
+          min-height: 43px;
+          padding: 4px 16px 4px 10px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          border: 1px solid #dce8f5;
+          border-radius: 24px;
+          color: #315b8f;
+          background: #fff;
+          box-shadow: 0 8px 20px rgba(28,75,125,.07);
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 600;
+          transition: .2s ease;
+        }
+
+        .back-pill:hover {
+          transform: translateY(-2px);
+          border-color: #a9c9ee;
+          box-shadow: 0 11px 24px rgba(24,119,242,.13);
+        }
+
+        .back-arrow {
+          width: 29px;
+          height: 29px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          color: #fff;
+          background: linear-gradient(145deg, #4f99f6, #1769dc);
+          font-size: 21px;
+          line-height: 1;
+          padding-bottom: 2px;
         }
 
         .profile-pill {
@@ -928,7 +983,20 @@ export default function ExerciseSelect() {
 
           .dashboard-header {
             min-height: 125px;
-            padding: 17px 65px 17px 8px;
+            padding: 17px 65px 17px 65px;
+          }
+
+          .header-back {
+            left: 0;
+            top: 21px;
+          }
+
+          .back-pill {
+            padding: 4px;
+          }
+
+          .back-text {
+            display: none;
           }
 
           .header-actions {

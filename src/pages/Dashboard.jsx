@@ -243,8 +243,11 @@ export default function Dashboard() {
       <aside className="dashboard-sidebar">
         <div className="brand-block">
           <div className="brand-mark" aria-label="FitTrack">
-            <svg viewBox="0 0 32 32" width="27" height="30" aria-hidden="true" focusable="false">
-              <path d="M8 3.5h17l-4.5 7H29L13 28v-11H4l4-13.5Z" fill="#a855f7" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
+            <span className="brand-spark spark-one" aria-hidden="true">✦</span>
+            <span className="brand-spark spark-two" aria-hidden="true">✦</span>
+            <svg className="brand-exercise-logo" viewBox="0 0 48 48" width="29" height="29" aria-hidden="true" focusable="false">
+              <path d="M10 18v12M14 15v18M18 20h12M30 15v18M34 18v12" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round"/>
+              <path d="M18 24h12" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/>
             </svg>
           </div>
           <div>
@@ -286,7 +289,6 @@ export default function Dashboard() {
           <div className="header-copy">
             <div className="logo">FITTRACK</div>
             <h1>ระบบออกกำลังกายอัจฉริยะ</h1>
-            <p>ดูแลสุขภาพ · โภชนาการ · AI ตรวจจับท่าทาง</p>
           </div>
 
           <div className="header-actions">
@@ -308,17 +310,14 @@ export default function Dashboard() {
           {/* สุขภาพ */}
           <section className="panel health-panel">
             <div className="panel-heading">
-              <div className="panel-icon blue">♡</div>
               <div>
-                <h2>สุขภาพของคุณ</h2>
-                <span>ข้อมูลล่าสุด</span>
+                <h2 className="health-section-title">สุขภาพของคุณ</h2>
               </div>
             </div>
 
             <div className="health-grid">
               <div className="metric-card">
                 <div className="metric-top">
-                  <span className="metric-icon">▣</span>
                   <span>BMI</span>
                 </div>
 
@@ -344,7 +343,6 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="health-empty-state">
-                    <span className="empty-icon">✦</span>
                     <div className="health-empty-copy">
                       <strong>พร้อมดูแลสุขภาพของคุณ · กรอกข้อมูลด้านล่างเพื่อดู BMI</strong>
                     </div>
@@ -354,7 +352,6 @@ export default function Dashboard() {
 
               <div className="metric-card">
                 <div className="metric-top">
-                  <span className="metric-icon fire">♨</span>
                   <span>TDEE</span>
                 </div>
 
@@ -365,12 +362,11 @@ export default function Dashboard() {
                         {tdeeResult}<small>kcal/วัน</small>
                       </div>
                     </div>
-                    <div className="energy-pill">◉ พลังงานที่แนะนำต่อวัน</div>
+                    <div className="energy-pill">พลังงานที่แนะนำต่อวัน</div>
                     <div className="result-description">คำนวณจากข้อมูลร่างกายและกิจกรรมของคุณ</div>
                   </div>
                 ) : (
                   <div className="health-empty-state tdee-empty">
-                    <span className="empty-icon fire-empty">✦</span>
                     <div className="health-empty-copy">
                       <strong>พลังงานของคุณจะอยู่ตรงนี้ · ระบบจะคำนวณ TDEE พร้อมกับ BMI</strong>
                     </div>
@@ -382,43 +378,39 @@ export default function Dashboard() {
             <form onSubmit={calculateHealth} className="health-form">
               <div className="health-form-head">
                 <div className="health-form-title">
-                  <span className="health-form-orb">✦</span>
                   <div>
                     <strong>ข้อมูลร่างกายของคุณ</strong>
-                    <span>กรอกข้อมูลเพื่อดู BMI และพลังงานที่เหมาะสม</span>
+                    <span>กรอกข้อมูลด้านล่าง แล้วให้ FitTrack คำนวณ BMI และพลังงานที่เหมาะสมให้คุณ</span>
                   </div>
                 </div>
               </div>
 
               <div className="health-input-row">
                 <div className="modern-field">
-                  <div className="modern-field-icon">⚖</div>
                   <div className="modern-field-copy">
                     <label htmlFor="weight">น้ำหนัก</label>
                     <div className="modern-input-wrap">
-                      <input id="weight" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="—" required />
+                      <input id="weight" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="0" required />
                       <small>kg</small>
                     </div>
                   </div>
                 </div>
 
                 <div className="modern-field">
-                  <div className="modern-field-icon height-icon">↕</div>
                   <div className="modern-field-copy">
                     <label htmlFor="height">ส่วนสูง</label>
                     <div className="modern-input-wrap">
-                      <input id="height" type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="—" required />
+                      <input id="height" type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="0" required />
                       <small>cm</small>
                     </div>
                   </div>
                 </div>
 
                 <div className="modern-field age-modern-field">
-                  <div className="modern-field-icon age-icon">◷</div>
                   <div className="modern-field-copy">
                     <label htmlFor="age">อายุ</label>
                     <div className="modern-input-wrap">
-                      <input id="age" type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="—" required />
+                      <input id="age" type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="0" required />
                       <small>ปี</small>
                     </div>
                   </div>
@@ -690,7 +682,7 @@ export default function Dashboard() {
       )}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&family=Anuphan:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap');
 
         * { box-sizing: border-box; }
         html {
@@ -709,7 +701,7 @@ export default function Dashboard() {
           border: 0;
           background: #eef4fb;
           color: #173b73;
-          font-family: "Anuphan", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
         }
 
         button, input { font-family: inherit; }
@@ -758,14 +750,56 @@ export default function Dashboard() {
         }
 
         .brand-mark {
-          width: 42px;
-          height: 42px;
+          position: relative;
+          width: 46px;
+          height: 46px;
           display: grid;
           place-items: center;
-          border-radius: 13px;
+          border-radius: 15px;
           color: #fff;
-          background: linear-gradient(145deg, #5b9cf6, #1769dc);
-          box-shadow: 0 9px 20px rgba(24,119,242,.22);
+          background: linear-gradient(145deg, #5b9cf6 0%, #2b82ec 48%, #1769dc 100%);
+          box-shadow: 0 10px 24px rgba(24,119,242,.25);
+          overflow: visible;
+          isolation: isolate;
+          transition: transform .22s ease, box-shadow .22s ease;
+        }
+
+        .brand-exercise-logo {
+          position: relative;
+          z-index: 3;
+          filter: drop-shadow(0 2px 5px rgba(0,0,0,.12));
+          transition: transform .22s ease;
+        }
+
+        .brand-spark {
+          position: absolute;
+          z-index: 4;
+          color: #fff;
+          line-height: 1;
+          pointer-events: none;
+          opacity: 0;
+          text-shadow: 0 0 8px rgba(255,255,255,.95), 0 0 14px rgba(126,202,255,.8);
+          animation: brandSparkle 2.4s ease-in-out infinite;
+        }
+
+        .spark-one {
+          top: -7px;
+          right: -6px;
+          font-size: 12px;
+        }
+
+        .spark-two {
+          bottom: -5px;
+          left: -5px;
+          font-size: 8px;
+          animation-delay: 1.1s;
+        }
+
+        @keyframes brandSparkle {
+          0%, 100% { opacity: 0; transform: scale(.45) rotate(0deg); }
+          35% { opacity: 1; transform: scale(1.08) rotate(12deg); }
+          58% { opacity: .35; transform: scale(.78) rotate(28deg); }
+          75% { opacity: 0; transform: scale(.45) rotate(42deg); }
         }
 
         .brand-mark img {
@@ -777,7 +811,7 @@ export default function Dashboard() {
 
         .brand-name {
           color: #123c78;
-          font-family: "Kanit", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 21px;
           font-weight: 600;
           line-height: 1.1;
@@ -805,7 +839,7 @@ export default function Dashboard() {
           gap: 13px;
           border: 0;
           border-radius: 15px;
-          cursor: pointer;
+          cursor: default;
           color: #5c7594;
           background: transparent;
           font-size: 13px;
@@ -899,7 +933,7 @@ export default function Dashboard() {
         .dashboard-header h1 {
           margin: 0;
           color: #11396f;
-          font-family: "Kanit", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: clamp(27px, 3.2vw, 39px);
           font-weight: 600;
           line-height: 1.25;
@@ -989,14 +1023,16 @@ export default function Dashboard() {
         .dashboard-content {
           max-width: 1230px;
           margin: 0 auto;
-          padding-top: 20px;
+          padding: 24px 0 10px;
           display: grid;
-          grid-template-columns: minmax(0, 1.7fr) minmax(330px, .9fr);
+          grid-template-columns: minmax(0, 1fr);
           grid-template-areas:
-            "health food"
-            "workout workout"
-            "meals meals";
-          gap: 18px;
+            "workout"
+            "health"
+            "food"
+            "meals";
+          gap: 24px;
+          align-items: start;
         }
 
         /* ---------- PANELS ---------- */
@@ -1004,7 +1040,7 @@ export default function Dashboard() {
         .panel {
           position: relative;
           min-width: 0;
-          padding: 20px;
+          padding: 24px;
           overflow: hidden;
           border: 1px solid #dbe8f5;
           border-radius: 19px;
@@ -1059,11 +1095,22 @@ export default function Dashboard() {
         .section-heading h2 {
           margin: 0;
           color: #153d78;
-          font-family: "Kanit", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 18px;
           font-weight: 600;
           line-height: 1.3;
           white-space: nowrap;
+        }
+
+        .health-panel .health-section-title {
+          font-size: 22px;
+          font-weight: 700;
+          letter-spacing: -.2px;
+          background: linear-gradient(100deg, #1558a9 0%, #2d82ed 48%, #7a5af8 100%);
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          color: transparent;
         }
 
         .panel-heading span:not(.heading-badge),
@@ -1142,7 +1189,7 @@ export default function Dashboard() {
           gap: 9px;
           margin-top: 7px;
           color: #123c78;
-          font-family: "Kanit", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 34px;
           font-weight: 600;
           line-height: 1.1;
@@ -1153,7 +1200,7 @@ export default function Dashboard() {
           border-radius: 999px;
           color: #27a36a;
           background: #dcf7ea;
-          font-family: "Anuphan", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 9px;
           font-style: normal;
           font-weight: 700;
@@ -1165,7 +1212,7 @@ export default function Dashboard() {
 
         .tdee-value small {
           color: #66809e;
-          font-family: "Anuphan", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 10px;
           font-weight: 500;
         }
@@ -1252,9 +1299,9 @@ export default function Dashboard() {
 
         .health-empty-state strong {
           display: block;
-          color: #315a8f;
+          color: #a8b1bd;
           font-size: 11px;
-          font-weight: 700;
+          font-weight: 600;
         }
 
         .health-empty-state p {
@@ -1329,15 +1376,15 @@ export default function Dashboard() {
 
         .health-form {
           position: relative;
-          margin-top: 18px;
-          padding: 18px;
-          border: 1px solid rgba(196,218,240,.9);
-          border-radius: 20px;
+          margin-top: 22px;
+          padding: 22px;
+          border: 1px solid #dbe8f5;
+          border-radius: 24px;
           background:
-            radial-gradient(circle at 8% 0%, rgba(64,143,255,.10), transparent 26%),
-            radial-gradient(circle at 100% 100%, rgba(85,203,166,.07), transparent 30%),
-            linear-gradient(145deg, #ffffff 0%, #f8fbff 100%);
-          box-shadow: 0 12px 32px rgba(35,82,137,.07), inset 0 1px 0 rgba(255,255,255,.95);
+            radial-gradient(circle at 8% 0%, rgba(76,153,255,.12), transparent 24%),
+            radial-gradient(circle at 100% 100%, rgba(75,204,165,.07), transparent 26%),
+            #ffffff;
+          box-shadow: 0 14px 32px rgba(35,82,137,.065);
           overflow: hidden;
         }
 
@@ -1347,153 +1394,159 @@ export default function Dashboard() {
           top: 0;
           left: 0;
           right: 0;
-          height: 2px;
-          background: linear-gradient(90deg, #5ba6ff, #1877f2 45%, #73d7b0);
+          height: 3px;
+          background: linear-gradient(90deg, #62adff, #247ff0 50%, #69d2ad);
         }
 
         .health-form-head {
           display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          margin-bottom: 14px;
+          justify-content: center;
+          margin-bottom: 18px;
         }
 
         .health-form-title {
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 12px;
           min-width: 0;
         }
 
         .health-form-orb {
-          width: 31px;
-          height: 31px;
-          flex: 0 0 31px;
+          width: 42px;
+          height: 42px;
+          flex: 0 0 42px;
           display: grid;
           place-items: center;
-          border-radius: 10px;
+          border-radius: 13px;
           color: #fff;
-          background: linear-gradient(145deg, #4b9bfa, #176de0);
-          box-shadow: 0 7px 16px rgba(24,119,242,.18);
-          font-size: 13px;
+          background: linear-gradient(145deg, #58a7ff, #176cdd);
+          box-shadow: 0 8px 18px rgba(24,119,242,.18);
+          font-size: 17px;
         }
 
         .health-form-title strong {
           display: block;
-          color: #214d85;
-          font-family: "Kanit", sans-serif;
-          font-size: 12px;
+          color: #153f79;
+          font-family: "IBM Plex Sans Thai", sans-serif;
+          font-size: 17px;
           font-weight: 600;
           line-height: 1.2;
         }
 
         .health-form-title span:not(.health-form-orb) {
           display: block;
-          margin-top: 3px;
-          color: #8a9db3;
-          font-size: 8px;
+          margin-top: 4px;
+          color: #8197af;
+          font-size: 9.5px;
           line-height: 1.4;
         }
 
-        .health-form-badge {
-          flex: 0 0 auto;
-          padding: 5px 9px;
-          border: 1px solid #dbe9f8;
-          border-radius: 999px;
-          color: #5c7ea5;
-          background: #f2f7fd;
-          font-size: 8px;
-          font-weight: 700;
-        }
+        .health-form-badge { display: none; }
 
+        /* Desktop: 4 ช่องขนาดเท่ากันจริง และไม่มี element ซ้อนกัน */
         .health-input-row {
           display: grid;
-          grid-template-columns: 1fr 1fr .82fr 1.35fr;
-          gap: 9px;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
           align-items: stretch;
         }
 
         .modern-field {
           min-width: 0;
-          min-height: 57px;
+          height: 118px;
+          padding: 14px 15px;
           display: flex;
-          align-items: center;
+          flex-direction: column;
+          align-items: stretch;
+          justify-content: space-between;
           gap: 9px;
-          padding: 8px 10px;
-          border: 1px solid #e0ebf6;
-          border-radius: 14px;
-          background: rgba(255,255,255,.9);
-          box-shadow: 0 4px 13px rgba(40,91,145,.035);
-          transition: .2s ease;
+          border: 1px solid #dce8f4;
+          border-radius: 18px;
+          background: linear-gradient(145deg, #ffffff, #f9fcff);
+          box-shadow: 0 6px 17px rgba(40,91,145,.045);
+          transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
         }
 
-        .modern-field:focus-within {
-          border-color: #72aff0;
-          background: #fff;
-          box-shadow: 0 0 0 3px rgba(24,119,242,.07), 0 8px 18px rgba(24,119,242,.07);
+        .modern-field:hover {
+          border-color: #c5dbef;
+          box-shadow: 0 10px 22px rgba(40,91,145,.07);
           transform: translateY(-1px);
         }
 
+        .modern-field:focus-within {
+          border-color: #69a9ed;
+          background: #fff;
+          box-shadow: 0 0 0 3px rgba(24,119,242,.065), 0 12px 24px rgba(24,119,242,.08);
+          transform: translateY(-2px);
+        }
+
         .modern-field-icon {
-          width: 31px;
-          height: 31px;
-          flex: 0 0 31px;
+          width: 38px;
+          height: 38px;
+          flex: 0 0 38px;
           display: grid;
           place-items: center;
-          border-radius: 10px;
+          border-radius: 12px;
           color: #2d82ed;
           background: #eaf4ff;
-          font-size: 14px;
+          font-size: 17px;
           font-weight: 700;
         }
 
         .height-icon {
-          color: #6a7ee8;
+          color: #687be5;
           background: #eef0ff;
         }
 
         .age-icon {
-          color: #25a477;
+          color: #24a377;
           background: #e8f9f2;
         }
 
         .modern-field-copy {
           min-width: 0;
-          flex: 1;
+          width: 100%;
         }
 
         .modern-field label {
           display: block;
-          margin: 0 0 1px;
-          color: #70859d;
-          font-size: 8px;
+          margin: 0 0 4px;
+          color: #647e9c;
+          font-size: 10px;
           font-weight: 700;
+          line-height: 1.2;
+          white-space: nowrap;
         }
 
         .modern-input-wrap {
+          width: 100%;
+          min-width: 0;
           display: flex;
-          align-items: baseline;
-          gap: 4px;
+          align-items: center;
+          justify-content: space-between;
+          gap: 7px;
+          padding-bottom: 4px;
+          border-bottom: 1px solid #e5edf5;
         }
 
         .modern-input-wrap input {
           width: 100%;
           min-width: 0;
-          height: 25px;
+          height: 27px;
           padding: 0;
           outline: none;
-          border: 0;
-          color: #163f79;
+          border: 0 !important;
+          color: #143e79;
           background: transparent;
-          font-family: "Kanit", sans-serif;
-          font-size: 17px;
-          font-weight: 500;
+          font-family: "IBM Plex Sans Thai", sans-serif;
+          font-size: 23px;
+          font-weight: 600;
           line-height: 1;
         }
 
         .modern-input-wrap input::placeholder {
-          color: #c1cfdd;
+          color: #c3cfdb;
+          opacity: 1;
         }
 
         .modern-input-wrap input::-webkit-outer-spin-button,
@@ -1502,70 +1555,71 @@ export default function Dashboard() {
           -webkit-appearance: none;
         }
 
-        .modern-input-wrap input[type=number] {
-          -moz-appearance: textfield;
-        }
+        .modern-input-wrap input[type=number] { -moz-appearance: textfield; }
 
         .modern-input-wrap small {
           flex: 0 0 auto;
-          color: #9aadc1;
-          font-size: 7.5px;
-          font-weight: 600;
+          padding: 5px 7px;
+          border-radius: 7px;
+          color: #7891ab;
+          background: #f0f6fc;
+          font-size: 8px;
+          font-weight: 700;
+          line-height: 1;
         }
 
         .health-calculate-btn {
           position: relative;
-          min-height: 57px;
-          padding: 9px 13px 9px 42px;
+          min-width: 0;
+          height: 118px;
+          padding: 15px 16px;
           display: flex;
           flex-direction: column;
-          align-items: flex-start;
+          align-items: center;
           justify-content: center;
+          gap: 7px;
           border: 0;
-          border-radius: 14px;
+          border-radius: 12px;
           color: #fff;
-          background: linear-gradient(135deg, #2d87f4 0%, #1767d8 100%);
-          box-shadow: 0 9px 20px rgba(24,119,242,.2);
-          cursor: pointer;
+          background:
+            radial-gradient(circle at 86% 12%, rgba(255,255,255,.22), transparent 29%),
+            radial-gradient(circle at 100% 100%, rgba(75,184,255,.2), transparent 38%),
+            linear-gradient(135deg, #318cf7 0%, #1769d8 72%, #1558bf 100%);
+          box-shadow: 0 12px 25px rgba(24,119,242,.22);
+          cursor: default;
           overflow: hidden;
-          transition: .22s ease;
+          transition: transform .22s ease, box-shadow .22s ease;
         }
 
+        .health-calculate-btn::before,
         .health-calculate-btn::after {
-          content: "";
-          position: absolute;
-          width: 90px;
-          height: 90px;
-          right: -35px;
-          top: -55px;
-          border-radius: 50%;
-          background: rgba(255,255,255,.12);
+          content: none !important;
+          display: none !important;
         }
 
         .health-calculate-btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 13px 25px rgba(24,119,242,.28);
+          transform: translateY(-3px);
+          box-shadow: 0 16px 30px rgba(24,119,242,.28);
         }
 
-        .health-calculate-btn:active {
-          transform: translateY(0) scale(.985);
-        }
+        .health-calculate-btn:active { transform: translateY(0) scale(.985); }
 
         .health-calculate-btn > span {
           position: relative;
           z-index: 1;
-          font-family: "Kanit", sans-serif;
-          font-size: 11px;
+          font-family: "IBM Plex Sans Thai", sans-serif;
+          font-size: 15px;
           font-weight: 600;
-          line-height: 1.2;
+          line-height: 1.1;
+          white-space: nowrap;
         }
 
         .health-calculate-btn small {
           position: relative;
           z-index: 1;
-          margin-top: 3px;
-          color: rgba(255,255,255,.76);
-          font-size: 7px;
+          color: rgba(255,255,255,.78);
+          font-size: 8px;
+          white-space: nowrap;
         }
 
         /* ---------- FOOD ---------- */
@@ -1648,7 +1702,7 @@ export default function Dashboard() {
         .food-empty strong {
           margin-top: 3px;
           color: #163e78;
-          font-family: "Kanit", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 15px;
           font-weight: 600;
         }
@@ -1760,7 +1814,7 @@ export default function Dashboard() {
           display: block;
           margin-top: 3px;
           color: #183f78;
-          font-family: "Kanit", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 18px;
           font-weight: 600;
         }
@@ -1777,7 +1831,7 @@ export default function Dashboard() {
           background: #fff7e9;
         }
         .food-kcal-badge b {
-          font-family: "Kanit", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 22px;
           line-height: 1;
         }
@@ -1816,7 +1870,7 @@ export default function Dashboard() {
           gap: 2px;
         }
         .calorie-summary small { color: #8aa0b7; font-size: 9px; }
-        .calorie-summary strong { color: #315a8f; font-family: "Kanit", sans-serif; font-size: 17px; }
+        .calorie-summary strong { color: #315a8f; font-family: "IBM Plex Sans Thai", sans-serif; font-size: 17px; }
         .calorie-summary > div:last-child { text-align: right; }
         .remaining-ok strong { color: #1d9a68; }
         .remaining-danger strong { color: #dc4b4b; }
@@ -2002,7 +2056,7 @@ export default function Dashboard() {
         .workout-copy h3 {
           margin: 4px 0 4px;
           color: #fff;
-          font-family: "Kanit", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 19px;
           font-weight: 600;
           line-height: 1.35;
@@ -2372,7 +2426,7 @@ export default function Dashboard() {
         .meal-modal-heading h2 {
           margin: 0;
           color: #f7fbff;
-          font-family: "Kanit", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 27px;
           font-weight: 600;
           line-height: 1.25;
@@ -2453,7 +2507,7 @@ export default function Dashboard() {
           border-radius: 12px;
           color: #e8f3ff;
           background: rgba(44,112,188,.13);
-          font-family: "Kanit", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 16px;
           font-weight: 500;
           letter-spacing: .1px;
@@ -2620,7 +2674,7 @@ export default function Dashboard() {
         /* ---------- TYPOGRAPHY / MICRO EFFECTS ---------- */
 
         .dashboard-page {
-          font-family: "Anuphan", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
         }
 
         .dashboard-header h1 {
@@ -2741,8 +2795,7 @@ export default function Dashboard() {
         }
 
         /* Glow / lift ที่นุ่มขึ้น */
-        .panel-icon,
-        .brand-mark {
+        .panel-icon {
           position: relative;
         }
 
@@ -2762,6 +2815,15 @@ export default function Dashboard() {
         .brand-block:hover .brand-mark::after {
           opacity: 1;
           transform: scale(1.08);
+        }
+
+        .brand-block:hover .brand-mark {
+          transform: translateY(-2px) rotate(-1deg);
+          box-shadow: 0 14px 28px rgba(24,119,242,.3);
+        }
+
+        .brand-block:hover .brand-exercise-logo {
+          transform: scale(1.06);
         }
 
         .metric-value,
@@ -2873,7 +2935,7 @@ export default function Dashboard() {
 
         /* ---------- MODERN READABILITY PASS ---------- */
         .dashboard-page {
-          font-family: "Noto Sans Thai", "Anuphan", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
           font-size: 15px;
         }
 
@@ -2881,7 +2943,7 @@ export default function Dashboard() {
         .dashboard-page input,
         .dashboard-page textarea,
         .dashboard-page select {
-          font-family: "Noto Sans Thai", "Anuphan", sans-serif;
+          font-family: "IBM Plex Sans Thai", sans-serif;
         }
 
         .brand-name { font-size: 24px; }
@@ -2900,17 +2962,17 @@ export default function Dashboard() {
         .metric-helper, .result-description { font-size: 11px; }
         .health-empty-state strong { font-size: 14px; }
         .health-empty-state p { font-size: 11px; }
-        .health-form { padding: 20px; }
-        .health-form-title strong { font-size: 15px; }
-        .health-form-title span:not(.health-form-orb) { font-size: 11px; }
-        .health-form-badge { font-size: 10px; padding: 6px 10px; }
-        .modern-field { min-height: 68px; padding: 10px 12px; gap: 11px; }
-        .modern-field-icon { width: 37px; height: 37px; flex-basis: 37px; font-size: 17px; }
+        .health-form { padding: 22px; }
+        .health-form-title strong { font-size: 17px; }
+        .health-form-title span:not(.health-form-orb) { font-size: 10.5px; }
+        .health-form-badge { font-size: 10px; padding: 8px 12px; }
+        .modern-field { min-height: 82px; padding: 13px 15px; gap: 13px; border-radius: 18px; }
+        .modern-field-icon { width: 42px; height: 42px; flex-basis: 42px; font-size: 18px; }
         .modern-field label { font-size: 10px; margin-bottom: 3px; }
-        .modern-input-wrap input { height: 29px; font-size: 21px; }
-        .modern-input-wrap small { font-size: 10px; }
-        .health-calculate-btn { min-height: 68px; padding-left: 18px; }
-        .health-calculate-btn > span { font-size: 14px; }
+        .modern-input-wrap input { height: 31px; font-size: 24px; }
+        .modern-input-wrap small { font-size: 9px; }
+        .health-calculate-btn { min-height: 82px; padding-left: 56px; border-radius: 12px; }
+        .health-calculate-btn > span { font-size: 15px; }
         .health-calculate-btn small { font-size: 9px; }
         .scale-labels { font-size: 9px; }
         .energy-pill { font-size: 11px; }
@@ -2931,20 +2993,20 @@ export default function Dashboard() {
           gap: 10px;
         }
         .empty-icon { width: 38px; height: 38px; flex-basis: 38px; font-size: 18px; }
-        .health-form { padding: 14px; margin-top: 13px; border-radius: 17px; }
-        .health-form-head { margin-bottom: 9px; }
-        .health-form-title { gap: 8px; }
-        .health-form-orb { width: 27px; height: 27px; flex-basis: 27px; border-radius: 8px; font-size: 11px; }
-        .health-form-title strong { font-size: 12px; }
-        .health-form-title span:not(.health-form-orb) { font-size: 8px; }
-        .modern-field { min-height: 54px; padding: 7px 9px; gap: 8px; border-radius: 12px; }
-        .modern-field-icon { width: 29px; height: 29px; flex-basis: 29px; border-radius: 8px; font-size: 13px; }
-        .modern-field label { font-size: 8px; margin-bottom: 0; }
-        .modern-input-wrap input { height: 23px; font-size: 17px; }
-        .modern-input-wrap small { font-size: 8px; }
-        .health-calculate-btn { min-height: 54px; border-radius: 12px; }
-        .health-calculate-btn > span { font-size: 11px; }
-        .health-calculate-btn small { font-size: 7px; }
+        .health-form { padding: 22px; margin-top: 22px; border-radius: 24px; }
+        .health-form-head { margin-bottom: 18px; }
+        .health-form-title { gap: 13px; }
+        .health-form-orb { width: 44px; height: 44px; flex-basis: 44px; border-radius: 14px; font-size: 18px; }
+        .health-form-title strong { font-size: 17px; }
+        .health-form-title span:not(.health-form-orb) { font-size: 10.5px; }
+        .modern-field { min-height: 82px; padding: 13px 15px; gap: 13px; border-radius: 18px; }
+        .modern-field-icon { width: 42px; height: 42px; flex-basis: 42px; border-radius: 13px; font-size: 18px; }
+        .modern-field label { font-size: 10px; margin-bottom: 3px; }
+        .modern-input-wrap input { height: 31px; font-size: 24px; }
+        .modern-input-wrap small { font-size: 9px; }
+        .health-calculate-btn { min-height: 82px; border-radius: 12px; padding-left: 56px; }
+        .health-calculate-btn > span { font-size: 15px; }
+        .health-calculate-btn small { font-size: 9px; }
 
         /* Result cards: cleaner, larger, no downward arrows */
         .health-empty-state {
@@ -3003,9 +3065,9 @@ export default function Dashboard() {
           .dashboard-content {
             grid-template-columns: 1fr;
             grid-template-areas:
+              "workout"
               "health"
               "food"
-              "workout"
               "meals";
           }
         }
@@ -3176,6 +3238,479 @@ export default function Dashboard() {
           .time-section p {
             font-size: 14px;
           }
+        }
+      /* ---------- HEALTH FORM FINAL BALANCE ---------- */
+      .health-form {
+        padding: 24px;
+        border-radius: 24px;
+      }
+
+      .health-form-head {
+        margin-bottom: 20px;
+      }
+
+      .health-form-title {
+        max-width: 620px;
+      }
+
+      .health-form-title strong {
+        font-size: 18px;
+      }
+
+      .health-form-title span:not(.health-form-orb) {
+        font-size: 10px;
+      }
+
+      .health-input-row {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .modern-field,
+      .health-calculate-btn {
+        width: 100%;
+        min-width: 0;
+        height: 124px;
+        min-height: 124px;
+        box-sizing: border-box;
+      }
+
+      .modern-field {
+        padding: 15px;
+        gap: 8px;
+        border-radius: 18px;
+      }
+
+      .modern-field-icon {
+        width: 40px;
+        height: 40px;
+        flex-basis: 40px;
+        border-radius: 12px;
+      }
+
+      .modern-field-copy {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .modern-field label {
+        font-size: 10px;
+        margin-bottom: 5px;
+      }
+
+      .modern-input-wrap {
+        width: 100%;
+        padding-bottom: 5px;
+      }
+
+      .modern-input-wrap input {
+        height: 28px;
+        font-size: 24px;
+      }
+
+      .modern-input-wrap small {
+        padding: 5px 7px;
+        font-size: 8px;
+      }
+
+      .health-calculate-btn {
+        padding: 14px;
+        border-radius: 12px;
+        gap: 6px;
+      }
+
+      .health-calculate-btn::before {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+      }
+
+      .health-calculate-btn > span {
+        font-size: 15px;
+      }
+
+      .health-calculate-btn small {
+        font-size: 8px;
+      }
+
+      @media (max-width: 1050px) {
+        .health-input-row {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 520px) {
+        .health-form {
+          padding: 17px;
+        }
+
+        .health-form-title {
+          width: 100%;
+        }
+
+        .health-form-title strong {
+          font-size: 16px;
+        }
+
+        .health-form-title span:not(.health-form-orb) {
+          font-size: 9px;
+        }
+
+        .health-input-row {
+          grid-template-columns: 1fr;
+        }
+      }
+
+
+        /* ---------- CLEAN HEALTH ICON-FREE LAYOUT ---------- */
+        .health-panel > .panel-heading { justify-content: flex-start; }
+        .health-panel .metric-top { justify-content: flex-start; padding-left: 2px; }
+        .health-panel .health-form-title { gap: 0; width: 100%; }
+        .health-panel .health-form-title strong,
+        .health-panel .health-form-title span { text-align: center; }
+        .health-panel .health-form-title > div { width: 100%; }
+        .health-panel .modern-field { justify-content: center; }
+        .health-panel .health-calculate-btn::before { display: none; }
+        .health-panel .health-calculate-btn { padding: 14px 18px; }
+        .health-panel .health-calculate-btn > span,
+        .health-panel .health-calculate-btn small { text-align: center; }
+        .health-panel .energy-pill { padding-left: 0; background: transparent; color: #5f7fa3; border-radius: 0; }
+        .health-panel .health-empty-state { justify-content: center; text-align: center; }
+        .health-panel .health-empty-copy { width: 100%; }
+        .health-panel .health-empty-state strong { white-space: normal; overflow: visible; text-overflow: clip; }
+
+
+        @media (max-width: 560px) {
+          .health-panel .health-section-title {
+            font-size: 20px;
+          }
+        }
+
+        /* =========================================================
+           PREMIUM DASHBOARD REDESIGN
+           One font system + depth + motion + balanced spacing
+           ========================================================= */
+        :root {
+          --ui-blue-1: #2f8cff;
+          --ui-blue-2: #1769d8;
+          --ui-blue-3: #0e4fae;
+          --ui-ink: #123765;
+          --ui-muted: #7187a3;
+          --ui-line: rgba(125, 164, 207, .24);
+          --ui-surface: rgba(255,255,255,.86);
+          --ui-shadow: 0 18px 50px rgba(26, 79, 137, .11);
+          --ui-radius: 24px;
+        }
+
+        html, body, button, input, textarea, select,
+        .dashboard-page, .dashboard-page * {
+          font-family: "IBM Plex Sans Thai" !important;
+        }
+
+        body {
+          color: var(--ui-ink);
+          background: #edf5ff;
+        }
+
+        .dashboard-page {
+          position: relative;
+          isolation: isolate;
+          min-height: 100vh;
+          background:
+            radial-gradient(circle at 8% 8%, rgba(83,164,255,.22), transparent 25%),
+            radial-gradient(circle at 92% 18%, rgba(116,214,255,.17), transparent 24%),
+            radial-gradient(circle at 52% 92%, rgba(55,132,255,.10), transparent 30%),
+            linear-gradient(135deg, #f7fbff 0%, #edf5ff 48%, #f8fbff 100%);
+        }
+
+        .dashboard-page::before,
+        .dashboard-page::after {
+          content: "";
+          position: fixed;
+          z-index: -1;
+          width: 280px;
+          height: 280px;
+          border-radius: 50%;
+          filter: blur(55px);
+          pointer-events: none;
+          opacity: .38;
+          animation: uiFloat 10s ease-in-out infinite alternate;
+        }
+
+        .dashboard-page::before {
+          top: 8%; left: 24%;
+          background: rgba(55, 143, 255, .18);
+        }
+        .dashboard-page::after {
+          right: 4%; bottom: 8%;
+          background: rgba(67, 195, 255, .14);
+          animation-delay: -4s;
+        }
+
+        @keyframes uiFloat {
+          from { transform: translate3d(0, 0, 0) scale(1); }
+          to { transform: translate3d(18px, -14px, 0) scale(1.08); }
+        }
+
+        .dashboard-sidebar {
+          background: rgba(255,255,255,.84) !important;
+          backdrop-filter: blur(22px);
+          -webkit-backdrop-filter: blur(22px);
+          border-right: 1px solid rgba(137, 177, 220, .22) !important;
+          box-shadow: 12px 0 45px rgba(32, 84, 140, .07) !important;
+        }
+
+        .side-nav {
+          border: 1px solid transparent;
+          transition: transform .25s ease, background .25s ease, box-shadow .25s ease, color .25s ease;
+        }
+        .side-nav:hover {
+          transform: translateX(4px);
+          background: rgba(231,241,255,.82) !important;
+          box-shadow: 0 8px 22px rgba(40, 113, 197, .08);
+        }
+        .side-nav.active {
+          transform: translateX(3px);
+          background: linear-gradient(135deg, rgba(225,240,255,.95), rgba(242,248,255,.95)) !important;
+          border-color: rgba(73, 143, 221, .18);
+          box-shadow: 0 10px 25px rgba(36, 113, 196, .10);
+        }
+
+        .dashboard-main {
+          position: relative;
+        }
+
+        .dashboard-header {
+          min-height: 148px;
+          margin: 0 -31px;
+          padding: 30px 31px 24px;
+          border-bottom: 1px solid rgba(139, 177, 216, .18) !important;
+          background: linear-gradient(180deg, rgba(255,255,255,.48), rgba(255,255,255,.04));
+        }
+
+        .header-copy {
+          position: relative;
+          padding: 17px 34px;
+          border: 1px solid rgba(145, 183, 220, .18);
+          border-radius: 26px;
+          background: rgba(255,255,255,.42);
+          box-shadow: 0 12px 35px rgba(35, 89, 146, .06);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+        }
+
+        .header-copy::after {
+          content: "";
+          position: absolute;
+          inset: -1px;
+          border-radius: inherit;
+          padding: 1px;
+          background: linear-gradient(120deg, rgba(68,151,255,.45), transparent 42%, rgba(108,206,255,.35));
+          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          pointer-events: none;
+        }
+
+        .logo {
+          color: #2b7eea !important;
+          letter-spacing: 2.8px;
+        }
+        .dashboard-header h1 {
+          font-family: "IBM Plex Sans Thai" !important;
+          font-weight: 700;
+          letter-spacing: -.5px;
+          background: linear-gradient(90deg, #123e7b, #1f73d4, #123e7b);
+          background-size: 180% auto;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          animation: titleFlow 7s ease-in-out infinite;
+        }
+        @keyframes titleFlow {
+          0%,100% { background-position: 0% center; }
+          50% { background-position: 100% center; }
+        }
+
+        .dashboard-content {
+          max-width: 1240px;
+          padding-top: 28px;
+          gap: 24px;
+          grid-template-columns: 1fr;
+          grid-template-areas:
+            "workout"
+            "health"
+            "food"
+            "meals";
+        }
+
+        .panel {
+          position: relative;
+          padding: 27px;
+          border: 1px solid var(--ui-line) !important;
+          border-radius: var(--ui-radius) !important;
+          background: linear-gradient(145deg, rgba(255,255,255,.94), rgba(248,252,255,.82)) !important;
+          box-shadow: var(--ui-shadow) !important;
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          transition: transform .3s cubic-bezier(.2,.75,.25,1), box-shadow .3s ease, border-color .3s ease;
+        }
+
+        .panel::before {
+          height: 4px !important;
+          background: linear-gradient(90deg, #2d8cff, #63c4ff 55%, transparent) !important;
+          opacity: .95;
+        }
+        .panel::after {
+          content: "";
+          position: absolute;
+          width: 150px;
+          height: 150px;
+          right: -75px;
+          top: -75px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(70,157,255,.12), transparent 68%);
+          pointer-events: none;
+          transition: transform .45s ease;
+        }
+        .panel:hover {
+          transform: translateY(-5px);
+          border-color: rgba(70, 143, 220, .34) !important;
+          box-shadow: 0 24px 60px rgba(27, 85, 145, .14) !important;
+        }
+        .panel:hover::after { transform: scale(1.25); }
+
+        .panel-heading, .section-heading {
+          margin-bottom: 20px;
+          gap: 13px;
+        }
+        .panel-heading h2, .section-heading h2 {
+          font-family: "IBM Plex Sans Thai" !important;
+          font-weight: 700 !important;
+          color: #143d76 !important;
+          letter-spacing: -.2px;
+        }
+        .panel-heading p, .section-heading p { color: #7890ab; }
+
+        .panel-icon {
+          width: 46px !important;
+          height: 46px !important;
+          flex-basis: 46px !important;
+          border-radius: 15px !important;
+          background: linear-gradient(145deg, #58aaff, #1769d8) !important;
+          box-shadow: 0 10px 24px rgba(24,119,242,.23) !important;
+          transition: transform .3s ease, box-shadow .3s ease;
+        }
+        .panel:hover .panel-icon {
+          transform: rotate(-4deg) scale(1.06);
+          box-shadow: 0 14px 28px rgba(24,119,242,.28) !important;
+        }
+
+        .workout-grid { gap: 16px; }
+        .workout-card {
+          min-height: 205px;
+          padding: 24px;
+          border: 1px solid rgba(255,255,255,.16) !important;
+          border-radius: 21px !important;
+          background: linear-gradient(135deg, #2d78cf 0%, #123f78 72%, #0c2c58 100%) !important;
+          box-shadow: 0 16px 32px rgba(18,61,115,.18) !important;
+          transition: transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease, filter .3s ease;
+        }
+        .workout-card::before {
+          opacity: .22;
+          background: radial-gradient(circle at 85% 15%, #fff, transparent 30%);
+        }
+        .workout-card:hover {
+          transform: translateY(-7px) scale(1.01);
+          filter: saturate(1.08);
+          box-shadow: 0 24px 45px rgba(18,61,115,.27) !important;
+        }
+
+        .health-input-row { gap: 14px !important; }
+        .modern-input-wrap {
+          border-radius: 15px !important;
+          border-color: rgba(130,166,204,.28) !important;
+          background: rgba(249,252,255,.9) !important;
+          transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease;
+        }
+        .modern-input-wrap:focus-within {
+          border-color: rgba(47,140,255,.55) !important;
+          box-shadow: 0 0 0 4px rgba(47,140,255,.09), 0 10px 24px rgba(47,140,255,.08) !important;
+          transform: translateY(-2px);
+        }
+        .modern-input-wrap input {
+          font-family: "IBM Plex Sans Thai" !important;
+        }
+
+        .health-calculate-btn {
+          border-radius: 17px !important;
+          box-shadow: 0 16px 30px rgba(24,119,242,.23) !important;
+          transition: transform .28s ease, box-shadow .28s ease, filter .28s ease !important;
+        }
+        .health-calculate-btn:hover {
+          transform: translateY(-4px);
+          filter: brightness(1.04);
+          box-shadow: 0 22px 38px rgba(24,119,242,.29) !important;
+        }
+
+        .food-panel, .meals-panel { overflow: hidden; }
+        .food-panel .food-upload,
+        .food-panel .analysis-card,
+        .meal-item {
+          border-radius: 17px !important;
+        }
+        .meal-grid { gap: 15px; }
+        .meal-item {
+          border-color: rgba(130,166,204,.22) !important;
+          background: rgba(255,255,255,.78) !important;
+          box-shadow: 0 7px 20px rgba(35,82,137,.045);
+          transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease;
+        }
+        .meal-item:hover {
+          transform: translateY(-5px) !important;
+          border-color: rgba(47,140,255,.30) !important;
+          box-shadow: 0 16px 30px rgba(35,82,137,.10) !important;
+        }
+
+        .dashboard-footer {
+          padding-top: 12px !important;
+          color: #8196af !important;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          *, *::before, *::after {
+            animation-duration: .01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: .01ms !important;
+          }
+        }
+
+        @media (max-width: 1050px) {
+          .dashboard-header {
+            margin: 0 -20px;
+            padding-left: 20px;
+            padding-right: 20px;
+          }
+          .dashboard-content {
+            gap: 18px;
+          }
+        }
+
+        @media (max-width: 680px) {
+          .dashboard-header {
+            min-height: 125px;
+          }
+          .header-copy {
+            width: 100%;
+            padding: 15px 18px;
+            border-radius: 20px;
+          }
+          .dashboard-content { padding-top: 20px; gap: 16px; }
+          .panel { padding: 20px; border-radius: 20px !important; }
+          .workout-grid, .meal-grid { grid-template-columns: 1fr; }
+          .workout-card { min-height: 160px; }
         }
       `}</style>
     </div>

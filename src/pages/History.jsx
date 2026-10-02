@@ -113,6 +113,19 @@ export default function History() {
 
       <main className="history-main">
         <header className="history-header">
+          <div className="history-header-back">
+            <button
+              className="history-back-pill"
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              title="กลับไปหน้า Dashboard"
+              aria-label="ย้อนกลับไปหน้า Dashboard"
+            >
+              <span className="history-back-arrow">‹</span>
+              <span className="history-back-text">ย้อนกลับ</span>
+            </button>
+          </div>
+
           <div className="history-header-copy">
             <div className="history-logo">FITTRACK</div>
             <h1>ประวัติการออกกำลังกาย</h1>
@@ -424,6 +437,40 @@ export default function History() {
           line-height: 1.5;
         }
         .history-header-actions { position: absolute; right: 0; top: 33px; }
+.history-header-back { position: absolute; left: 0; top: 33px; }
+        .history-back-pill {
+          min-height: 43px;
+          padding: 4px 16px 4px 10px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          border: 1px solid #dce8f5;
+          border-radius: 24px;
+          color: #315b8f;
+          background: #fff;
+          box-shadow: 0 8px 20px rgba(28,75,125,.07);
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 600;
+          transition: .2s ease;
+        }
+        .history-back-pill:hover {
+          transform: translateY(-2px);
+          border-color: #a9c9ee;
+          box-shadow: 0 11px 24px rgba(24,119,242,.13);
+        }
+        .history-back-arrow {
+          width: 29px;
+          height: 29px;
+          display: grid;
+          place-items: center;
+          border-radius: 50%;
+          color: #fff;
+          background: linear-gradient(145deg, #4f99f6, #1769dc);
+          font-size: 21px;
+          line-height: 1;
+          padding-bottom: 2px;
+        }
         .history-profile-pill {
           min-height: 43px;
           padding: 4px 12px 4px 4px;
@@ -719,7 +766,10 @@ export default function History() {
             margin-left: 0;
             padding: 0 12px 25px;
           }
-          .history-header { min-height: 125px; padding: 17px 65px 17px 8px; }
+          .history-header { min-height: 125px; padding: 17px 65px 17px 65px; }
+          .history-header-back { left: 0; top: 21px; }
+          .history-back-pill { padding: 4px; }
+          .history-back-text { display: none; }
           .history-header-actions { right: 0; top: 21px; }
           .history-profile-name, .history-profile-chevron { display: none; }
           .history-profile-pill { padding: 4px; }
