@@ -13,42 +13,49 @@ const CANVAS_H = 640;
 //              ใช้ได้ทั้งหันหน้าและหันข้างกล้อง
 //  2) มุมเข่า = สำรอง/เสริม (หันข้างแม่น หันหน้าจะคลาดเคลื่อน)
 // ---------------------------------------------------------------
-const SQUAT_DEPTH_DOWN = 0.13;     // ลดลงเกินนี้ = ย่อแล้ว
-const SQUAT_DEPTH_UP = 0.06;       // ต่ำกว่านี้ = ยืนแล้ว
-const SQUAT_ANGLE_DOWN = 118;      // ใช้มุมเข่าเป็นสัญญาณสำรองเมื่อวัด depth ไม่ได้
-const SQUAT_ANGLE_UP = 150;
-const SQUAT_CONFIRM_FRAMES = 3;    // กรองการแกว่งของจุดตรวจจับ
-const SQUAT_COOLDOWN_MS = 650;
+const SQUAT_DEPTH_DOWN = 0.2;  // ต้องย่อลึกขึ้น (เดิม 0.13)
+const SQUAT_DEPTH_UP = 0.05;  // ต้องยืนตรงจริงถึงจะนับ (เดิม 0.06)
+const SQUAT_ANGLE_DOWN = 105;
+const SQUAT_ANGLE_UP = 160;
+const SQUAT_CONFIRM_FRAMES = 6;  // ต้องค้างท่านี้กี่เฟรมถึงยืนยัน (เดิม 3)
+const SQUAT_COOLDOWN_MS = 1000;  // (เดิม 650)
 const SQUAT_SMOOTH = 5;
 const BASELINE_DECAY = 0.9995;     // ค่าอ้างอิงความสูงตอนยืนค่อยๆ ลดเอง (รองรับขยับเข้า-ออกกล้อง)
-const MIN_VISIBILITY_SQUAT = 0.5;
+const MIN_VISIBILITY_SQUAT = 0.55;
+const SQUAT_SHOULDER_DOWN = 0.08;  // ไหล่ต้องลดลงด้วย (กันแค่ก้มหรือขยับสะโพกอย่างเดียว)
+const SQUAT_MIN_TORSO_RATIO = 0.55; // ลำตัวต้องไม่ก้มหรือเอนมากเกินไป (เทียบตอนยืน)
+const SQUAT_MIN_HOLD_MS = 250;     // ต้องค้างอยู่ท่าย่ออย่างน้อยเท่านี้
+const SQUAT_MIN_REP_MS = 1000;     // 1 ครั้งต้องใช้เวลาอย่างน้อยเท่านี้ (กันขยับเร็วๆ รัวๆ)
 
 // ---------------------------------------------------------------
 // JUMPING JACK
 // ---------------------------------------------------------------
 const ARM_SMOOTHING_WINDOW = 5;
-const JJ_CONFIRM_FRAMES = 3;
+const JJ_CONFIRM_FRAMES = 4;  // (เดิม 3)
 // ค่าแขน normalize ด้วยความยาวลำตัว: 0 = ข้อมือระดับไหล่, + = สูงกว่าไหล่, - = ต่ำกว่าไหล่
-const ARM_UP_THRESHOLD = 0.18;
-const ARM_DOWN_THRESHOLD = -0.25;
+const ARM_UP_THRESHOLD = 0.35;  // ข้อมือต้องสูงกว่าไหล่ชัดเจน ทั้งสองแขน (เดิม 0.18)
+const ARM_DOWN_THRESHOLD = -0.5;  // แขนต้องลงต่ำจริง ทั้งสองแขน (เดิม -0.25)
 const FALLBACK_TORSO = 0.3;
-const REQUIRE_LEGS_SPREAD = false;
-const LEG_SPREAD_RATIO = 1.2;
-const JJ_COOLDOWN_MS = 600;
-const MIN_VISIBILITY_ARM = 0.4;
+const REQUIRE_LEGS_SPREAD = true;  // บังคับให้ต้องกางขาด้วย (เดิม false)
+const LEG_SPREAD_RATIO = 1.4;  // (เดิม 1.2)
+const JJ_COOLDOWN_MS = 800;  // (เดิม 600)
+const MIN_VISIBILITY_ARM = 0.5;
+const JJ_MIN_UP_MS = 150;          // ต้องค้างแขนอยู่ข้างบนอย่างน้อยเท่านี้
 
 // ---------------------------------------------------------------
 // HIGH KNEES (ยกเข่าสูง): นับทีละข้างเมื่อเข่ายกขึ้นมาใกล้ระดับสะโพก
 // ค่า lift normalize ด้วยความยาวลำตัว: 0 = เข่าอยู่ระดับสะโพก, ติดลบ = เข่าต่ำกว่าสะโพก
 //  ยืนปกติ ~ -0.85  |  ยกเข่าสูงถึงระดับสะโพก ~ 0
 // ---------------------------------------------------------------
-const HK_UP_THRESHOLD = -0.2;      // เข่าสูงกว่าค่านี้ = ยกแล้ว (ยิ่งใกล้ 0 ต้องยกสูงขึ้น)
-const HK_DOWN_THRESHOLD = -0.5;    // เข่าต่ำกว่าค่านี้ = วางลงแล้ว
-const HK_CONFIRM_FRAMES = 2;
-const HK_SMOOTH = 2;
-const HK_LEG_COOLDOWN_MS = 350;    // กันนับซ้ำของเข่าข้างเดียวกัน
-const HK_COOLDOWN_MS = 150;        // กันนับซ้ำรวมทั้งสองข้าง
-const MIN_VISIBILITY_HK = 0.4;
+const HK_UP_THRESHOLD = -0.12;  // ต้องยกเข่าสูงขึ้น (เดิม -0.2)
+const HK_DOWN_THRESHOLD = -0.6;  // ต้องวางเท้าลงจริง (เดิม -0.5)
+const HK_CONFIRM_FRAMES = 3;  // (เดิม 2)
+const HK_SMOOTH = 3;  // (เดิม 2)
+const HK_LEG_COOLDOWN_MS = 450;  // (เดิม 350)
+const HK_COOLDOWN_MS = 250;  // (เดิม 150)
+const MIN_VISIBILITY_HK = 0.5;
+const HK_OTHER_DOWN_MAX = -0.4;    // ตอนยกเข่าข้างหนึ่ง อีกข้างต้องอยู่ต่ำ (กันกระโดดตุ๊ยเข่า/นั่ง)
+const REQUIRE_ALTERNATE = true;    // ต้องสลับซ้าย-ขวา ยกข้างเดิมซ้ำไม่นับ
 
 // ---------------------------------------------------------------
 // PUNCHES (ชกหมัด): นับทีละข้างเมื่อแขนเหยียดออกไปด้านหน้า แล้วกลับมาตั้งการ์ด
@@ -56,19 +63,22 @@ const MIN_VISIBILITY_HK = 0.4;
 //  forward = ข้อมือยื่นเข้าหากล้องกี่เท่าของลำตัว (ใช้ z ช่วยตอนหันหน้าชกเข้าหากล้อง)
 //  height  = ข้อมือสูงกว่าไหล่กี่เท่าของลำตัว (กันนับตอนปล่อยแขนห้อยตรงๆ)
 // ---------------------------------------------------------------
-const PUNCH_REACH_OUT = 0.9;       // reach เกินนี้ = หมัดเหยียดออกแล้ว
-const PUNCH_REACH_IN = 0.65;       // reach ต่ำกว่านี้ = ดึงหมัดกลับแล้ว
-const PUNCH_FORWARD_OUT = 0.55;    // ข้อมือยื่นเข้าหากล้องเกินนี้ = ชกแล้ว
+const PUNCH_REACH_OUT = 0.93;  // (เดิม 0.9)
+const PUNCH_REACH_IN = 0.7;
+const PUNCH_FORWARD_OUT = 0.7;  // (เดิม 0.55)
 const PUNCH_FORWARD_IN = 0.3;
 const PUNCH_MIN_HEIGHT = -0.35;    // ข้อมือต้องอยู่ประมาณระดับอกขึ้นไป
-const PUNCH_CONFIRM_FRAMES = 2;
-const PUNCH_ARM_COOLDOWN_MS = 250; // กันนับซ้ำของแขนข้างเดียวกัน
-const PUNCH_COOLDOWN_MS = 120;     // กันนับซ้ำรวมทั้งสองข้าง
-const MIN_VISIBILITY_PUNCH = 0.4;
+const PUNCH_CONFIRM_FRAMES = 3;  // (เดิม 2)
+const PUNCH_ARM_COOLDOWN_MS = 400;  // (เดิม 250)
+const PUNCH_COOLDOWN_MS = 200;  // (เดิม 120)
+const MIN_VISIBILITY_PUNCH = 0.5;
+const PUNCH_MAX_HEIGHT = 0.45;     // ข้อมือสูงเกินนี้ = ยกแขนขึ้น ไม่ใช่ชกตรง
+const PUNCH_ELBOW_MIN = 150;       // ข้อศอกต้องเหยียดตรงอย่างน้อยกี่องศา (วัดแบบ 3 มิติ)
 
 // ทั่วไป
 const MIN_VISIBILITY_DRAW = 0.4;
 const POSE_LOST_RESET_FRAMES = 15;
+const INIT_HOLD_FRAMES = 12;       // ต้องยืนท่าเริ่มต้นนิ่งๆ กี่เฟรมก่อนเริ่มนับ
 const SHOW_DEBUG = true;           // แสดงค่า depth / มุมเข่า ใต้ภาพ ไว้ช่วยจูน
 
 const calculateAngle = (a, b, c) => {
@@ -77,6 +87,16 @@ const calculateAngle = (a, b, c) => {
   let angle = Math.abs((radians * 180.0) / Math.PI);
   if (angle > 180.0) angle = 360 - angle;
   return angle;
+};
+
+const calculateAngle3D = (a, b, c) => {
+  const u = [a.x - b.x, a.y - b.y, (a.z ?? 0) - (b.z ?? 0)];
+  const v = [c.x - b.x, c.y - b.y, (c.z ?? 0) - (b.z ?? 0)];
+  const dot = u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+  const mu = Math.hypot(...u);
+  const mv = Math.hypot(...v);
+  if (mu === 0 || mv === 0) return 180;
+  return (Math.acos(Math.max(-1, Math.min(1, dot / (mu * mv)))) * 180) / Math.PI;
 };
 
 const isVisible = (p, min = 0.65) => !!p && (p.visibility ?? 1) > min;
@@ -125,18 +145,27 @@ export default function Exercise() {
     let baselineSpan = 0;
     let candidate = null;
     let candidateFrames = 0;
+    let readyFrames = 0;            // นับเฟรมที่ยืนท่าเริ่มต้นนิ่งๆ
+    let shoulderBuffer = [];
+    let torsoBuffer = [];
+    let baselineShoulderSpan = 0;
+    let baselineTorso = 0;
+    let downSince = 0;
+    let cycleStart = 0;
 
     // jumping jack
     let armBuffer = [];
     let skipNextCount = false;
     let legsSpreadSeen = false;
     let legsVisibleInCycle = false;
+    let upSince = 0;
 
     // high knees (แยกสถานะซ้าย/ขวา)
     let hkBuffer = { L: [], R: [] };
     let hkStage = { L: 'down', R: 'down' };
     let hkConfirm = { L: 0, R: 0 };
     let hkLast = { L: 0, R: 0 };
+    let lastHkSide = null;
 
     // punches (แยกสถานะซ้าย/ขวา)
     let punchStage = { L: 'guard', R: 'guard' };
@@ -170,11 +199,23 @@ export default function Exercise() {
       hkConfirm = { L: 0, R: 0 };
       punchStage = { L: 'guard', R: 'guard' };
       punchConfirm = { L: 0, R: 0 };
+      shoulderBuffer = [];
+      torsoBuffer = [];
+      baselineShoulderSpan = 0;
+      baselineTorso = 0;
+      readyFrames = 0;
+      lastHkSide = null;
       baselineSpan = 0;
       candidate = null;
       candidateFrames = 0;
       initialized = false;
       stage = null;
+    };
+
+    // ต้องยืนท่าเริ่มต้นนิ่งๆ ต่อเนื่องก่อนเริ่มนับ
+    const holdReady = (cond) => {
+      readyFrames = cond ? readyFrames + 1 : 0;
+      return readyFrames >= INIT_HOLD_FRAMES;
     };
 
     const tryCountRep = (cooldown) => {
@@ -215,6 +256,12 @@ export default function Exercise() {
     };
 
     // ---------------- SQUAT ----------------
+    const pushSmooth = (buf, v) => {
+      buf.push(v);
+      if (buf.length > SQUAT_SMOOTH) buf.shift();
+      return average(buf);
+    };
+
     const getSquatSignals = (lm) => {
       const v = MIN_VISIBILITY_SQUAT;
 
@@ -228,34 +275,55 @@ export default function Exercise() {
       }
       let angle = null;
       if (angles.length) {
-        angleBuffer.push(average(angles));
-        if (angleBuffer.length > SQUAT_SMOOTH) angleBuffer.shift();
-        angle = average(angleBuffer);
+        angle = pushSmooth(angleBuffer, average(angles));
       }
 
-      // depth จากระยะสะโพก->ข้อเท้า (แกนตั้ง)
       const hips = [lm[23], lm[24]].filter((p) => isVisible(p, v));
       const ankles = [lm[27], lm[28]].filter((p) => isVisible(p, v));
-      let depth = null;
+      const shoulders = [lm[11], lm[12]].filter((p) => isVisible(p, v));
+
+      let depth = null;          // สะโพกลดลงกี่ %
+      let shoulderDepth = null;  // ไหล่ลดลงกี่ %
+      let torsoRatio = null;     // ลำตัว (ไหล่->สะโพก) เหลือกี่ % เทียบตอนยืน
       if (hips.length && ankles.length) {
-        const span = average(ankles.map((p) => p.y)) - average(hips.map((p) => p.y));
+        const hipY = average(hips.map((p) => p.y));
+        const ankleY = average(ankles.map((p) => p.y));
+        const span = ankleY - hipY;
         if (span > 0.1) {
-          spanBuffer.push(span);
-          if (spanBuffer.length > SQUAT_SMOOTH) spanBuffer.shift();
-          const smoothSpan = average(spanBuffer);
+          const smoothSpan = pushSmooth(spanBuffer, span);
           baselineSpan = Math.max(smoothSpan, baselineSpan * BASELINE_DECAY);
           depth = Math.max(0, 1 - smoothSpan / baselineSpan);
+
+          if (shoulders.length) {
+            const shoulderY = average(shoulders.map((p) => p.y));
+
+            const sSpan = ankleY - shoulderY;
+            if (sSpan > 0.2) {
+              const smoothS = pushSmooth(shoulderBuffer, sSpan);
+              baselineShoulderSpan = Math.max(smoothS, baselineShoulderSpan * BASELINE_DECAY);
+              shoulderDepth = Math.max(0, 1 - smoothS / baselineShoulderSpan);
+            }
+
+            const tLen = hipY - shoulderY;
+            if (tLen > 0.05) {
+              const smoothT = pushSmooth(torsoBuffer, tLen);
+              baselineTorso = Math.max(smoothT, baselineTorso * BASELINE_DECAY);
+              torsoRatio = smoothT / baselineTorso;
+            }
+          }
         }
       }
 
-      return { angle, depth };
+      return { angle, depth, shoulderDepth, torsoRatio };
     };
 
     const handleSquat = (lm) => {
-      const { angle, depth } = getSquatSignals(lm);
+      const { angle, depth, shoulderDepth, torsoRatio } = getSquatSignals(lm);
 
       updateDebug(
-        `depth: ${depth === null ? '-' : Math.round(depth * 100) + '%'}  |  มุมเข่า: ${
+        `depth: ${depth === null ? '-' : Math.round(depth * 100) + '%'}  |  ไหล่: ${
+          shoulderDepth === null ? '-' : Math.round(shoulderDepth * 100) + '%'
+        }  |  ลำตัว: ${torsoRatio === null ? '-' : Math.round(torsoRatio * 100) + '%'}  |  มุมเข่า: ${
           angle === null ? '-' : Math.round(angle) + '°'
         }  |  สถานะ: ${stage ?? '-'}`
       );
@@ -265,46 +333,70 @@ export default function Exercise() {
         return;
       }
 
-      // ใช้ depth เป็นหลัก เพราะมุมเข่าคลาดเคลื่อนได้เมื่อหันหน้าหากล้อง
-      // ใช้มุมเข่าเฉพาะกรณีที่ประเมิน depth ไม่ได้
+      // ย่อลึกพอ + ไหล่ลดลงด้วย + ลำตัวไม่ก้มมากเกินไป จึงจะถือว่า "ย่อ" ถูกท่า
+      const shoulderOk = shoulderDepth === null || shoulderDepth > SQUAT_SHOULDER_DOWN;
+      const torsoOk = torsoRatio === null || torsoRatio > SQUAT_MIN_TORSO_RATIO;
       const isDown = depth !== null
-        ? depth > SQUAT_DEPTH_DOWN
+        ? depth > SQUAT_DEPTH_DOWN && shoulderOk && torsoOk
         : angle !== null && angle < SQUAT_ANGLE_DOWN;
       const isUp = depth !== null
         ? depth < SQUAT_DEPTH_UP
         : angle !== null && angle > SQUAT_ANGLE_UP;
 
+      const now = Date.now();
+
       if (!initialized) {
-        if (isUp) {
-          stage = 'up';
+        if (holdReady(isUp || isDown)) {
           initialized = true;
-          updateFeedback('พร้อมแล้ว ย่อตัวลงได้เลย');
-        } else if (isDown) {
-          stage = 'down';
-          initialized = true;
-          updateFeedback('อยู่ในท่าย่อ ยืนขึ้นเพื่อเริ่มนับ');
+          cycleStart = now;
+          if (isUp) {
+            stage = 'up';
+            updateFeedback('พร้อมแล้ว ย่อตัวลงช้าๆ ได้เลย');
+          } else {
+            stage = 'down';
+            downSince = now;
+            updateFeedback('อยู่ในท่าย่อ ยืนขึ้นเพื่อเริ่มนับ');
+          }
+        } else {
+          updateFeedback('ยืนตรงนิ่งๆ ก่อนเริ่มนับ');
         }
         return;
       }
 
       if (isDown) {
         if (confirm('down', SQUAT_CONFIRM_FRAMES)) {
-          if (stage !== 'down') updateFeedback('ดีมาก! ดันตัวขึ้นตรงๆ');
+          if (stage !== 'down') {
+            downSince = now;
+            updateFeedback('ดีมาก! ค้างไว้แป๊บ แล้วดันตัวขึ้นตรงๆ');
+          }
           stage = 'down';
         }
       } else if (isUp) {
         if (confirm('up', SQUAT_CONFIRM_FRAMES)) {
           if (stage === 'down') {
-            tryCountRep(SQUAT_COOLDOWN_MS);
-            updateFeedback('นับแล้ว! ย่อตัวลงอีกครั้ง');
+            const heldMs = now - downSince;
+            const cycleMs = now - cycleStart;
+            if (heldMs >= SQUAT_MIN_HOLD_MS && cycleMs >= SQUAT_MIN_REP_MS) {
+              tryCountRep(SQUAT_COOLDOWN_MS);
+              updateFeedback('นับแล้ว! ย่อตัวลงอีกครั้ง');
+            } else {
+              updateFeedback('เร็วเกินไป ย่อลงช้าๆ แล้วค้างไว้สักครู่');
+            }
           }
+          if (stage !== 'up') cycleStart = now;
           stage = 'up';
         }
       } else {
         // อยู่ระหว่างทาง: ไม่เปลี่ยนสถานะ (hysteresis)
         candidate = null;
         candidateFrames = 0;
-        if (stage === 'up') updateFeedback('ย่อลงอีกนิด');
+        if (depth !== null && depth > SQUAT_DEPTH_DOWN && !torsoOk) {
+          updateFeedback('ตั้งหลังให้ตรงขึ้น อย่าก้มตัว');
+        } else if (depth !== null && depth > SQUAT_DEPTH_DOWN && !shoulderOk) {
+          updateFeedback('ย่อลงทั้งตัว ไม่ใช่แค่ก้ม');
+        } else if (stage === 'up') {
+          updateFeedback('ย่อลงอีกนิด');
+        }
       }
     };
 
@@ -318,19 +410,21 @@ export default function Exercise() {
       return FALLBACK_TORSO;
     };
 
-    const getSmoothedArmRaise = (lm) => {
+    // คืนค่า { lo, hi }: lo = แขนที่ต่ำกว่า, hi = แขนที่สูงกว่า (ต้องเห็นแขนทั้งสองข้าง)
+    const getSmoothedArms = (lm) => {
+      const v = MIN_VISIBILITY_ARM;
+      if (!(isVisible(lm[11], v) && isVisible(lm[15], v) && isVisible(lm[12], v) && isVisible(lm[16], v))) {
+        return null;
+      }
       const torso = getTorsoLength(lm);
-      const vals = [];
-      if (isVisible(lm[11], MIN_VISIBILITY_ARM) && isVisible(lm[15], MIN_VISIBILITY_ARM)) {
-        vals.push((lm[11].y - lm[15].y) / torso);
-      }
-      if (isVisible(lm[12], MIN_VISIBILITY_ARM) && isVisible(lm[16], MIN_VISIBILITY_ARM)) {
-        vals.push((lm[12].y - lm[16].y) / torso);
-      }
-      if (vals.length === 0) return null;
-      armBuffer.push(average(vals));
+      const l = (lm[11].y - lm[15].y) / torso;
+      const r = (lm[12].y - lm[16].y) / torso;
+      armBuffer.push({ lo: Math.min(l, r), hi: Math.max(l, r) });
       if (armBuffer.length > ARM_SMOOTHING_WINDOW) armBuffer.shift();
-      return average(armBuffer);
+      return {
+        lo: average(armBuffer.map((a) => a.lo)),
+        hi: average(armBuffer.map((a) => a.hi)),
+      };
     };
 
     const getLegsSpread = (lm) => {
@@ -344,26 +438,30 @@ export default function Exercise() {
     };
 
     const handleJumpingJack = (lm) => {
-      const armRaise = getSmoothedArmRaise(lm);
+      const arms = getSmoothedArms(lm);
       updateDebug(
-        `แขน: ${armRaise === null ? '-' : armRaise.toFixed(2)}  |  สถานะ: ${stage ?? '-'}`
+        `แขน(ต่ำ/สูง): ${arms === null ? '-' : arms.lo.toFixed(2) + ' / ' + arms.hi.toFixed(2)}  |  สถานะ: ${stage ?? '-'}`
       );
 
-      if (armRaise === null) {
-        updateFeedback('ถอยให้เห็นแขนและลำตัวชัดเจน');
+      if (arms === null) {
+        updateFeedback('ถอยให้เห็นแขนทั้งสองข้างและลำตัวชัดเจน');
         return;
       }
 
+      const now = Date.now();
+      const armsUp = arms.lo > ARM_UP_THRESHOLD;     // ยกสูงทั้งสองแขน
+      const armsDown = arms.hi < ARM_DOWN_THRESHOLD; // ลดต่ำทั้งสองแขน
+
       if (!initialized) {
-        // เริ่มนับเมื่อผู้ใช้อยู่ในท่าแขนลงชัดเจน ป้องกันเริ่มกลางจังหวะ
-        if (armRaise < ARM_DOWN_THRESHOLD) {
+        // เริ่มนับเมื่อผู้ใช้ยืนแขนลงนิ่งๆ ชัดเจน
+        if (holdReady(armsDown)) {
           stage = 'down';
           initialized = true;
           candidate = null;
           candidateFrames = 0;
           updateFeedback('พร้อมแล้ว กระโดดยกแขนขึ้นได้เลย');
         } else {
-          updateFeedback('ลดแขนลงก่อนเริ่มนับ');
+          updateFeedback('ยืนตรง ลดแขนลงนิ่งๆ ก่อนเริ่มนับ');
         }
         return;
       }
@@ -376,26 +474,32 @@ export default function Exercise() {
         }
       }
 
-      if (armRaise > ARM_UP_THRESHOLD) {
+      if (armsUp) {
         if (confirm('up', JJ_CONFIRM_FRAMES) && stage !== 'up') {
           stage = 'up';
+          upSince = now;
           candidate = null;
           candidateFrames = 0;
           legsSpreadSeen = false;
           legsVisibleInCycle = false;
           updateFeedback('ยอดเยี่ยม! หุบแขนขาลง');
         }
-      } else if (armRaise < ARM_DOWN_THRESHOLD) {
+      } else if (armsDown) {
         if (confirm('down', JJ_CONFIRM_FRAMES) && stage !== 'down') {
           stage = 'down';
           candidate = null;
           candidateFrames = 0;
-          const legsOk = !REQUIRE_LEGS_SPREAD || !legsVisibleInCycle || legsSpreadSeen;
-          if (legsOk) {
+          const legsOk = !REQUIRE_LEGS_SPREAD || (legsVisibleInCycle && legsSpreadSeen);
+          const heldOk = now - upSince >= JJ_MIN_UP_MS;
+          if (legsOk && heldOk) {
             tryCountRep(JJ_COOLDOWN_MS);
             updateFeedback('นับแล้ว! กระโดดกางแขนขาออกอีกครั้ง');
-          } else {
+          } else if (!legsVisibleInCycle) {
+            updateFeedback('ถอยให้เห็นขาทั้งสองข้างด้วย');
+          } else if (!legsSpreadSeen) {
             updateFeedback('กางขาให้กว้างขึ้นด้วย');
+          } else {
+            updateFeedback('เร็วเกินไป ยกแขนให้สุดก่อนหุบลง');
           }
         } else if (stage === 'down') {
           updateFeedback('เตรียมตัว - กระโดดกางแขนขาออก');
@@ -404,6 +508,9 @@ export default function Exercise() {
         // ช่วงแขนกำลังเคลื่อนที่ ไม่เปลี่ยนสถานะและเริ่มนับเฟรมยืนยันใหม่
         candidate = null;
         candidateFrames = 0;
+        if (stage === 'down' && arms.hi > ARM_UP_THRESHOLD && arms.lo <= ARM_UP_THRESHOLD) {
+          updateFeedback('ยกแขนทั้งสองข้างพร้อมกันให้สูงเหนือไหล่');
+        }
       }
     };
 
@@ -418,19 +525,26 @@ export default function Exercise() {
       return average(hkBuffer[side]);
     };
 
-    const processKnee = (side, lift) => {
+    const processKnee = (side, lift, other) => {
       if (lift === null) return;
 
       if (hkStage[side] === 'down') {
-        if (lift > HK_UP_THRESHOLD) {
+        // เข่าอีกข้างต้องอยู่ต่ำ ไม่งั้นถือว่ากระโดดตุ๊ยเข่า/นั่ง ไม่ใช่ยกเข่าสูง
+        const otherDown = other === null || other < HK_OTHER_DOWN_MAX;
+        if (lift > HK_UP_THRESHOLD && otherDown) {
           hkConfirm[side] += 1;
           if (hkConfirm[side] >= HK_CONFIRM_FRAMES) {
             hkStage[side] = 'up';
             hkConfirm[side] = 0;
+            if (REQUIRE_ALTERNATE && lastHkSide === side) {
+              updateFeedback('สลับยกเข่าอีกข้างด้วย');
+              return;
+            }
             const now = Date.now();
             if (now - hkLast[side] >= HK_LEG_COOLDOWN_MS) {
               hkLast[side] = now;
               if (tryCountRep(HK_COOLDOWN_MS) && !finished) {
+                lastHkSide = side;
                 updateFeedback('นับแล้ว! ยกเข่าอีกข้างต่อเลย');
               }
             }
@@ -464,19 +578,20 @@ export default function Exercise() {
         // เริ่มนับเมื่อยืนตรง เข่าทั้งสองข้างอยู่ต่ำ
         const leftDown = left === null || left < HK_DOWN_THRESHOLD;
         const rightDown = right === null || right < HK_DOWN_THRESHOLD;
-        if (leftDown && rightDown) {
+        if (holdReady(leftDown && rightDown)) {
           initialized = true;
+          lastHkSide = null;
           hkStage = { L: 'down', R: 'down' };
           hkConfirm = { L: 0, R: 0 };
           updateFeedback('พร้อมแล้ว วิ่งอยู่กับที่ ยกเข่าสูงได้เลย');
         } else {
-          updateFeedback('ยืนตรงก่อนเริ่มนับ');
+          updateFeedback('ยืนตรงนิ่งๆ ก่อนเริ่มนับ');
         }
         return;
       }
 
-      processKnee('L', left);
-      processKnee('R', right);
+      processKnee('L', left, right);
+      processKnee('R', right, left);
     };
 
     // ---------------- PUNCHES ----------------
@@ -492,6 +607,7 @@ export default function Exercise() {
 
       const torso = getTorsoLength(lm);
       return {
+        elbow: calculateAngle3D(s, e, w),
         reach: Math.hypot(s.x - w.x, s.y - w.y) / armLen,
         forward: ((s.z ?? 0) - (w.z ?? 0)) / torso, // z ติดลบ = อยู่ใกล้กล้อง
         height: (s.y - w.y) / torso,
@@ -501,9 +617,12 @@ export default function Exercise() {
     const processPunch = (side, sig) => {
       if (sig === null) return;
 
-      const heightOk = sig.height > PUNCH_MIN_HEIGHT;
+      // ข้อมืออยู่ช่วงอก-ไหล่ (ไม่ห้อยลง ไม่ชูสูง) + ข้อศอกเหยียดตรง + เหยียดออกไปด้านหน้า
+      const heightOk = sig.height > PUNCH_MIN_HEIGHT && sig.height < PUNCH_MAX_HEIGHT;
       const extended =
-        heightOk && (sig.reach > PUNCH_REACH_OUT || sig.forward > PUNCH_FORWARD_OUT);
+        heightOk &&
+        sig.elbow > PUNCH_ELBOW_MIN &&
+        (sig.reach > PUNCH_REACH_OUT || sig.forward > PUNCH_FORWARD_OUT);
       const retracted =
         !heightOk || (sig.reach < PUNCH_REACH_IN && sig.forward < PUNCH_FORWARD_IN);
 
@@ -536,9 +655,9 @@ export default function Exercise() {
       const right = getPunchSignal(lm, 12, 14, 16);
 
       const fmt = (s) =>
-        s === null ? '-' : `${s.reach.toFixed(2)}/${s.forward.toFixed(2)}/${s.height.toFixed(2)}`;
+        s === null ? '-' : `${s.reach.toFixed(2)}/${s.forward.toFixed(2)}/${s.height.toFixed(2)}/${Math.round(s.elbow)}°`;
       updateDebug(
-        `หมัดซ้าย(reach/fwd/สูง): ${fmt(left)}  |  หมัดขวา: ${fmt(right)}  |  ซ้าย: ${punchStage.L}  ขวา: ${punchStage.R}`
+        `หมัดซ้าย(reach/fwd/สูง/ศอก): ${fmt(left)}  |  หมัดขวา: ${fmt(right)}  |  ซ้าย: ${punchStage.L}  ขวา: ${punchStage.R}`
       );
 
       if (left === null && right === null) {
@@ -547,8 +666,12 @@ export default function Exercise() {
       }
 
       if (!initialized) {
-        initialized = true;
-        updateFeedback('พร้อมแล้ว ตั้งการ์ดแล้วชกหมัดได้เลย');
+        if (holdReady(true)) {
+          initialized = true;
+          updateFeedback('พร้อมแล้ว ตั้งการ์ดแล้วชกหมัดได้เลย');
+        } else {
+          updateFeedback('ตั้งการ์ดนิ่งๆ ก่อนเริ่มนับ');
+        }
         return;
       }
 
@@ -646,8 +769,8 @@ export default function Exercise() {
         modelComplexity: 1,
         smoothLandmarks: true,
         enableSegmentation: false,
-        minDetectionConfidence: 0.6,
-        minTrackingConfidence: 0.6,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.7,
       });
 
       pose.onResults(onResults);
