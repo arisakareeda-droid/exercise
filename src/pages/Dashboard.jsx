@@ -1,20 +1,35 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
+const getLocalDateKey = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const getSavedDailyCalories = () => {
+  try {
+    const saved = localStorage.getItem(`fittrack-calories-${getLocalDateKey()}`);
+    return saved === null ? 0 : Math.max(0, Number(saved) || 0);
+  } catch {
+    return 0;
+  }
+};
+
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [userInitial, setUserInitial] = useState("?");
-
+  const [displayName, setDisplayName] = useState("Filmmy");
+  const [userInitial, setUserInitial] = useState("F");
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [age, setAge] = useState("");
   const [bmiResult, setBmiResult] = useState(null);
   const [tdeeResult, setTdeeResult] = useState(null);
 
-  // Food Analysis States
   const [itemImage, setItemImage] = useState(null);
   const [itemCalories, setItemCalories] = useState(0);
   const [itemName, setItemName] = useState("");
@@ -23,25 +38,81 @@ export default function Dashboard() {
   const [itemNote, setItemNote] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
-  const [selectedMeal, setSelectedMeal] = useState(null);
-  const [exerciseBurned, setExerciseBurned] = useState(0);
+  const [dailyConsumedCalories, setDailyConsumedCalories] = useState(getSavedDailyCalories);
+  const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [goalWeight, setGoalWeight] = useState("");
+  const [mealTab, setMealTab] = useState("เช้า");
+
+  // ธีม: "dark" (ค่าเริ่มต้น) | "light" — จำค่าที่เลือกไว้ในเบราว์เซอร์
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("fittrack-theme") === "light" ? "light" : "dark";
+    } catch {
+      return "dark";
+    }
+  });
+
+  useLayoutEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    try {
+      localStorage.setItem("fittrack-theme", theme);
+    } catch {
+      /* ไม่เป็นไรถ้าเบราว์เซอร์บล็อก storage */
+    }
+  }, [theme]);
+
+  // ออกจากหน้านี้แล้วคืนค่า ไม่ให้ธีมไปกระทบหน้าอื่น
+  useEffect(() => () => document.documentElement.removeAttribute("data-theme"), []);
+
+  // อัปเดตวันที่/เวลาจริง และเริ่มวันใหม่ด้วยยอดแคลอรี่ของวันนั้น
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const nextDate = new Date();
+      setCurrentDateTime(nextDate);
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const todayKey = getLocalDateKey(currentDateTime);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`fittrack-calories-${todayKey}`);
+      setDailyConsumedCalories(saved === null ? 0 : Math.max(0, Number(saved) || 0));
+    } catch {
+      setDailyConsumedCalories(0);
+    }
+  }, [todayKey]);
+
+  const dateLabel = new Intl.DateTimeFormat("th-TH", {
+    day: "numeric", month: "short", year: "numeric",
+  }).format(currentDateTime);
+  const timeLabel = new Intl.DateTimeFormat("th-TH", {
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  }).format(currentDateTime);
+
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    root.classList.add("theme-anim");
+    setTheme((t) => (t === "dark" ? "light" : "dark"));
+    setTimeout(() => root.classList.remove("theme-anim"), 450);
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        try {
-          const snap = await getDoc(doc(db, "users", currentUser.uid));
-          if (snap.exists()) {
-            const data = snap.data();
-            if (data.name) setUserInitial(data.name.charAt(0).toUpperCase());
-            if (data.weight) setWeight(data.weight);
-            if (data.height) setHeight(data.height);
-          } else if (currentUser.email) {
-            setUserInitial(currentUser.email.charAt(0).toUpperCase());
-          }
-        } catch (err) {
-          console.error("โหลดข้อมูลโปรไฟล์ไม่สำเร็จ:", err);
-        }
+      if (!currentUser) return;
+      try {
+        const snap = await getDoc(doc(db, "users", currentUser.uid));
+        const data = snap.exists() ? snap.data() : {};
+        const name = data.name || currentUser.displayName || currentUser.email?.split("@")[0] || "Filmmy";
+        setDisplayName(name);
+        setUserInitial(name.charAt(0).toUpperCase());
+        if (data.weight) setWeight(data.weight);
+        if (data.height) setHeight(data.height);
+        if (data.age) setAge(data.age);
+        if (data.goalWeight || data.targetWeight) setGoalWeight(String(data.goalWeight || data.targetWeight));
+      } catch (err) {
+        console.error("โหลดข้อมูลโปรไฟล์ไม่สำเร็จ:", err);
       }
     });
     return () => unsubscribe();
@@ -49,3670 +120,1132 @@ export default function Dashboard() {
 
   const calculateHealth = (e) => {
     e.preventDefault();
-    if (!weight || !height) return;
+    const w = Number(weight);
+    const h = Number(height);
+    const a = Number(age);
+    if (!w || !h || h <= 0) return;
 
-    const hM = height / 100;
-    const bmi = (weight / (hM * hM)).toFixed(1);
-
-    let status = "";
-    if (bmi < 18.5) status = "น้ำหนักน้อยกว่าเกณฑ์";
-    else if (bmi < 25) status = "น้ำหนักปกติ (สมส่วน)";
-    else if (bmi < 30) status = "น้ำหนักเกินเกณฑ์";
-    else status = "โรคอ้วน";
+    const bmi = Number((w / Math.pow(h / 100, 2)).toFixed(2));
+    let status = "ผอม";
+    if (bmi >= 18.5 && bmi < 23) status = "ปกติ";
+    else if (bmi >= 23 && bmi < 25) status = "น้ำหนักเกิน";
+    else if (bmi >= 25 && bmi < 30) status = "อ้วนระดับ 1";
+    else if (bmi >= 30) status = "อ้วนระดับ 2";
 
     setBmiResult({ value: bmi, status });
 
-    const bmr = 10 * weight + 6.25 * height - 5 * age + 5;
-    const tdee = Math.round(bmr * 1.55);
-    setTdeeResult(tdee);
+    if (a > 0) {
+      const bmr = 10 * w + 6.25 * h - 5 * a + 5;
+      setTdeeResult(Math.round(bmr * 1.55));
+    }
   };
 
-  // ฟังก์ชันวิเคราะห์ภาพผ่าน API หลังบ้าน
   const handleImageSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (!file.type.startsWith("image/")) {
       setAnalysisError("กรุณาเลือกไฟล์รูปภาพเท่านั้น");
-      setItemImage(null);
-      setItemName("");
-      setItemCategory("");
-      setItemCalories(0);
-      setItemConfidence(null);
-      setItemNote("");
       return;
     }
-
-    const maxSize = 10 * 1024 * 1024; // 10 MB
-    if (file.size > maxSize) {
+    if (file.size > 10 * 1024 * 1024) {
       setAnalysisError("ขนาดรูปภาพต้องไม่เกิน 10 MB");
       return;
     }
 
     setAnalysisError("");
-    setItemName("");
+    setItemName("กำลังวิเคราะห์ภาพอาหารด้วย AI...");
     setItemCategory("");
     setItemCalories(0);
     setItemConfidence(null);
     setItemNote("");
-    setExerciseBurned(0);
-
-    // แสดงรูปภาพตัวอย่างทันที
-    const imageUrl = URL.createObjectURL(file);
-    setItemImage(imageUrl);
+    setItemImage(URL.createObjectURL(file));
     setIsAnalyzing(true);
-    setItemName("กำลังวิเคราะห์ภาพอาหารด้วย AI...");
 
     try {
       const formData = new FormData();
       formData.append("image", file);
+      formData.append("bmi", bmiResult?.value ?? "");
+      formData.append("weight", String(weight ?? ""));
+      formData.append("height", String(height ?? ""));
+      formData.append("age", String(age ?? ""));
+      formData.append("tdee", String(tdeeResult ?? ""));
 
       const response = await fetch("/api/analyze-food", {
         method: "POST",
         body: formData,
-        headers: {
-          Accept: "application/json",
-        },
+        headers: { Accept: "application/json" },
       });
-
-      // อ่านเป็น text ก่อน แล้วค่อย JSON.parse เพื่อป้องกัน
-      // `Unexpected end of JSON input` เมื่อ API ส่ง body ว่างหรือส่ง HTML/error กลับมา
-      const rawText = await response.text();
+      const raw = await response.text();
       let data = null;
+      if (raw.trim()) data = JSON.parse(raw);
+      if (!response.ok) throw new Error(data?.error || `เซิร์ฟเวอร์ตอบกลับ ${response.status}`);
 
-      if (rawText.trim()) {
-        try {
-          data = JSON.parse(rawText);
-        } catch (parseError) {
-          console.error("API returned non-JSON response:", rawText);
-          throw new Error(
-            response.ok
-              ? "เซิร์ฟเวอร์วิเคราะห์อาหารส่งข้อมูลไม่ถูกต้อง กรุณาตรวจสอบ API /api/analyze-food"
-              : `เซิร์ฟเวอร์วิเคราะห์อาหารตอบกลับ ${response.status} แต่ไม่ใช่ JSON`
-          );
-        }
+      const name = data?.name || data?.foodName || data?.food_name;
+      const category = data?.category || data?.type || "อาหาร";
+      const calories = Number(data?.calories ?? data?.kcal ?? data?.energy);
+      const confidence = Number(data?.confidence);
+      const note = data?.note || data?.description || "";
+
+      if (!name || !Number.isFinite(calories) || calories < 0) {
+        throw new Error("AI วิเคราะห์ภาพได้ไม่ครบ กรุณาถ่ายภาพอาหารให้เห็นชัดขึ้น");
       }
 
-      if (!response.ok) {
-        throw new Error(
-          data?.error ||
-            data?.message ||
-            (rawText.trim()
-              ? `ไม่สามารถวิเคราะห์ภาพได้ (HTTP ${response.status})`
-              : `ไม่สามารถวิเคราะห์ภาพได้ เพราะเซิร์ฟเวอร์ไม่ส่งข้อมูลกลับมา (HTTP ${response.status})`)
-        );
-      }
-
-      if (!data || typeof data !== "object") {
-        throw new Error(
-          "เซิร์ฟเวอร์วิเคราะห์อาหารไม่ได้ส่งผลลัพธ์กลับมา กรุณาตรวจสอบ API /api/analyze-food"
-        );
-      }
-
-      setItemName(data.name || data.foodName || "ไม่สามารถระบุได้ชัดเจน");
-      setItemCategory(data.category || data.type || "ไม่สามารถระบุได้");
-      setItemCalories(
-        Number.isFinite(Number(data.calories ?? data.kcal))
-          ? Number(data.calories ?? data.kcal)
-          : 0
-      );
-      setItemConfidence(
-        Number.isFinite(Number(data.confidence))
-          ? Number(data.confidence)
-          : null
-      );
-      setItemNote(data.note || data.description || "");
+      setItemName(name);
+      setItemCategory(category);
+      setItemCalories(Math.round(calories));
+      setItemConfidence(Number.isFinite(confidence) ? confidence : null);
+      setItemNote(note);
+      setDailyConsumedCalories((prev) => {
+        const nextTotal = prev + Math.round(calories);
+        try { localStorage.setItem(`fittrack-calories-${getLocalDateKey()}`, String(nextTotal)); } catch { /* storage optional */ }
+        return nextTotal;
+      });
     } catch (error) {
       console.error("Food analysis error:", error);
       setItemName("");
-      setItemCategory("");
       setItemCalories(0);
-      setItemConfidence(null);
-      setItemNote("");
-      setAnalysisError(
-        error.message || "ไม่สามารถวิเคราะห์ภาพได้ กรุณาลองใหม่อีกครั้ง"
-      );
+      setAnalysisError(error?.message || "ไม่สามารถวิเคราะห์ภาพได้ กรุณาลองใหม่อีกครั้ง");
     } finally {
       setIsAnalyzing(false);
+      e.target.value = "";
     }
   };
 
-  const bmiScalePosition = bmiResult ? (() => {
-    const bmi = Number(bmiResult.value);
-    if (bmi < 18.5) return Math.max(0, (bmi / 18.5) * 25);
-    if (bmi < 25) return 25 + ((bmi - 18.5) / 6.5) * 30;
-    if (bmi < 30) return 55 + ((bmi - 25) / 5) * 23;
-    return Math.min(100, 78 + ((bmi - 30) / 10) * 22);
-  })() : 0;
+  const dailyTarget = Number(tdeeResult || 1650);
+  const remainingCalories = dailyTarget - dailyConsumedCalories;
+  const overCalories = Math.max(0, -remainingCalories);
+  const progress = Math.min((dailyConsumedCalories / dailyTarget) * 100, 100);
 
-  const dailyCalorieTarget = tdeeResult || 0;
-  const consumedCalories = itemCalories || 0;
-  const remainingCalories = dailyCalorieTarget
-    ? dailyCalorieTarget - consumedCalories + exerciseBurned
-    : 0;
-  const calorieSurplus = dailyCalorieTarget
-    ? Math.max(0, consumedCalories - dailyCalorieTarget - exerciseBurned)
-    : 0;
-  const exerciseNeeded = calorieSurplus > 0 ? calorieSurplus : 0;
-  const exerciseMinutes = exerciseNeeded > 0 ? Math.ceil(exerciseNeeded / 6) : 0;
+  const calorieNotice = dailyConsumedCalories === 0
+    ? "วันนี้ยังไม่มีข้อมูลอาหารที่บันทึกไว้"
+    : overCalories > 0
+      ? `วันนี้ได้รับพลังงานเกินเป้าหมาย ${overCalories.toLocaleString()} kcal`
+      : `วันนี้ยังได้รับพลังงานต่ำกว่าเป้าหมาย ${Math.max(0, remainingCalories).toLocaleString()} kcal`;
+  const goalNotice = goalWeight && Number(weight) > 0
+    ? `น้ำหนักปัจจุบัน ${Number(weight).toLocaleString()} กก. · เป้าหมาย ${Number(goalWeight).toLocaleString()} กก.`
+    : "เพิ่มน้ำหนักปัจจุบันและน้ำหนักเป้าหมายในโปรไฟล์ เพื่อดูความคืบหน้าสู่เป้าหมาย";
 
-  const mealDetails = {
-    breakfast: {
-      title: "มื้อเช้า",
-      kcal: "~400 kcal",
-      emoji: "🍓",
-      time: "06:30–09:00 น.",
-      ingredients: ["ข้าวโอ๊ต", "ไข่ต้ม", "ผลไม้สด"],
-      benefits: [
-        "ให้พลังงานสำหรับเริ่มต้นวัน",
-        "โปรตีนจากไข่ช่วยเสริมสร้างและซ่อมแซมกล้ามเนื้อ",
-        "ใยอาหารจากข้าวโอ๊ตและผลไม้ช่วยให้อิ่มนานและช่วยการขับถ่าย"
-      ],
-      recommendation: "เหมาะสำหรับรับประทานก่อนเริ่มเรียนหรือทำกิจกรรมในช่วงเช้า"
-    },
-    lunch: {
-      title: "มื้อกลางวัน",
-      kcal: "~550 kcal",
-      emoji: "🥗",
-      time: "11:30–13:30 น.",
-      ingredients: ["อกไก่", "ข้าวกล้อง", "ผักหลากสี"],
-      benefits: [
-        "โปรตีนจากอกไก่ช่วยเสริมสร้างกล้ามเนื้อ",
-        "คาร์โบไฮเดรตเชิงซ้อนจากข้าวกล้องช่วยให้พลังงานต่อเนื่อง",
-        "วิตามิน แร่ธาตุ และใยอาหารจากผักช่วยสนับสนุนสุขภาพโดยรวม"
-      ],
-      recommendation: "เหมาะสำหรับเติมพลังงานระหว่างวัน โดยควรรับประทานให้ครบทั้งโปรตีน คาร์โบไฮเดรต และผัก"
-    },
-    dinner: {
-      title: "มื้อเย็น",
-      kcal: "~350 kcal",
-      emoji: "🐟",
-      time: "17:30–19:30 น.",
-      ingredients: ["ปลาแซลมอน", "ผักต้ม", "คีนัว"],
-      benefits: [
-        "โปรตีนและไขมันดีจากปลาแซลมอนช่วยสนับสนุนการทำงานของร่างกาย",
-        "ผักต้มให้วิตามิน แร่ธาตุ และใยอาหาร",
-        "คีนัวช่วยเติมพลังงานและมีโปรตีนจากพืช"
-      ],
-      recommendation: "เหมาะสำหรับมื้อเย็นที่ต้องการสารอาหารครบถ้วนและไม่หนักเกินไป"
+  const handleNotifications = async () => {
+    setNotificationsOpen((open) => !open);
+    // Browser notification permission is requested only after an explicit click.
+    if (typeof window !== "undefined" && "Notification" in window) {
+      try {
+        let permission = window.Notification.permission;
+        if (permission === "default") permission = await window.Notification.requestPermission();
+        if (permission === "granted") {
+          new window.Notification("FitTrack · สรุปสุขภาพวันนี้", {
+            body: `${calorieNotice}. ${goalNotice}`,
+            tag: `fittrack-daily-${todayKey}`,
+          });
+        }
+      } catch (error) {
+        console.warn("ไม่สามารถแสดงการแจ้งเตือนของเบราว์เซอร์ได้:", error);
+      }
+    }
+  };
+
+  const bmiPosition = bmiResult
+    ? Math.max(0, Math.min(100, ((bmiResult.value - 10) / 30) * 100))
+    : 38;
+
+  const meals = {
+    เช้า: [
+      { name: "ข้าวโอ๊ต + ไข่ต้ม + กล้วย", kcal: 350, img: "/meal-breakfast.png" },
+      { name: "ข้าวกล้อง + อกไก่ย่าง + ผักสด", kcal: 400, img: "/meal-chicken.png" },
+      { name: "โยเกิร์ต + ผลไม้ + ถั่ว", kcal: 300, img: "/meal-yogurt.png" },
+    ],
+    กลางวัน: [
+      { name: "ข้าวกล้อง + อกไก่ + ผัก", kcal: 500, img: "/meal-chicken.png" },
+      { name: "ปลา + ข้าวกล้อง + ผักรวม", kcal: 480, img: "/meal-fish.png" },
+      { name: "สลัดไก่ + ไข่ต้ม", kcal: 420, img: "/meal-salad.png" },
+    ],
+    เย็น: [
+      { name: "ปลาแซลมอน + ผักต้ม", kcal: 380, img: "/meal-fish.png" },
+      { name: "อกไก่ + ผักย่าง", kcal: 350, img: "/meal-chicken.png" },
+      { name: "ซุปผัก + ไข่ต้ม", kcal: 300, img: "/meal-soup.png" },
+    ],
+    ว่าง: [
+      { name: "โยเกิร์ต + ผลไม้", kcal: 180, img: "/meal-yogurt.png" },
+      { name: "กล้วย + อัลมอนด์", kcal: 200, img: "/meal-snack.png" },
+    ],
+  };
+
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout error:", error);
     }
   };
 
   return (
-    <div className="dashboard-page">
-      <aside className="dashboard-sidebar">
-        <div className="brand-block">
-          <div className="brand-mark" aria-label="FitTrack">
-            <span className="brand-spark spark-one" aria-hidden="true">✦</span>
-            <span className="brand-spark spark-two" aria-hidden="true">✦</span>
-            <svg className="brand-exercise-logo" viewBox="0 0 48 48" width="29" height="29" aria-hidden="true" focusable="false">
-              <path d="M10 18v12M14 15v18M18 20h12M30 15v18M34 18v12" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round"/>
-              <path d="M18 24h12" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round"/>
-            </svg>
-          </div>
-          <div>
-            <div className="brand-name">FitTrack</div>
-            <div className="brand-tagline">Healthy Today</div>
-          </div>
+    <div className="fittrack-app">
+      <aside className="sidebar">
+        <div className="sidebar-logo-wrap">
+          <img src="/fittrack-logo.png" alt="FitTrack" className="sidebar-logo" />
+          <div className="logo-caption">SMART FITNESS SYSTEM</div>
         </div>
 
-        <nav className="sidebar-nav">
-          <button className="side-nav active" onClick={() => navigate("/")}>
-            <span>⌂</span><b>หน้าหลัก</b>
-          </button>
-          <button className="side-nav" onClick={() => navigate("/exercises")}>
-            <span>✦</span><b>ออกกำลังกาย</b>
-          </button>
-          <button className="side-nav" onClick={() => navigate("/history")}>
-            <span>◷</span><b>ประวัติการใช้งาน</b>
-          </button>
+        <nav className="side-menu">
+          <button className="side-link active" onClick={() => navigate("/")}><span className="side-icon">⌂</span>หน้าหลัก</button>
+          <button className="side-link" onClick={() => navigate("/exercises")}><span className="side-icon">♧</span>ออกกำลังกาย</button>
+          <button className="side-link" onClick={() => navigate("/history")}><span className="side-icon">◷</span>ประวัติการออกกำลังกาย</button>
+          <button className="side-link" onClick={() => navigate("/settings")}><span className="side-icon">⚙</span>ตั้งค่า</button>
         </nav>
 
-        <button
-          className="side-logout"
-          type="button"
-          onClick={async () => {
-            try {
-              await signOut(auth);
-              navigate("/login", { replace: true });
-            } catch (err) {
-              console.error("ออกจากระบบไม่สำเร็จ:", err);
-            }
-          }}
-        >
-          <span>↪</span> ออกจากระบบ
-        </button>
+        <div className="sidebar-quote">
+          “สุขภาพที่ดี<br />เริ่มได้จาก<br />การเลือกในทุกๆ วัน”
+          <div className="pulse-line"><i></i><b></b><i></i></div>
+        </div>
+
+        <button className="logout-link" onClick={logout}><span>⇥</span>ออกจากระบบ</button>
       </aside>
 
-      <main className="dashboard-main">
-        <header className="dashboard-header">
-          <div className="header-copy">
-            <div className="logo">FITTRACK</div>
-            <h1>ระบบออกกำลังกายอัจฉริยะ</h1>
+      <main className="main-area">
+        <header className="topbar">
+          <div className="user-block">
+            <div className="avatar-wrap">
+              <div className="avatar-fallback">{userInitial}</div>
+              <span className="online-dot"></span>
+            </div>
+            <div>
+              <div className="hello">สวัสดีครับ/ค่ะ</div>
+              <strong>{displayName}</strong>
+            </div>
           </div>
 
-          <div className="header-actions">
+          <div className="topbar-right">
+            <div className="ai-note">ให้ <em>AI</em> เป็นผู้ช่วยของคุณ<br />ในการดูแลสุขภาพ <span>〽</span></div>
+            <div className="notification-wrap">
+              <button className="icon-button notification-bell" title="การแจ้งเตือน" aria-label="เปิดการแจ้งเตือน" aria-expanded={notificationsOpen} onClick={handleNotifications}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><i></i></button>
+              {notificationsOpen && <div className="notification-panel" role="status">
+                <div className="notification-panel-title"><span>การแจ้งเตือน <small>วันนี้</small></span><button type="button" aria-label="ปิดการแจ้งเตือน" onClick={() => setNotificationsOpen(false)}>×</button></div>
+                <div className="notification-item"><span className="notification-avatar dumbbell-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9v6M3.5 10v4M8.5 7v10M15.5 7v10M20.5 10v4M18 9v6M8.5 12h7" /></svg></span><div className="notification-message"><strong>FitTrack <small>· ตอนนี้</small></strong><span>{calorieNotice}</span><small>พลังงานที่บันทึก {dailyConsumedCalories.toLocaleString()} / {dailyTarget.toLocaleString()} kcal</small></div><i className="notification-unread" /></div>
+                <div className="notification-item"><span className="notification-avatar dumbbell-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9v6M3.5 10v4M8.5 7v10M15.5 7v10M20.5 10v4M18 9v6M8.5 12h7" /></svg></span><div className="notification-message"><strong>FitTrack <small>· วันนี้</small></strong><span>{goalNotice}</span><small>ติดตามความคืบหน้าของคุณได้ที่หน้าโปรไฟล์</small></div><i className="notification-unread" /></div>
+                <small className="notification-hint">แตะกระดิ่งเพื่อเปิดหรือปิดการแจ้งเตือน</small>
+              </div>}
+            </div>
+            <div className="date-box">{dateLabel}<br /><small>{timeLabel} น.</small></div>
             <button
-              className="profile-pill"
-              onClick={() => navigate("/profile")}
-              title="โปรไฟล์ของฉัน"
+              className="icon-button sun"
+              onClick={toggleTheme}
+              title={theme === "dark" ? "เปลี่ยนเป็นโหมดสว่าง" : "เปลี่ยนเป็นโหมดมืด"}
+              aria-label={theme === "dark" ? "เปลี่ยนเป็นโหมดสว่าง" : "เปลี่ยนเป็นโหมดมืด"}
             >
-              <div className="profile-avatar">
-                <span>{userInitial}</span>
-              </div>
-              <span className="profile-name">โปรไฟล์</span>
-              <span className="profile-chevron">›</span>
+              {theme === "dark" ? "☼" : "☾"}
             </button>
           </div>
         </header>
 
-        <div className="dashboard-content">
-          {/* สุขภาพ */}
-          <section className="panel health-panel">
-            <div className="panel-heading">
-              <div>
-                <h2 className="health-section-title">สุขภาพของคุณ</h2>
+        <div className="content-grid">
+          {/* HERO */}
+          <section className="hero-card">
+            <div className="hero-overlay"></div>
+            <img className="hero-image" src="/fittrack-hero.jpg" alt="" />
+            <div className="hero-content">
+              <img src="/fittrack-hero-logo.png" alt="FitTrack" className="hero-logo" />
+              <h1>รู้ตัวเลข&nbsp;&nbsp;วางแผนได้<br />สุขภาพดีขึ้นในทุกวัน</h1>
+              <div className="hero-features">
+                <span>♜ วิเคราะห์อาหาร</span><i></i>
+                <span>♧ ออกกำลังกายด้วย AI</span><i></i>
+                <span>♡ ดูแลสุขภาพแบบครบวงจร</span>
               </div>
             </div>
+          </section>
 
-            <div className="health-grid">
-              <div className="metric-card">
-                <div className="metric-top">
-                  <span>BMI</span>
-                </div>
-
-                {bmiResult ? (
-                  <div className="health-result bmi-result">
-                    <div className="result-main">
-                      <div className="metric-value">{bmiResult.value}</div>
-                      <span className={`result-status ${bmiResult.status.includes("ปกติ") ? "normal" : "attention"}`}>
-                        {bmiResult.status.includes("ปกติ") ? "ปกติ" : "ดูแลเพิ่มเติม"}
-                      </span>
-                    </div>
-                    <div className="result-description">{bmiResult.status}</div>
-                    <div className="bmi-scale compact-scale">
-                      <span className="scale-line"></span>
-                      <span className="scale-dot" style={{ left: `${bmiScalePosition}%` }}></span>
-                    </div>
-                    <div className="scale-labels">
-                      <span>&lt;18.5</span>
-                      <span>18.5–25</span>
-                      <span>25–30</span>
-                      <span>&gt;30</span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="health-empty-state">
-                    <div className="health-empty-copy">
-                      <strong>พร้อมดูแลสุขภาพของคุณ · กรอกข้อมูลด้านล่างเพื่อดู BMI</strong>
-                    </div>
-                  </div>
-                )}
+          {/* BMI */}
+          <section className="bmi-card dark-card">
+            <div className="card-title"><span className="title-icon purple" aria-hidden="true"><svg className="bmi-title-svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="4.7" r="2.5"/><path d="M9.15 8.1c.55-.38 1.55-.6 2.85-.6s2.3.22 2.85.6l1.75 1.25 2.05 4.55-2.05.9-1.55-3.15-.45 4.1 1.25 5.75h-2.6L12 16.7l-1.25 4.8h-2.6l1.25-5.75-.45-4.1L7.4 14.8l-2.05-.9L7.4 9.35 9.15 8.1Z"/></svg></span><h2>คำนวณค่า BMI</h2></div>
+            <form onSubmit={calculateHealth}>
+              <div className="bmi-inputs">
+                <label>น้ำหนัก (กก.)<input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="55" required /></label>
+                <label>ส่วนสูง (ซม.)<input type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="160" required /></label>
               </div>
-
-              <div className="metric-card">
-                <div className="metric-top">
-                  <span>TDEE</span>
-                </div>
-
-                {tdeeResult ? (
-                  <div className="health-result tdee-result">
-                    <div className="result-main">
-                      <div className="metric-value tdee-value">
-                        {tdeeResult}<small>kcal/วัน</small>
-                      </div>
-                    </div>
-                    <div className="energy-pill">พลังงานที่แนะนำต่อวัน</div>
-                    <div className="result-description">คำนวณจากข้อมูลร่างกายและกิจกรรมของคุณ</div>
-                  </div>
-                ) : (
-                  <div className="health-empty-state tdee-empty">
-                    <div className="health-empty-copy">
-                      <strong>พลังงานของคุณจะอยู่ตรงนี้ · ระบบจะคำนวณ TDEE พร้อมกับ BMI</strong>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <form onSubmit={calculateHealth} className="health-form">
-              <div className="health-form-head">
-                <div className="health-form-title">
-                  <div>
-                    <strong>ข้อมูลร่างกายของคุณ</strong>
-                    <span>กรอกข้อมูลด้านล่าง แล้วให้ FitTrack คำนวณ BMI และพลังงานที่เหมาะสมให้คุณ</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="health-input-row">
-                <div className="modern-field">
-                  <div className="modern-field-copy">
-                    <label htmlFor="weight">น้ำหนัก</label>
-                    <div className="modern-input-wrap">
-                      <input id="weight" type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="0" required />
-                      <small>kg</small>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="modern-field">
-                  <div className="modern-field-copy">
-                    <label htmlFor="height">ส่วนสูง</label>
-                    <div className="modern-input-wrap">
-                      <input id="height" type="number" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="0" required />
-                      <small>cm</small>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="modern-field age-modern-field">
-                  <div className="modern-field-copy">
-                    <label htmlFor="age">อายุ</label>
-                    <div className="modern-input-wrap">
-                      <input id="age" type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="0" required />
-                      <small>ปี</small>
-                    </div>
-                  </div>
-                </div>
-
-                <button type="submit" className="health-calculate-btn">
-                  <span>ดูผลสุขภาพ</span>
-                  <small>คำนวณ BMI + TDEE</small>
-                </button>
+              <div className="bmi-extra-row">
+                <label>อายุ<input type="number" value={age} onChange={(e) => setAge(e.target.value)} placeholder="20" required /></label>
+                <button className="lime-btn" type="submit">คำนวณ</button>
               </div>
             </form>
-          </section>
 
-          {/* AI อาหาร */}
-          <section className="panel food-panel">
-            <div className="panel-heading">
-              <div className="panel-icon blue">♜</div>
-              <div>
-                <h2>AI วิเคราะห์อาหาร</h2>
-                <span>สแกนเมนูได้ทันที</span>
+            <div className="bmi-result">
+              <div className="result-label">ค่า BMI <span>{bmiResult?.status || "ปกติ"}</span></div>
+              <div className="bmi-number">{bmiResult?.value ?? "21.48"}</div>
+              <div className="bmi-bar"><i style={{ left: `${bmiPosition}%` }}></i></div>
+              <div className="bmi-scale-labels">
+                <span>&lt; 18.5<br />ผอม</span><span>18.5 - 22.9<br /><b>ปกติ</b></span><span>23 - 24.9<br />น้ำหนักเกิน</span><span>25 - 29.9<br />อ้วนระดับ 1</span><span>&gt; 30<br />อ้วนระดับ 2</span>
               </div>
             </div>
 
-            <label className="food-scan-box">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageSelect}
-                style={{ display: "none" }}
-              />
-
-              {itemImage ? (
-                <img src={itemImage} alt="Selected Item" className="food-preview" />
-              ) : (
-                <div className="food-empty">
-                  <div className="camera-orb">●</div>
-                  <strong>คลิกอัปโหลดรูป</strong>
-                  <span>สแกนแคล · ไขมัน · สารอาหาร</span>
-                  <div className="food-tags">
-                    <i>อาหาร</i><i>เครื่องดื่ม</i><i>ขนม</i>
-                  </div>
-                </div>
-              )}
-            </label>
-
-            {isAnalyzing && <p className="scanning-text">AI กำลังวิเคราะห์...</p>}
-            {analysisError && <p className="error-text">⚠️ {analysisError}</p>}
-
-            {itemName && !isAnalyzing && (
-              <div className="food-result-dashboard">
-                <div className="food-result-top">
-                  <div>
-                    <span className="food-result-category">{itemCategory || "อาหาร / เครื่องดื่ม / ของกินเล่น"}</span>
-                    <strong>{itemName}</strong>
-                  </div>
-                  <div className="food-kcal-badge">
-                    <b>{itemCalories}</b>
-                    <small>kcal</small>
-                  </div>
-                </div>
-
-                {tdeeResult ? (
-                  <div className="calorie-tracker">
-                    <div className="calorie-tracker-head">
-                      <span>แคลอรี่วันนี้</span>
-                      <b>เป้าหมาย {dailyCalorieTarget.toLocaleString()} kcal</b>
-                    </div>
-                    <div className="calorie-progress">
-                      <span style={{ width: `${Math.min(100, Math.round((consumedCalories / dailyCalorieTarget) * 100))}%` }}></span>
-                    </div>
-                    <div className="calorie-summary">
-                      <div><small>กินไป</small><strong>{consumedCalories.toLocaleString()} kcal</strong></div>
-                      <div className={remainingCalories < 0 ? "remaining-danger" : "remaining-ok"}>
-                        <small>{remainingCalories < 0 ? "เกินเป้าหมาย" : "กินได้อีก"}</small>
-                        <strong>{Math.abs(remainingCalories).toLocaleString()} kcal</strong>
-                      </div>
-                    </div>
-
-                    {calorieSurplus > 0 ? (
-                      <div className="calorie-warning">
-                        <div>
-                          <strong>⚠️ เกินแคลอรี่ {calorieSurplus.toLocaleString()} kcal</strong>
-                          <span>แนะนำออกกำลังกายเพิ่มประมาณ {exerciseMinutes} นาที เพื่อช่วยชดเชยพลังงานส่วนเกิน</span>
-                        </div>
-                        <button type="button" onClick={() => navigate("/exercises")} className="food-exercise-btn">ไปออกกำลังกาย</button>
-                      </div>
-                    ) : (
-                      <div className="calorie-good">✓ หลังมื้อนี้ยังอยู่ในกรอบพลังงานที่ตั้งไว้</div>
-                    )}
-
-                    <div className="exercise-adjust">
-                      <span>ออกกำลังกายเพิ่มแล้ว</span>
-                      <div>
-                        {[0, 100, 200, 300].map((value) => (
-                          <button key={value} type="button" className={exerciseBurned === value ? "active" : ""} onClick={() => setExerciseBurned(value)}>
-                            {value === 0 ? "0" : `-${value}`}
-                          </button>
-                        ))}
-                        <small>kcal</small>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="calorie-no-target">กรอกข้อมูลสุขภาพก่อน เพื่อดูว่าเมนูนี้ใช้พลังงานไปเท่าไรจากเป้าหมายต่อวัน</div>
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* ออกกำลังกาย */}
-          <section className="panel workout-panel">
-            <div className="section-heading">
-              <div className="panel-icon blue">✚</div>
-              <div>
-                <h2>เลือกออกกำลังกาย</h2>
-                <span>ฟิตได้ทุกวัน</span>
-              </div>
-              <button className="text-btn" type="button" onClick={() => navigate("/exercises")}>ดูทั้งหมด</button>
-            </div>
-
-            <div className="workout-grid">
-              <button className="workout-card" onClick={() => navigate("/exercises")}>
-                <div className="workout-art person-art">🏃</div>
-                <div className="workout-copy">
-                  <span className="mini-label">SMART AI</span>
-                  <h3>ออกกำลังกาย</h3>
-                  <p>สร้างหุ่น · เผาผลาญ · แข็งแรง</p>
-                  <span className="card-action">เริ่มเลย</span>
-                </div>
-                <div className="workout-glow"></div>
-              </button>
-
-              <button className="workout-card history-card" onClick={() => navigate("/history")}>
-                <div className="workout-art chart-art">◴</div>
-                <div className="workout-copy">
-                  <span className="mini-label">TRACKER</span>
-                  <h3>ประวัติการใช้งาน</h3>
-                  <p>ดูสถิติ · ความคืบหน้า · เป้าหมาย</p>
-                  <span className="card-action">เริ่มเลย</span>
-                </div>
-                <div className="workout-glow"></div>
-              </button>
-            </div>
-
-            <div className="info-strip">
-              <div><span>🤖</span><b>AI Detection</b><small>ตรวจจับท่าทาง</small></div>
-              <div><span>123</span><b>นับอัตโนมัติ</b><small>แม่นยำและปลอดภัย</small></div>
-              <div><span>↗</span><b>วิเคราะห์สุขภาพ</b><small>BMI · Calories</small></div>
+            <div className="daily-energy">
+              <span className="energy-flame" aria-hidden="true">
+                <svg viewBox="0 0 48 60" role="img" aria-label="">
+                  <defs>
+                    <radialGradient id="energy-fire-glow" cx="50%" cy="78%" r="58%">
+                      <stop offset="0%" stopColor="#fff3a0" stopOpacity=".95" />
+                      <stop offset="42%" stopColor="#ff8b18" stopOpacity=".48" />
+                      <stop offset="100%" stopColor="#ff4a12" stopOpacity="0" />
+                    </radialGradient>
+                    <linearGradient id="energy-flame-outer" x1="0" y1="1" x2="1" y2="0">
+                      <stop offset="0%" stopColor="#e92b12" />
+                      <stop offset="48%" stopColor="#ff5a0b" />
+                      <stop offset="100%" stopColor="#ffd34a" />
+                    </linearGradient>
+                    <linearGradient id="energy-flame-inner" x1="0" y1="1" x2="0.8" y2="0">
+                      <stop offset="0%" stopColor="#ff4b08" />
+                      <stop offset="52%" stopColor="#ff9d16" />
+                      <stop offset="82%" stopColor="#ffe35a" />
+                      <stop offset="100%" stopColor="#fffbd0" />
+                    </linearGradient>
+                    <filter id="flame-turbulence" x="-35%" y="-25%" width="170%" height="160%">
+                      <feTurbulence type="fractalNoise" baseFrequency="0.035 0.055" numOctaves="2" seed="8" result="noise" />
+                      <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.8" xChannelSelector="R" yChannelSelector="G" />
+                    </filter>
+                  </defs>
+                  <ellipse className="fire-glow" cx="24" cy="43" rx="20" ry="17" fill="url(#energy-fire-glow)" />
+                  <ellipse className="fire-ember" cx="24" cy="55" rx="12" ry="3.2" fill="#ff4a08" opacity=".85" />
+                  <path className="fire-tongue fire-tongue-left" filter="url(#flame-turbulence)" d="M22 57C10 56 5 48 7 39C8 33 13 29 12 21C18 27 19 33 17 38C22 33 23 27 21 20C29 28 29 37 25 43C23 48 22 52 22 57Z" fill="url(#energy-flame-outer)" />
+                  <path className="fire-tongue fire-tongue-right" filter="url(#flame-turbulence)" d="M25 57C35 55 42 49 41 39C40 33 36 29 37 22C31 27 29 33 32 39C27 35 27 29 29 23C22 30 21 38 25 44C27 49 27 53 25 57Z" fill="url(#energy-flame-outer)" />
+                  <path className="fire-core" filter="url(#flame-turbulence)" d="M24 54C17 52 15 46 18 40C20 36 23 33 22 28C28 33 28 39 26 43C30 40 31 36 30 33C36 40 34 48 29 52C28 53 26 54 24 54Z" fill="url(#energy-flame-inner)" />
+                  <path className="fire-heart" d="M24 51C21 48 22 44 24 41C26 45 28 47 26 51Z" fill="#fffbd1" opacity=".9" />
+                </svg>
+              </span>
+              <small className="energy-heading">พลังงานที่ควรได้รับต่อวัน (โดยประมาณ)</small>
+              <strong className="energy-value">{dailyTarget.toLocaleString()} <em>kcal</em></strong>
+              <b className="energy-info">ⓘ</b>
             </div>
           </section>
 
-          {/* อาหาร */}
-          <section className="panel meals-panel">
-            <div className="section-heading">
-              <div className="panel-icon blue">♨</div>
-              <div>
-                <h2>เมนูอาหารแนะนำ</h2>
-                <span>อร่อย · มีประโยชน์</span>
-              </div>
-            </div>
-
-            <div className="meal-grid">
-              <button
-                type="button"
-                className="meal-item breakfast"
-                onClick={() => setSelectedMeal("breakfast")}
-                aria-label="ดูรายละเอียดมื้อเช้า"
-              >
-                <div className="meal-emoji">🍓</div>
-                <div><strong>มื้อเช้า</strong><span>~400 kcal</span><p>ข้าวโอ๊ต · ไข่ต้ม · ผลไม้</p></div>
-                <b>›</b>
-              </button>
-
-              <button
-                type="button"
-                className="meal-item lunch"
-                onClick={() => setSelectedMeal("lunch")}
-                aria-label="ดูรายละเอียดมื้อกลางวัน"
-              >
-                <div className="meal-emoji">🥗</div>
-                <div><strong>มื้อกลางวัน</strong><span>~550 kcal</span><p>อกไก่ · ข้าวกล้อง · ผัก</p></div>
-                <b>›</b>
-              </button>
-
-              <button
-                type="button"
-                className="meal-item dinner"
-                onClick={() => setSelectedMeal("dinner")}
-                aria-label="ดูรายละเอียดมื้อเย็น"
-              >
-                <div className="meal-emoji">🐟</div>
-                <div><strong>มื้อเย็น</strong><span>~350 kcal</span><p>ปลาแซลมอน · ผักต้ม · คีนัว</p></div>
-                <b>›</b>
-              </button>
-            </div>
-
-
-          </section>
-        </div>
-
-        <footer className="dashboard-footer">Small Steps · Big Changes · FITTRACK</footer>
-      </main>
-
-      {selectedMeal && (
-        <div
-          className="meal-modal-backdrop"
-          onClick={() => setSelectedMeal(null)}
-          role="presentation"
-        >
-          <div
-            className={`meal-modal ${selectedMeal}`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="meal-modal-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="meal-modal-close"
-              onClick={() => setSelectedMeal(null)}
-              aria-label="ปิดรายละเอียดเมนู"
-            >
-              ×
+          {/* QUICK ACTIONS */}
+          <section className="quick-grid">
+            <button className="feature-card exercise" onClick={() => navigate("/exercises")}>
+              <div className="feature-art" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 18v12M14 14v20M34 14v20M40 18v12M14 24h20M8 24h6M34 24h6" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 18v12M11 14v20M37 14v20M43 18v12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg></div><div><h3>ออกกำลังกาย</h3><p>เลือกโปรแกรมที่เหมาะกับคุณ<br />พร้อมคำแนะนำจาก AI</p></div><span className="round-arrow">›</span>
             </button>
+            <button className="feature-card history" onClick={() => navigate("/history")}>
+              <div className="feature-art" aria-hidden="true"><svg viewBox="0 0 48 48"><rect x="10" y="8" width="28" height="33" rx="4" fill="none" stroke="currentColor" strokeWidth="3"/><path d="M17 17h14M17 24h14M17 31h8" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/><path d="M17 8V5h14v3" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/></svg></div><div><h3>ประวัติการออกกำลังกาย</h3><p>ดูสรุปผลการออกกำลังกาย<br />และพัฒนาการของคุณ</p></div><span className="round-arrow">›</span>
+            </button>
+          </section>
 
-            <div className="meal-modal-top">
-              <div className="meal-modal-icon">
-                {mealDetails[selectedMeal].emoji}
-              </div>
+          {/* FOOD */}
+          <section className="food-card dark-card">
+            <div className="section-title"><span className="title-icon green">♜</span><h2>วิเคราะห์อาหาร</h2></div>
+            <div className="food-layout">
+              <label className="upload-box">
+                <input type="file" accept="image/*" onChange={handleImageSelect} />
+                {itemImage ? <img src={itemImage} alt="อาหารที่เลือก" /> : <><span className="upload-icon">▧</span><strong>อัปโหลดรูปอาหาร</strong><small>หรือเลือกจากแกลเลอรี่</small><b>เลือกไฟล์</b></>}
+              </label>
 
-              <div className="meal-modal-heading">
-                <div>
-                  <span className="meal-modal-label">รายละเอียดเมนู</span>
-                  <h2 id="meal-modal-title">{mealDetails[selectedMeal].title}</h2>
-                </div>
-                <span className="meal-modal-kcal">{mealDetails[selectedMeal].kcal}</span>
-              </div>
-            </div>
-
-            <div className="meal-modal-section time-section">
-              <strong>🕐 ช่วงเวลาที่แนะนำ</strong>
-              <p>{mealDetails[selectedMeal].time}</p>
-            </div>
-
-            <div className="meal-modal-section ingredients-section">
-              <strong>🥗 ส่วนประกอบ</strong>
-              <div className="meal-ingredient-list">
-                {mealDetails[selectedMeal].ingredients.map((ingredient) => (
-                  <span key={ingredient}>{ingredient}</span>
-                ))}
+              <div className="food-result-box">
+                {isAnalyzing ? <div className="food-loading">AI กำลังวิเคราะห์ภาพอาหาร...</div> : itemName && itemCalories > 0 ? <>
+                  <div className="food-result-top"><img src={itemImage} alt="อาหาร" /><div><h3>{itemName}</h3><span className="food-chip">{itemCategory || "อาหารหลัก"}</span><span className="food-chip muted">{itemConfidence ? `${Math.round(itemConfidence * 100)}% มั่นใจ` : "โปรตีนสูง"}</span></div></div>
+                  <div className="food-kcal"><small>พลังงานทั้งหมด</small><strong>{itemCalories}</strong><em> kcal</em></div>
+                  {itemNote && <p className="food-note">{itemNote}</p>}
+                  <div className="macro-row"><span>โปรตีน<br /><b>35 g</b></span><span>คาร์โบไฮเดรต<br /><b>45 g</b></span><span>ไขมัน<br /><b>8 g</b></span></div>
+                </> : <div className="food-placeholder"><strong>อัปโหลดรูปอาหารเพื่อเริ่มวิเคราะห์</strong><span>AI จะประเมินชนิดอาหาร แคลอรี่ และข้อมูลโภชนาการ</span></div>}
               </div>
             </div>
+            {analysisError && <div className="error-box">⚠️ {analysisError}</div>}
 
-            <div className="meal-modal-section benefits-section">
-              <strong>💪 ประโยชน์ที่ได้รับ</strong>
-              <ul>
-                {mealDetails[selectedMeal].benefits.map((benefit) => (
-                  <li key={benefit}>{benefit}</li>
-                ))}
-              </ul>
+            <div className="calorie-bottom">
+              <div className="calorie-progress-card">
+                <div className="progress-title">พลังงานที่ได้รับวันนี้</div>
+                <div className="progress-track"><span style={{ width: `${progress}%` }}></span></div>
+                <div className="calorie-stats"><div>ได้รับแล้ว<strong>{dailyConsumedCalories.toLocaleString()} <small>kcal</small></strong></div><div>เหลืออีก<strong>{Math.max(0, remainingCalories).toLocaleString()} <small>kcal</small></strong><small>จากเป้าหมาย {dailyTarget.toLocaleString()} kcal</small></div></div>
+              </div>
+              <div className={`warning-card ${overCalories ? "danger" : "safe"}`}>
+                <strong>{overCalories ? "⚠️ คุณได้รับพลังงานเกินเป้าหมาย!" : "✓ พลังงานวันนี้อยู่ในเป้าหมาย"}</strong>
+                <p>{overCalories ? "แนะนำให้ลดอาหารที่มีแคลอรี่สูง และออกกำลังกายเพิ่มประมาณ 30 นาที" : "รักษาสมดุลอาหารและออกกำลังกายอย่างสม่ำเสมอ"}</p>
+                {overCalories && <button onClick={() => navigate("/exercises")}>ดูโปรแกรมออกกำลังกายเพิ่มเติม</button>}
+              </div>
             </div>
+          </section>
 
-            <div className="meal-modal-tip">
-              <b>💡 แนะนำ</b>
-              <span>{mealDetails[selectedMeal].recommendation}</span>
-            </div>
-          </div>
+          {/* RECOMMENDED MENU */}
+          <section className="recommend-card dark-card">
+            <div className="section-title"><span className="title-icon yellow">♜</span><h2>เมนูแนะนำ <small>(ตามผล BMI ของคุณ)</small></h2></div>
+            <div className="meal-tabs">{Object.keys(meals).map((tab) => <button key={tab} className={mealTab === tab ? "active" : ""} onClick={() => setMealTab(tab)}>{tab}</button>)}</div>
+            <div className="meal-list">{meals[mealTab].map((meal) => <div className="meal-row" key={meal.name}><img src={meal.img} alt={meal.name} onError={(e) => { e.currentTarget.style.display = "none"; }} /><div><strong>{meal.name}</strong><span>ประมาณ {meal.kcal} kcal</span></div><button>เลือก</button></div>)}</div>
+            <div className="tips-box"><h3>💡 เคล็ดลับเพิ่มเติม</h3><ul><li>ดื่มน้ำให้เพียงพอ อย่างน้อย 2-3 ลิตร/วัน</li><li>ลดอาหารหวาน มัน เค็ม</li><li>ออกกำลังกายสม่ำเสมออย่างน้อย 3-5 วัน/สัปดาห์</li></ul></div>
+          </section>
         </div>
-      )}
-
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap');
-
-        * { box-sizing: border-box; }
-        html {
-          scroll-behavior: smooth;
-          width: 100%;
-          max-width: 100%;
-          margin: 0;
-          overflow-x: hidden;
-        }
-
-        body {
-          width: 100%;
-          max-width: 100%;
-          margin: 0;
-          overflow-x: hidden;
-          border: 0;
-          background: #eef4fb;
-          color: #173b73;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-        }
-
-        button, input { font-family: inherit; }
-
-        #root {
-          width: 100%;
-          min-height: 100vh;
-          margin: 0;
-          border: 0;
-        }
-
-        .dashboard-page {
-          width: 100%;
-          max-width: 100%;
-          min-height: 100vh;
-          margin: 0;
-          border: 0;
-          overflow-x: hidden;
-          display: flex;
-          background:
-            radial-gradient(circle at 70% 10%, rgba(87,153,255,.12), transparent 27%),
-            linear-gradient(135deg, #f9fcff 0%, #eef5ff 48%, #f7fbff 100%);
-        }
-
-        /* ---------- SIDEBAR ---------- */
-
-        .dashboard-sidebar {
-          position: fixed;
-          inset: 0 auto 0 0;
-          width: 232px;
-          padding: 31px 18px 24px;
-          display: flex;
-          flex-direction: column;
-          z-index: 20;
-          background: rgba(255,255,255,.93);
-          border-right: 1px solid #dbe7f4;
-          box-shadow: 8px 0 30px rgba(35,82,137,.045);
-          backdrop-filter: blur(18px);
-        }
-
-        .brand-block {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 0 10px 30px;
-        }
-
-        .brand-mark {
-          position: relative;
-          width: 46px;
-          height: 46px;
-          display: grid;
-          place-items: center;
-          border-radius: 15px;
-          color: #fff;
-          background: linear-gradient(145deg, #5b9cf6 0%, #2b82ec 48%, #1769dc 100%);
-          box-shadow: 0 10px 24px rgba(24,119,242,.25);
-          overflow: visible;
-          isolation: isolate;
-          transition: transform .22s ease, box-shadow .22s ease;
-        }
-
-        .brand-exercise-logo {
-          position: relative;
-          z-index: 3;
-          filter: drop-shadow(0 2px 5px rgba(0,0,0,.12));
-          transition: transform .22s ease;
-        }
-
-        .brand-spark {
-          position: absolute;
-          z-index: 4;
-          color: #fff;
-          line-height: 1;
-          pointer-events: none;
-          opacity: 0;
-          text-shadow: 0 0 8px rgba(255,255,255,.95), 0 0 14px rgba(126,202,255,.8);
-          animation: brandSparkle 2.4s ease-in-out infinite;
-        }
-
-        .spark-one {
-          top: -7px;
-          right: -6px;
-          font-size: 12px;
-        }
-
-        .spark-two {
-          bottom: -5px;
-          left: -5px;
-          font-size: 8px;
-          animation-delay: 1.1s;
-        }
-
-        @keyframes brandSparkle {
-          0%, 100% { opacity: 0; transform: scale(.45) rotate(0deg); }
-          35% { opacity: 1; transform: scale(1.08) rotate(12deg); }
-          58% { opacity: .35; transform: scale(.78) rotate(28deg); }
-          75% { opacity: 0; transform: scale(.45) rotate(42deg); }
-        }
-
-        .brand-mark img {
-          width: 27px;
-          height: 30px;
-          display: block;
-          object-fit: contain;
-        }
-
-        .brand-name {
-          color: #123c78;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 21px;
-          font-weight: 600;
-          line-height: 1.1;
-        }
-
-        .brand-tagline {
-          margin-top: 3px;
-          color: #8aa0b9;
-          font-size: 9px;
-          letter-spacing: .5px;
-        }
-
-        .sidebar-nav {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .side-nav {
-          width: 100%;
-          min-height: 51px;
-          padding: 0 14px;
-          display: flex;
-          align-items: center;
-          gap: 13px;
-          border: 0;
-          border-radius: 15px;
-          cursor: default;
-          color: #5c7594;
-          background: transparent;
-          font-size: 13px;
-          text-align: left;
-          transition: .22s ease;
-        }
-
-        .side-nav span {
-          width: 31px;
-          height: 31px;
-          display: grid;
-          place-items: center;
-          border-radius: 10px;
-          color: #4376b8;
-          background: #edf5ff;
-          font-size: 16px;
-        }
-
-        .side-nav:hover,
-        .side-nav.active {
-          color: #1558a9;
-          background: #e7f1ff;
-          transform: translateX(2px);
-        }
-
-        .side-nav.active span {
-          color: #fff;
-          background: linear-gradient(145deg, #4d97f5, #1769dc);
-          box-shadow: 0 5px 12px rgba(24,119,242,.2);
-        }
-
-        .side-logout {
-          margin-top: auto;
-          padding: 12px 14px;
-          border: 0;
-          color: #69809a;
-          background: transparent;
-          cursor: pointer;
-          text-align: left;
-          font-size: 11px;
-        }
-
-        .side-logout span {
-          margin-right: 9px;
-          color: #3b79c5;
-          font-size: 17px;
-        }
-
-        /* ---------- MAIN ---------- */
-
-        .dashboard-main {
-          flex: 1 1 auto;
-          width: auto;
-          max-width: 100%;
-          margin-left: 232px;
-          min-width: 0;
-          padding: 0 31px 36px;
-          border: 0;
-          outline: 0;
-        }
-
-        .dashboard-main,
-        .dashboard-content,
-        .dashboard-footer {
-          border-right: 0 !important;
-          outline: 0;
-        }
-
-        .dashboard-header {
-          min-height: 122px;
-          padding: 25px 10px 20px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          position: relative;
-          border-bottom: 1px solid #dfe9f4;
-        }
-
-        .header-copy {
-          text-align: center;
-        }
-
-        .logo {
-          margin-bottom: 2px;
-          color: #2b7eea;
-          font-size: 9px;
-          font-weight: 700;
-          letter-spacing: 2px;
-        }
-
-        .dashboard-header h1 {
-          margin: 0;
-          color: #11396f;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: clamp(27px, 3.2vw, 39px);
-          font-weight: 600;
-          line-height: 1.25;
-        }
-
-        .dashboard-header p {
-          margin: 5px 0 0;
-          color: #68809f;
-          font-size: 13px;
-          line-height: 1.5;
-        }
-
-        .header-actions {
-          position: absolute;
-          right: 0;
-          top: 33px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .notify-btn {
-          position: relative;
-          width: 43px;
-          height: 43px;
-          border: 0;
-          border-radius: 50%;
-          color: #55749a;
-          background: #fff;
-          box-shadow: 0 8px 20px rgba(28,75,125,.08);
-          cursor: pointer;
-          font-size: 18px;
-        }
-
-        .notify-btn i {
-          position: absolute;
-          top: 8px;
-          right: 9px;
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          background: #ff5b5b;
-        }
-
-        .profile-pill {
-          min-height: 43px;
-          padding: 4px 12px 4px 4px;
-          display: flex;
-          align-items: center;
-          gap: 9px;
-          border: 1px solid #dce8f5;
-          border-radius: 24px;
-          color: #315b8f;
-          background: #fff;
-          box-shadow: 0 8px 20px rgba(28,75,125,.07);
-          cursor: pointer;
-          transition: .2s ease;
-        }
-
-        .profile-pill:hover {
-          transform: translateY(-2px);
-          border-color: #a9c9ee;
-          box-shadow: 0 11px 24px rgba(24,119,242,.13);
-        }
-
-        .profile-avatar {
-          width: 35px;
-          height: 35px;
-          display: grid;
-          place-items: center;
-          border-radius: 50%;
-          color: #fff;
-          background: linear-gradient(145deg, #4f99f6, #1769dc);
-          font-weight: 700;
-        }
-
-        .profile-name {
-          font-size: 11px;
-          font-weight: 600;
-        }
-
-        .profile-chevron {
-          color: #6d8aab;
-          font-size: 19px;
-        }
-
-        .dashboard-content {
-          max-width: 1230px;
-          margin: 0 auto;
-          padding: 24px 0 10px;
-          display: grid;
-          grid-template-columns: minmax(0, 1fr);
-          grid-template-areas:
-            "workout"
-            "health"
-            "food"
-            "meals";
-          gap: 24px;
-          align-items: start;
-        }
-
-        /* ---------- PANELS ---------- */
-
-        .panel {
-          position: relative;
-          min-width: 0;
-          padding: 24px;
-          overflow: hidden;
-          border: 1px solid #dbe8f5;
-          border-radius: 19px;
-          background: rgba(255,255,255,.94);
-          box-shadow: 0 10px 28px rgba(35,82,137,.065);
-          transition: transform .22s ease, box-shadow .22s ease;
-        }
-
-        .panel::before {
-          content: "";
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 3px;
-          background: linear-gradient(90deg, #1877f2, #74b3ff, transparent);
-        }
-
-        .panel:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 15px 35px rgba(35,82,137,.09);
-        }
-
-        .health-panel { grid-area: health; }
-        .food-panel { grid-area: food; }
-        .workout-panel { grid-area: workout; }
-        .meals-panel { grid-area: meals; }
-
-        .panel-heading,
-        .section-heading {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          min-width: 0;
-          margin-bottom: 16px;
-        }
-
-        .panel-icon {
-          width: 42px;
-          height: 42px;
-          flex: 0 0 42px;
-          display: grid;
-          place-items: center;
-          border-radius: 13px;
-          color: #fff;
-          font-size: 18px;
-          background: linear-gradient(145deg, #4e98f6, #1769dc);
-          box-shadow: 0 8px 17px rgba(24,119,242,.19);
-        }
-
-        .panel-heading h2,
-        .section-heading h2 {
-          margin: 0;
-          color: #153d78;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 18px;
-          font-weight: 600;
-          line-height: 1.3;
-          white-space: nowrap;
-        }
-
-        .health-panel .health-section-title {
-          font-size: 22px;
-          font-weight: 700;
-          letter-spacing: -.2px;
-          background: linear-gradient(100deg, #1558a9 0%, #2d82ed 48%, #7a5af8 100%);
-          -webkit-background-clip: text;
-          background-clip: text;
-          -webkit-text-fill-color: transparent;
-          color: transparent;
-        }
-
-        .panel-heading span:not(.heading-badge),
-        .section-heading span:not(.text-btn) {
-          display: block;
-          margin-top: 2px;
-          color: #8095ad;
-          font-size: 9.5px;
-          line-height: 1.4;
-        }
-
-        .heading-badge {
-          margin-left: auto;
-          padding: 6px 10px;
-          border-radius: 999px;
-          color: #3175c5;
-          background: #eaf3ff;
-          border: 1px solid #d8e9fb;
-          font-size: 9px;
-          font-weight: 600;
-          white-space: nowrap;
-        }
-
-        /* ---------- HEALTH ---------- */
-
-        .health-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 11px;
-        }
-
-        .metric-card {
-          position: relative;
-          min-height: 151px;
-          padding: 15px;
-          border: 1px solid #e2ebf5;
-          border-radius: 15px;
-          background: linear-gradient(145deg, #f9fcff, #f3f8fd);
-          overflow: hidden;
-          transition: .2s ease;
-        }
-
-        .metric-card:hover {
-          transform: translateY(-2px);
-          border-color: #c9ddef;
-          box-shadow: 0 8px 20px rgba(24,119,242,.07);
-        }
-
-        .metric-top {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          color: #315a8f;
-          font-size: 12px;
-          font-weight: 700;
-        }
-
-        .metric-icon {
-          width: 27px;
-          height: 27px;
-          display: grid;
-          place-items: center;
-          border-radius: 8px;
-          color: #2f7ee8;
-          background: #e6f1ff;
-        }
-
-        .metric-icon.fire {
-          color: #ff9d31;
-          background: #fff0db;
-        }
-
-        .metric-value {
-          display: flex;
-          align-items: baseline;
-          gap: 9px;
-          margin-top: 7px;
-          color: #123c78;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 34px;
-          font-weight: 600;
-          line-height: 1.1;
-        }
-
-        .metric-value em {
-          padding: 4px 9px;
-          border-radius: 999px;
-          color: #27a36a;
-          background: #dcf7ea;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 9px;
-          font-style: normal;
-          font-weight: 700;
-        }
-
-        .placeholder-value {
-          color: #a8b7c7;
-        }
-
-        .tdee-value small {
-          color: #66809e;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 10px;
-          font-weight: 500;
-        }
-
-        .metric-helper {
-          margin-top: 11px;
-          color: #8295aa;
-          font-size: 9.5px;
-        }
-
-        .health-result {
-          min-height: 92px;
-          margin-top: 10px;
-          padding: 11px 12px 9px;
-          border: 1px solid #dce9f6;
-          border-radius: 14px;
-          background: linear-gradient(135deg, rgba(255,255,255,.94), rgba(239,247,255,.92));
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
-        }
-
-        .result-main {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-        }
-
-        .result-status {
-          padding: 5px 9px;
-          border-radius: 999px;
-          font-size: 8.5px;
-          font-weight: 700;
-          white-space: nowrap;
-        }
-
-        .result-status.normal {
-          color: #21865a;
-          background: #ddf7ea;
-          border: 1px solid #c5ecd9;
-        }
-
-        .result-status.attention {
-          color: #b87518;
-          background: #fff1d9;
-          border: 1px solid #f4dfb7;
-        }
-
-        .result-description {
-          margin-top: 4px;
-          color: #7b91aa;
-          font-size: 8.5px;
-          line-height: 1.45;
-        }
-
-        .health-empty-state {
-          min-height: 111px;
-          margin-top: 9px;
-          padding: 13px;
-          display: flex;
-          align-items: center;
-          gap: 11px;
-          border: 1px dashed #cbdff2;
-          border-radius: 14px;
-          background: linear-gradient(135deg, #f8fbff, #f1f7fd);
-        }
-
-        .empty-icon {
-          width: 38px;
-          height: 38px;
-          flex: 0 0 38px;
-          display: grid;
-          place-items: center;
-          border-radius: 12px;
-          color: #2c80ed;
-          background: #e7f2ff;
-          font-size: 18px;
-          box-shadow: 0 5px 12px rgba(24,119,242,.09);
-        }
-
-        .fire-empty {
-          color: #f39a31;
-          background: #fff1dd;
-        }
-
-        .health-empty-state strong {
-          display: block;
-          color: #a8b1bd;
-          font-size: 11px;
-          font-weight: 600;
-        }
-
-        .health-empty-state p {
-          margin: 4px 0 0;
-          color: #8ba0b7;
-          font-size: 8.5px;
-          line-height: 1.5;
-        }
-
-        .compact-scale {
-          margin-top: 9px;
-        }
-
-        .tdee-result {
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-        }
-
-        .tdee-result .result-main {
-          justify-content: flex-start;
-        }
-
-        .tdee-result .energy-pill {
-          margin-top: 7px;
-        }
-
-        .bmi-scale {
-          position: relative;
-          height: 10px;
-          margin-top: 12px;
-        }
-
-        .scale-line {
-          position: absolute;
-          inset: 0;
-          border-radius: 999px;
-          background: linear-gradient(90deg, #74b9ff 0 25%, #63d3a1 25% 55%, #ffc45e 55% 78%, #ff6e6e 78%);
-        }
-
-        .scale-dot {
-          position: absolute;
-          left: 0%;
-          transform: translateX(-50%);
-          top: -3px;
-          width: 16px;
-          height: 16px;
-          border: 3px solid #fff;
-          border-radius: 50%;
-          background: #45bb87;
-          box-shadow: 0 3px 7px rgba(34,100,72,.2);
-        }
-
-        .scale-labels {
-          display: flex;
-          justify-content: space-between;
-          gap: 5px;
-          margin-top: 6px;
-          color: #8799ad;
-          font-size: 7.5px;
-        }
-
-        .energy-pill {
-          width: fit-content;
-          margin-top: 13px;
-          padding: 6px 10px;
-          border-radius: 999px;
-          color: #3174bf;
-          background: #e8f2ff;
-          font-size: 9px;
-        }
-
-        .health-form {
-          position: relative;
-          margin-top: 22px;
-          padding: 22px;
-          border: 1px solid #dbe8f5;
-          border-radius: 24px;
-          background:
-            radial-gradient(circle at 8% 0%, rgba(76,153,255,.12), transparent 24%),
-            radial-gradient(circle at 100% 100%, rgba(75,204,165,.07), transparent 26%),
-            #ffffff;
-          box-shadow: 0 14px 32px rgba(35,82,137,.065);
-          overflow: hidden;
-        }
-
-        .health-form::before {
-          content: "";
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          height: 3px;
-          background: linear-gradient(90deg, #62adff, #247ff0 50%, #69d2ad);
-        }
-
-        .health-form-head {
-          display: flex;
-          justify-content: center;
-          margin-bottom: 18px;
-        }
-
-        .health-form-title {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          min-width: 0;
-        }
-
-        .health-form-orb {
-          width: 42px;
-          height: 42px;
-          flex: 0 0 42px;
-          display: grid;
-          place-items: center;
-          border-radius: 13px;
-          color: #fff;
-          background: linear-gradient(145deg, #58a7ff, #176cdd);
-          box-shadow: 0 8px 18px rgba(24,119,242,.18);
-          font-size: 17px;
-        }
-
-        .health-form-title strong {
-          display: block;
-          color: #153f79;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 17px;
-          font-weight: 600;
-          line-height: 1.2;
-        }
-
-        .health-form-title span:not(.health-form-orb) {
-          display: block;
-          margin-top: 4px;
-          color: #8197af;
-          font-size: 9.5px;
-          line-height: 1.4;
-        }
-
-        .health-form-badge { display: none; }
-
-        /* Desktop: 4 ช่องขนาดเท่ากันจริง และไม่มี element ซ้อนกัน */
-        .health-input-row {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 12px;
-          align-items: stretch;
-        }
-
-        .modern-field {
-          min-width: 0;
-          height: 118px;
-          padding: 14px 15px;
-          display: flex;
-          flex-direction: column;
-          align-items: stretch;
-          justify-content: space-between;
-          gap: 9px;
-          border: 1px solid #dce8f4;
-          border-radius: 18px;
-          background: linear-gradient(145deg, #ffffff, #f9fcff);
-          box-shadow: 0 6px 17px rgba(40,91,145,.045);
-          transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
-        }
-
-        .modern-field:hover {
-          border-color: #c5dbef;
-          box-shadow: 0 10px 22px rgba(40,91,145,.07);
-          transform: translateY(-1px);
-        }
-
-        .modern-field:focus-within {
-          border-color: #69a9ed;
-          background: #fff;
-          box-shadow: 0 0 0 3px rgba(24,119,242,.065), 0 12px 24px rgba(24,119,242,.08);
-          transform: translateY(-2px);
-        }
-
-        .modern-field-icon {
-          width: 38px;
-          height: 38px;
-          flex: 0 0 38px;
-          display: grid;
-          place-items: center;
-          border-radius: 12px;
-          color: #2d82ed;
-          background: #eaf4ff;
-          font-size: 17px;
-          font-weight: 700;
-        }
-
-        .height-icon {
-          color: #687be5;
-          background: #eef0ff;
-        }
-
-        .age-icon {
-          color: #24a377;
-          background: #e8f9f2;
-        }
-
-        .modern-field-copy {
-          min-width: 0;
-          width: 100%;
-        }
-
-        .modern-field label {
-          display: block;
-          margin: 0 0 4px;
-          color: #647e9c;
-          font-size: 10px;
-          font-weight: 700;
-          line-height: 1.2;
-          white-space: nowrap;
-        }
-
-        .modern-input-wrap {
-          width: 100%;
-          min-width: 0;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 7px;
-          padding-bottom: 4px;
-          border-bottom: 1px solid #e5edf5;
-        }
-
-        .modern-input-wrap input {
-          width: 100%;
-          min-width: 0;
-          height: 27px;
-          padding: 0;
-          outline: none;
-          border: 0 !important;
-          color: #143e79;
-          background: transparent;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 23px;
-          font-weight: 600;
-          line-height: 1;
-        }
-
-        .modern-input-wrap input::placeholder {
-          color: #c3cfdb;
-          opacity: 1;
-        }
-
-        .modern-input-wrap input::-webkit-outer-spin-button,
-        .modern-input-wrap input::-webkit-inner-spin-button {
-          margin: 0;
-          -webkit-appearance: none;
-        }
-
-        .modern-input-wrap input[type=number] { -moz-appearance: textfield; }
-
-        .modern-input-wrap small {
-          flex: 0 0 auto;
-          padding: 5px 7px;
-          border-radius: 7px;
-          color: #7891ab;
-          background: #f0f6fc;
-          font-size: 8px;
-          font-weight: 700;
-          line-height: 1;
-        }
-
-        .health-calculate-btn {
-          position: relative;
-          min-width: 0;
-          height: 118px;
-          padding: 15px 16px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 7px;
-          border: 0;
-          border-radius: 12px;
-          color: #fff;
-          background:
-            radial-gradient(circle at 86% 12%, rgba(255,255,255,.22), transparent 29%),
-            radial-gradient(circle at 100% 100%, rgba(75,184,255,.2), transparent 38%),
-            linear-gradient(135deg, #318cf7 0%, #1769d8 72%, #1558bf 100%);
-          box-shadow: 0 12px 25px rgba(24,119,242,.22);
-          cursor: default;
-          overflow: hidden;
-          transition: transform .22s ease, box-shadow .22s ease;
-        }
-
-        .health-calculate-btn::before,
-        .health-calculate-btn::after {
-          content: none !important;
-          display: none !important;
-        }
-
-        .health-calculate-btn:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 16px 30px rgba(24,119,242,.28);
-        }
-
-        .health-calculate-btn:active { transform: translateY(0) scale(.985); }
-
-        .health-calculate-btn > span {
-          position: relative;
-          z-index: 1;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 15px;
-          font-weight: 600;
-          line-height: 1.1;
-          white-space: nowrap;
-        }
-
-        .health-calculate-btn small {
-          position: relative;
-          z-index: 1;
-          color: rgba(255,255,255,.78);
-          font-size: 8px;
-          white-space: nowrap;
-        }
-
-        /* ---------- FOOD ---------- */
-
-        .food-panel {
-          padding-bottom: 18px;
-        }
-
-        .food-scan-box {
-          position: relative;
-          min-height: 222px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
-          cursor: pointer;
-          border: 1.5px dashed #a9c8ed;
-          border-radius: 18px;
-          background:
-            radial-gradient(circle at 50% 42%, rgba(24,119,242,.11), transparent 28%),
-            #f7faff;
-          transition: .22s ease;
-        }
-
-        .food-scan-box::before {
-          content: "AI FOOD SCAN";
-          position: absolute;
-          top: 14px;
-          left: 15px;
-          color: #7c91aa;
-          font-size: 7.5px;
-          font-weight: 700;
-          letter-spacing: 1.7px;
-        }
-
-        .food-scan-box:hover {
-          transform: translateY(-2px);
-          border-color: #1877f2;
-          box-shadow: inset 0 0 35px rgba(24,119,242,.05), 0 8px 20px rgba(24,119,242,.07);
-        }
-
-        .food-empty {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          text-align: center;
-          gap: 5px;
-        }
-
-        .camera-orb {
-          width: 58px;
-          height: 58px;
-          display: grid;
-          place-items: center;
-          border: 8px solid #e7f1ff;
-          border-radius: 17px;
-          color: #fff;
-          background: #3d8ef2;
-          box-shadow: 0 9px 20px rgba(24,119,242,.2);
-          font-size: 0;
-          transition: .2s ease;
-        }
-
-        .camera-orb::after {
-          content: "●";
-          width: 22px;
-          height: 15px;
-          display: grid;
-          place-items: center;
-          border: 3px solid #fff;
-          border-radius: 5px;
-          color: transparent;
-          box-shadow: inset 0 0 0 4px #fff;
-        }
-
-        .food-scan-box:hover .camera-orb {
-          transform: translateY(-3px) scale(1.05);
-        }
-
-        .food-empty strong {
-          margin-top: 3px;
-          color: #163e78;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 15px;
-          font-weight: 600;
-        }
-
-        .food-empty > span {
-          color: #758ba4;
-          font-size: 9.5px;
-        }
-
-        .food-tags {
-          display: flex;
-          gap: 7px;
-          margin-top: 6px;
-        }
-
-        .food-tags i {
-          padding: 5px 10px;
-          border-radius: 999px;
-          color: #3174bf;
-          background: #e6f1ff;
-          border: 1px solid #d5e7fb;
-          font-size: 8px;
-          font-style: normal;
-          font-weight: 600;
-        }
-
-        .food-preview {
-          width: 100%;
-          height: 100%;
-          min-height: 222px;
-          object-fit: cover;
-          border-radius: 16px;
-        }
-
-        .scanning-text,
-        .error-text {
-          margin: 8px 0 0;
-          text-align: center;
-          font-size: 10px;
-        }
-
-        .scanning-text { color: #1877f2; }
-        .error-text { color: #d44747; }
-
-        .food-result {
-          margin-top: 9px;
-          display: grid;
-          grid-template-columns: 1fr auto auto;
-          gap: 8px;
-          align-items: center;
-        }
-
-        .food-result span {
-          color: #6e839d;
-          font-size: 9px;
-        }
-
-        .food-result strong {
-          color: #173b73;
-          font-size: 10px;
-        }
-
-        .food-result b {
-          color: #f08b26;
-          font-size: 10px;
-        }
-
-        /* ---------- FOOD RESULT / CALORIE TRACKER ---------- */
-        .food-scan-box {
-          aspect-ratio: 4 / 3;
-          min-height: 0;
-          height: auto;
-        }
-
-        .food-preview {
-          width: 100%;
-          height: 100%;
-          min-height: 0;
-          aspect-ratio: 4 / 3;
-          object-fit: cover;
-          display: block;
-          border-radius: 16px;
-        }
-
-        .food-result-dashboard {
-          margin-top: 12px;
-          padding: 15px;
-          border: 1px solid #d9e8f7;
-          border-radius: 18px;
-          background: linear-gradient(145deg, #ffffff 0%, #f5f9ff 100%);
-          box-shadow: 0 10px 26px rgba(35,82,137,.07);
-        }
-
-        .food-result-top {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .food-result-top > div:first-child { min-width: 0; }
-        .food-result-category {
-          display: block;
-          color: #7190b1;
-          font-size: 10px;
-          font-weight: 600;
-        }
-        .food-result-top strong {
-          display: block;
-          margin-top: 3px;
-          color: #183f78;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 18px;
-          font-weight: 600;
-        }
-        .food-kcal-badge {
-          flex: 0 0 auto;
-          min-width: 78px;
-          padding: 8px 10px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          border: 1px solid #ffdcae;
-          border-radius: 14px;
-          color: #e98218;
-          background: #fff7e9;
-        }
-        .food-kcal-badge b {
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 22px;
-          line-height: 1;
-        }
-        .food-kcal-badge small { font-size: 9px; font-weight: 700; }
-
-        .calorie-tracker {
-          margin-top: 13px;
-          padding-top: 13px;
-          border-top: 1px solid #e4edf6;
-        }
-        .calorie-tracker-head, .calorie-summary {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-        }
-        .calorie-tracker-head { color: #547392; font-size: 10px; }
-        .calorie-tracker-head b { color: #2e5d8f; font-size: 10px; }
-        .calorie-progress {
-          height: 9px;
-          margin: 8px 0 10px;
-          overflow: hidden;
-          border-radius: 999px;
-          background: #e9f0f7;
-        }
-        .calorie-progress span {
-          display: block;
-          height: 100%;
-          border-radius: inherit;
-          background: linear-gradient(90deg, #42a5ff, #42c49a);
-          transition: width .35s ease;
-        }
-        .calorie-summary > div {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .calorie-summary small { color: #8aa0b7; font-size: 9px; }
-        .calorie-summary strong { color: #315a8f; font-family: "IBM Plex Sans Thai", sans-serif; font-size: 17px; }
-        .calorie-summary > div:last-child { text-align: right; }
-        .remaining-ok strong { color: #1d9a68; }
-        .remaining-danger strong { color: #dc4b4b; }
-
-        .calorie-warning, .calorie-good {
-          margin-top: 11px;
-          padding: 10px 11px;
-          border-radius: 13px;
-        }
-        .calorie-warning {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 10px;
-          border: 1px solid #f3cccc;
-          background: #fff5f5;
-        }
-        .calorie-warning strong { display: block; color: #c83f3f; font-size: 10px; }
-        .calorie-warning span { display: block; margin-top: 3px; color: #9b6a6a; font-size: 8.5px; line-height: 1.5; }
-        .food-exercise-btn {
-          flex: 0 0 auto;
-          padding: 8px 11px;
-          border: 0;
-          border-radius: 9px;
-          color: #fff;
-          background: #dc5252;
-          cursor: pointer;
-          font-size: 9px;
-          font-weight: 700;
-        }
-        .calorie-good {
-          color: #237a58;
-          background: #effaf5;
-          border: 1px solid #d0eddf;
-          font-size: 9px;
-          font-weight: 600;
-        }
-        .calorie-no-target {
-          margin-top: 10px;
-          padding: 10px 11px;
-          border-radius: 11px;
-          color: #7890a9;
-          background: #f4f8fc;
-          font-size: 9px;
-          line-height: 1.5;
-        }
-        .exercise-adjust {
-          margin-top: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-          color: #7890a9;
-          font-size: 8.5px;
-        }
-        .exercise-adjust > div { display: flex; align-items: center; gap: 4px; }
-        .exercise-adjust button {
-          min-width: 34px;
-          padding: 4px 6px;
-          border: 1px solid #d8e6f4;
-          border-radius: 7px;
-          color: #5e7c9d;
-          background: #fff;
-          cursor: pointer;
-          font-size: 8px;
-          font-weight: 700;
-        }
-        .exercise-adjust button.active {
-          color: #fff;
-          border-color: #2e86ee;
-          background: #2e86ee;
-        }
-        .exercise-adjust small { font-size: 8px; }
-
-        /* ---------- WORKOUT ---------- */
-
-        .section-heading .text-btn {
-          margin-left: auto;
-        }
-
-        .text-btn {
-          padding: 7px 13px;
-          border: 1px solid #d8e7f8;
-          border-radius: 999px;
-          color: #3775ba;
-          background: #f3f8ff;
-          cursor: pointer;
-          font-size: 9px;
-          transition: .2s ease;
-        }
-
-        .text-btn:hover {
-          color: #fff;
-          background: #1877f2;
-          border-color: #1877f2;
-        }
-
-        .workout-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 12px;
-        }
-
-        .workout-card {
-          position: relative;
-          min-height: 190px;
-          padding: 22px;
-          overflow: hidden;
-          display: flex;
-          align-items: center;
-          gap: 18px;
-          border: 1px solid #1b4b88;
-          border-radius: 17px;
-          color: #fff;
-          background: linear-gradient(135deg, #245da4, #102f5c);
-          box-shadow: 0 11px 25px rgba(18,61,115,.18);
-          cursor: pointer;
-          text-align: left;
-          transition: .24s ease;
-        }
-
-        .workout-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 17px 34px rgba(18,61,115,.25);
-          background: linear-gradient(135deg, #2d6fc1, #0d2b54);
-        }
-
-        .workout-card::before {
-          content: "";
-          position: absolute;
-          width: 180px;
-          height: 180px;
-          right: -75px;
-          bottom: -95px;
-          border-radius: 50%;
-          background: rgba(85,159,250,.22);
-        }
-
-        .workout-card::after {
-          content: "";
-          position: absolute;
-          width: 90px;
-          height: 90px;
-          right: 30px;
-          top: -45px;
-          border-radius: 50%;
-          border: 1px solid rgba(255,255,255,.12);
-        }
-
-        .workout-art {
-          position: relative;
-          z-index: 2;
-          width: 74px;
-          height: 74px;
-          flex: 0 0 74px;
-          display: grid;
-          place-items: center;
-          border-radius: 50%;
-          color: #fff;
-          background: rgba(116,178,255,.24);
-          border: 1px solid rgba(255,255,255,.15);
-          font-size: 35px;
-          box-shadow: inset 0 0 20px rgba(255,255,255,.05);
-        }
-
-        .chart-art {
-          font-size: 42px;
-        }
-
-        .workout-copy {
-          position: relative;
-          z-index: 3;
-          min-width: 0;
-        }
-
-        .mini-label {
-          color: #9bc8ff;
-          font-size: 8px;
-          font-weight: 700;
-          letter-spacing: 1.4px;
-        }
-
-        .workout-copy h3 {
-          margin: 4px 0 4px;
-          color: #fff;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 19px;
-          font-weight: 600;
-          line-height: 1.35;
-        }
-
-        .workout-copy p {
-          margin: 0 0 12px;
-          color: #cbdcf2;
-          font-size: 10px;
-        }
-
-        .card-action {
-          display: inline-flex;
-          padding: 7px 20px;
-          border: 1px solid rgba(123,187,255,.75);
-          border-radius: 999px;
-          color: #fff;
-          background: rgba(255,255,255,.08);
-          font-size: 9px;
-          font-weight: 700;
-          transition: .2s ease;
-        }
-
-        .workout-card:hover .card-action {
-          background: #1877f2;
-          border-color: #1877f2;
-        }
-
-        .info-strip {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 9px;
-          margin-top: 12px;
-        }
-
-        .info-strip > div {
-          min-width: 0;
-          padding: 10px 11px;
-          display: grid;
-          grid-template-columns: 30px 1fr;
-          grid-template-rows: auto auto;
-          column-gap: 8px;
-          border: 1px solid #dfe9f3;
-          border-radius: 11px;
-          background: #f9fbfd;
-          transition: .2s ease;
-        }
-
-        .info-strip > div:hover {
-          border-color: #bdd7f3;
-          background: #f3f8ff;
-          transform: translateY(-2px);
-        }
-
-        .info-strip span {
-          grid-row: 1 / span 2;
-          width: 30px;
-          height: 30px;
-          display: grid;
-          place-items: center;
-          border-radius: 9px;
-          color: #2877d5;
-          background: #e7f1ff;
-          font-size: 12px;
-        }
-
-        .info-strip b {
-          align-self: end;
-          color: #36597e;
-          font-size: 9px;
-        }
-
-        .info-strip small {
-          align-self: start;
-          color: #899bb0;
-          font-size: 7.5px;
-        }
-
-        /* ---------- MEALS ---------- */
-
-        .meal-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 11px;
-        }
-
-        .meal-item {
-          position: relative;
-          min-width: 0;
-          min-height: 103px;
-          width: 100%;
-          padding: 13px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          border: 1px solid #dfe8f2;
-          border-radius: 13px;
-          background: #fff;
-          overflow: hidden;
-          cursor: pointer;
-          text-align: left;
-          font: inherit;
-          color: inherit;
-          transition: .2s ease;
-        }
-
-        .meal-item:focus-visible {
-          outline: 3px solid rgba(24,119,242,.18);
-          outline-offset: 2px;
-        }
-
-        .meal-item:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 9px 21px rgba(35,82,137,.08);
-        }
-
-        .meal-item::before {
-          content: "";
-          position: absolute;
-          left: 0;
-          top: 0;
-          bottom: 0;
-          width: 3px;
-        }
-
-        .breakfast::before { background: #ffb83f; }
-        .lunch::before { background: #42c49a; }
-        .dinner::before { background: #367ff1; }
-
-        .meal-emoji {
-          width: 62px;
-          height: 62px;
-          flex: 0 0 62px;
-          display: grid;
-          place-items: center;
-          border-radius: 50%;
-          background: #f2f7fc;
-          font-size: 28px;
-        }
-
-        .meal-item > div:nth-child(2) {
-          min-width: 0;
-        }
-
-        .meal-item strong {
-          color: #214c83;
-          font-size: 11px;
-          font-weight: 700;
-        }
-
-        .meal-item span {
-          margin-left: 7px;
-          padding: 4px 7px;
-          border-radius: 999px;
-          color: #3977ba;
-          background: #eaf3ff;
-          font-size: 7.5px;
-          font-weight: 700;
-        }
-
-        .meal-item p {
-          margin: 6px 0 0;
-          color: #778ca3;
-          font-size: 8.5px;
-          white-space: nowrap;
-        }
-
-        .meal-item > b {
-          margin-left: auto;
-          width: 27px;
-          height: 27px;
-          flex: 0 0 27px;
-          display: grid;
-          place-items: center;
-          border-radius: 50%;
-          color: #2777d8;
-          background: #eaf3ff;
-          font-size: 17px;
-        }
-
-        /* ---------- MEAL DETAIL POPUP ---------- */
-
-        .meal-modal-backdrop {
-          position: fixed;
-          inset: 0;
-          z-index: 100;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 28px;
-          background:
-            radial-gradient(circle at 50% 25%, rgba(67,151,255,.12), transparent 35%),
-            rgba(6, 24, 48, .66);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          animation: mealModalFade .22s ease;
-        }
-
-        .meal-modal {
-          --meal-accent: #5aa8ff;
-          --meal-accent-soft: rgba(76,155,244,.15);
-          --meal-accent-border: rgba(116,181,255,.25);
-
-          position: relative;
-          width: min(760px, 100%);
-          max-height: min(820px, calc(100vh - 56px));
-          overflow-y: auto;
-          padding: 25px;
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-          gap: 12px;
-          border: 1px solid rgba(151,196,255,.28);
-          border-radius: 28px;
-          color: #e8f2ff;
-          background:
-            radial-gradient(circle at 10% 0%, rgba(82,157,255,.16), transparent 28%),
-            radial-gradient(circle at 95% 100%, rgba(56,122,222,.12), transparent 30%),
-            linear-gradient(150deg, #102f59 0%, #0b2243 55%, #0d294f 100%);
-          box-shadow:
-            0 32px 90px rgba(2,14,33,.62),
-            0 0 0 1px rgba(255,255,255,.025),
-            inset 0 1px 0 rgba(255,255,255,.08);
-          animation: mealModalPop .28s cubic-bezier(.2,.8,.2,1);
-          scrollbar-width: thin;
-          scrollbar-color: rgba(117,181,255,.45) transparent;
-        }
-
-        .meal-modal::-webkit-scrollbar {
-          width: 6px;
-        }
-
-        .meal-modal::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        .meal-modal::-webkit-scrollbar-thumb {
-          border-radius: 999px;
-          background: rgba(117,181,255,.4);
-        }
-
-        .meal-modal.breakfast {
-          --meal-accent: #ffbf55;
-          --meal-accent-soft: rgba(255,191,85,.14);
-          --meal-accent-border: rgba(255,191,85,.28);
-        }
-
-        .meal-modal.lunch {
-          --meal-accent: #58d5a8;
-          --meal-accent-soft: rgba(88,213,168,.14);
-          --meal-accent-border: rgba(88,213,168,.27);
-        }
-
-        .meal-modal.dinner {
-          --meal-accent: #69aaff;
-          --meal-accent-soft: rgba(105,170,255,.15);
-          --meal-accent-border: rgba(105,170,255,.28);
-        }
-
-        .meal-modal-top {
-          grid-column: 1 / -1;
-          display: flex;
-          align-items: center;
-          gap: 15px;
-          min-width: 0;
-          padding: 1px 48px 17px 1px;
-          margin-bottom: 1px;
-          border-bottom: 1px solid rgba(174,207,247,.14);
-          position: relative;
-        }
-
-        .meal-modal-top::after {
-          content: "";
-          position: absolute;
-          left: 0;
-          bottom: -1px;
-          width: 86px;
-          height: 2px;
-          border-radius: 999px;
-          background: linear-gradient(90deg, var(--meal-accent), transparent);
-        }
-
-        .meal-modal-close {
-          position: absolute;
-          top: 14px;
-          right: 14px;
-          width: 39px;
-          height: 39px;
-          display: grid;
-          place-items: center;
-          border: 1px solid rgba(198,222,255,.18);
-          border-radius: 50%;
-          color: #dceaff;
-          background: rgba(220,237,255,.08);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
-          cursor: pointer;
-          font-size: 25px;
-          line-height: 1;
-          transition: .22s ease;
-          z-index: 5;
-        }
-
-        .meal-modal-close:hover {
-          color: #fff;
-          background: var(--meal-accent);
-          border-color: var(--meal-accent);
-          box-shadow: 0 8px 22px rgba(55,135,235,.28);
-          transform: rotate(8deg) scale(1.04);
-        }
-
-        .meal-modal-icon {
-          width: 72px;
-          height: 72px;
-          flex: 0 0 72px;
-          display: grid;
-          place-items: center;
-          margin: 0;
-          border: 1px solid var(--meal-accent-border);
-          border-radius: 21px;
-          background:
-            linear-gradient(145deg, rgba(255,255,255,.08), transparent),
-            var(--meal-accent-soft);
-          box-shadow:
-            inset 0 0 0 1px rgba(255,255,255,.035),
-            0 12px 28px rgba(0,0,0,.18);
-          font-size: 35px;
-          position: relative;
-        }
-
-        .meal-modal-icon::after {
-          content: "";
-          position: absolute;
-          inset: -5px;
-          border-radius: 25px;
-          border: 1px solid var(--meal-accent-border);
-          opacity: .45;
-        }
-
-        .meal-modal-heading {
-          min-width: 0;
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 14px;
-          padding: 0;
-          margin: 0;
-        }
-
-        .meal-modal-label {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          margin-bottom: 5px;
-          color: #9ebde3;
-          font-size: 8.5px;
-          font-weight: 700;
-          letter-spacing: 1.4px;
-          text-transform: uppercase;
-        }
-
-        .meal-modal-label::before {
-          content: "✦";
-          color: var(--meal-accent);
-          font-size: 10px;
-        }
-
-        .meal-modal-heading h2 {
-          margin: 0;
-          color: #f7fbff;
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 27px;
-          font-weight: 600;
-          line-height: 1.25;
-          letter-spacing: -.3px;
-        }
-
-        .meal-modal-kcal {
-          flex: 0 0 auto;
-          padding: 8px 13px;
-          border: 1px solid var(--meal-accent-border);
-          border-radius: 999px;
-          color: #f1f7ff;
-          background: var(--meal-accent-soft);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.05);
-          font-size: 10px;
-          font-weight: 700;
-          white-space: nowrap;
-        }
-
-        .meal-modal-section {
-          min-width: 0;
-          margin: 0;
-          padding: 15px 16px;
-          border: 1px solid rgba(159,195,239,.14);
-          border-radius: 17px;
-          background: rgba(222,237,255,.055);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
-          transition: .2s ease;
-        }
-
-        .meal-modal-section:hover {
-          border-color: rgba(139,196,255,.24);
-          background: rgba(222,237,255,.07);
-          transform: translateY(-1px);
-        }
-
-        .meal-modal-section.time-section,
-        .meal-modal-section.ingredients-section {
-          min-height: 126px;
-        }
-
-        .meal-modal-section.benefits-section,
-        .meal-modal-tip {
-          grid-column: 1 / -1;
-        }
-
-        .meal-modal-section > strong {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-          margin-bottom: 10px;
-          color: #d8eaff;
-          font-size: 11px;
-          font-weight: 700;
-        }
-
-        .meal-modal-section > strong::after {
-          content: "";
-          flex: 1;
-          height: 1px;
-          background: linear-gradient(90deg, rgba(136,192,255,.2), transparent);
-        }
-
-        .meal-modal-section p {
-          margin: 0;
-          color: #c0d2e8;
-          font-size: 11px;
-          line-height: 1.7;
-        }
-
-        .time-section p {
-          min-height: 58px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 10px;
-          border: 1px solid rgba(128,184,248,.11);
-          border-radius: 12px;
-          color: #e8f3ff;
-          background: rgba(44,112,188,.13);
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 16px;
-          font-weight: 500;
-          letter-spacing: .1px;
-        }
-
-        .meal-ingredient-list {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 8px;
-        }
-
-        .meal-ingredient-list span {
-          min-width: 0;
-          min-height: 43px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 7px 9px;
-          border: 1px solid var(--meal-accent-border);
-          border-radius: 11px;
-          color: #e4f1ff;
-          background: var(--meal-accent-soft);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
-          font-size: 9.5px;
-          font-weight: 600;
-          text-align: center;
-          transition: .2s ease;
-        }
-
-        .meal-ingredient-list span:hover {
-          transform: translateY(-2px);
-          border-color: var(--meal-accent);
-        }
-
-        .meal-modal-section ul {
-          margin: 0;
-          padding: 0;
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 9px;
-          list-style: none;
-          color: #bfd1e6;
-          font-size: 10px;
-          line-height: 1.65;
-        }
-
-        .meal-modal-section li {
-          position: relative;
-          min-height: 82px;
-          padding: 11px 11px 11px 29px;
-          display: flex;
-          align-items: center;
-          border: 1px solid rgba(143,193,244,.11);
-          border-radius: 13px;
-          background: rgba(255,255,255,.035);
-        }
-
-        .meal-modal-section li::before {
-          content: "✓";
-          position: absolute;
-          left: 10px;
-          top: 12px;
-          width: 17px;
-          height: 17px;
-          display: grid;
-          place-items: center;
-          border-radius: 50%;
-          color: #0d294d;
-          background: var(--meal-accent);
-          font-size: 9px;
-          font-weight: 800;
-        }
-
-        .meal-modal-section li::marker {
-          color: transparent;
-        }
-
-        .meal-modal-tip {
-          margin: 0;
-          padding: 14px 16px;
-          display: flex;
-          flex-direction: row;
-          align-items: center;
-          gap: 13px;
-          border: 1px solid var(--meal-accent-border);
-          border-left: 3px solid var(--meal-accent);
-          border-radius: 15px;
-          background:
-            linear-gradient(100deg, var(--meal-accent-soft), rgba(39,112,190,.07));
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
-        }
-
-        .meal-modal-tip b {
-          flex: 0 0 auto;
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          color: #f0f7ff;
-          font-size: 10.5px;
-        }
-
-        .meal-modal-tip span {
-          color: #c2d5e9;
-          font-size: 9.5px;
-          line-height: 1.65;
-        }
-
-        @keyframes mealModalFade {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-
-        @keyframes mealModalPop {
-          from {
-            opacity: 0;
-            transform: translateY(14px) scale(.965);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-
-        .alert-box {
-          margin-top: 11px;
-          padding: 11px 13px;
-          display: flex;
-          align-items: center;
-          gap: 9px;
-          border-radius: 11px;
-          font-size: 9px;
-        }
-
-        .alert-danger {
-          color: #a84444;
-          background: #fff5f5;
-          border: 1px solid #f0d2d2;
-        }
-
-        .alert-success {
-          color: #26704a;
-          background: #f0faf5;
-          border: 1px solid #cfeadb;
-        }
-
-        .alert-box > span {
-          color: #71859b;
-        }
-
-        .start-now-btn {
-          margin-left: auto;
-          padding: 7px 12px;
-        }
-
-        .dashboard-footer {
-          padding: 19px 0 0;
-          color: #9aacbf;
-          text-align: center;
-          font-size: 8px;
-          letter-spacing: .8px;
-        }
-
-
-        /* ---------- TYPOGRAPHY / MICRO EFFECTS ---------- */
-
-        .dashboard-page {
-          font-family: "IBM Plex Sans Thai", sans-serif;
-        }
-
-        .dashboard-header h1 {
-          font-size: clamp(31px, 3.5vw, 43px);
-          letter-spacing: -.35px;
-          background: linear-gradient(90deg, #123c78 0%, #1877f2 48%, #2f68bd 100%);
-          background-size: 200% 100%;
-          background-position: 0% 50%;
-          -webkit-background-clip: text;
-          background-clip: text;
-          -webkit-text-fill-color: transparent;
-          text-shadow: 0 8px 24px rgba(24,119,242,.08);
-          animation: titleWink 3.6s ease-in-out infinite;
-        }
-
-        @keyframes titleWink {
-          0%, 65%, 100% {
-            background-position: 0% 50%;
-          }
-          78% {
-            background-position: 100% 50%;
-          }
-        }
-
-        .dashboard-header p {
-          font-size: 14px;
-          letter-spacing: .15px;
-        }
-
-        .brand-name {
-          font-size: 22px;
-          letter-spacing: -.15px;
-        }
-
-        .side-nav {
-          font-size: 13.5px;
-          letter-spacing: .05px;
-        }
-
-        .panel-heading h2,
-        .section-heading h2 {
-          font-size: 20px;
-          letter-spacing: -.15px;
-        }
-
-        .panel-heading span:not(.heading-badge),
-        .section-heading span:not(.text-btn) {
-          font-size: 10.5px;
-        }
-
-        .heading-badge {
-          font-size: 9.5px;
-          box-shadow: 0 4px 12px rgba(24,119,242,.06);
-        }
-
-        .metric-top {
-          font-size: 13px;
-        }
-
-        .metric-value {
-          font-size: 38px;
-          letter-spacing: -.5px;
-        }
-
-        .metric-helper {
-          font-size: 10px;
-        }
-
-        .compact-field label {
-          font-size: 9.5px;
-        }
-
-        .compact-field input {
-          font-size: 11px;
-        }
-
-        .primary-btn,
-        .start-now-btn {
-          font-size: 10.5px;
-        }
-
-        .food-empty strong {
-          font-size: 17px;
-          letter-spacing: -.15px;
-        }
-
-        .food-empty > span {
-          font-size: 10px;
-        }
-
-        .food-tags i {
-          font-size: 8.5px;
-        }
-
-        .workout-copy h3 {
-          font-size: 21px;
-          letter-spacing: -.2px;
-        }
-
-        .workout-copy p {
-          font-size: 10.5px;
-        }
-
-        .card-action {
-          font-size: 9.5px;
-        }
-
-        .info-strip b {
-          font-size: 9.5px;
-        }
-
-        .meal-item strong {
-          font-size: 12px;
-        }
-
-        .meal-item p {
-          font-size: 9px;
-        }
-
-        /* Glow / lift ที่นุ่มขึ้น */
-        .panel-icon {
-          position: relative;
-        }
-
-        .panel-icon::after,
-        .brand-mark::after {
-          content: "";
-          position: absolute;
-          inset: -3px;
-          border-radius: inherit;
-          border: 1px solid rgba(82,159,249,.14);
-          opacity: 0;
-          transform: scale(.82);
-          transition: .28s ease;
-        }
-
-        .panel:hover .panel-icon::after,
-        .brand-block:hover .brand-mark::after {
-          opacity: 1;
-          transform: scale(1.08);
-        }
-
-        .brand-block:hover .brand-mark {
-          transform: translateY(-2px) rotate(-1deg);
-          box-shadow: 0 14px 28px rgba(24,119,242,.3);
-        }
-
-        .brand-block:hover .brand-exercise-logo {
-          transform: scale(1.06);
-        }
-
-        .metric-value,
-        .workout-copy h3,
-        .meal-item strong {
-          transition: transform .22s ease, text-shadow .22s ease;
-        }
-
-        .metric-card:hover .metric-value {
-          transform: translateX(2px);
-          text-shadow: 0 5px 16px rgba(24,119,242,.12);
-        }
-
-        .workout-card:hover .workout-copy h3 {
-          transform: translateX(3px);
-          text-shadow: 0 4px 15px rgba(105,184,255,.25);
-        }
-
-        .meal-item:hover strong {
-          text-shadow: 0 3px 10px rgba(24,119,242,.12);
-        }
-
-        .primary-btn,
-        .start-now-btn,
-        .text-btn,
-        .profile-pill,
-        .notify-btn {
-          will-change: transform;
-        }
-
-        .primary-btn:active,
-        .start-now-btn:active,
-        .text-btn:active,
-        .profile-pill:active {
-          transform: translateY(1px) scale(.98);
-        }
-
-        @media (max-width: 760px) {
-          .meal-modal-backdrop {
-            padding: 12px;
-          }
-
-          .meal-modal {
-            padding: 18px;
-            border-radius: 22px;
-            max-height: calc(100vh - 24px);
-            grid-template-columns: 1fr;
-            gap: 10px;
-          }
-
-          .meal-modal-top {
-            gap: 11px;
-            padding-right: 35px;
-          }
-
-          .meal-modal-icon {
-            width: 56px;
-            height: 56px;
-            flex-basis: 56px;
-            font-size: 29px;
-            border-radius: 16px;
-          }
-
-          .meal-modal-heading {
-            align-items: flex-start;
-            flex-direction: column;
-            gap: 7px;
-          }
-
-          .meal-modal-heading h2 {
-            font-size: 22px;
-          }
-
-          .meal-modal-section.time-section,
-          .meal-modal-section.ingredients-section,
-          .meal-modal-section.benefits-section,
-          .meal-modal-tip {
-            grid-column: 1;
-          }
-
-          .meal-modal-section.time-section,
-          .meal-modal-section.ingredients-section {
-            min-height: auto;
-          }
-
-          .meal-modal-section ul {
-            grid-template-columns: 1fr;
-          }
-
-          .meal-modal-section li {
-            min-height: 0;
-          }
-
-          .meal-modal-tip {
-            align-items: flex-start;
-            flex-direction: column;
-            gap: 5px;
-          }
-
-          .dashboard-header h1 {
-            font-size: 28px;
-          }
-
-          .panel-heading h2,
-          .section-heading h2 {
-            font-size: 18px;
-          }
-        }
-
-        /* ---------- MODERN READABILITY PASS ---------- */
-        .dashboard-page {
-          font-family: "IBM Plex Sans Thai", sans-serif;
-          font-size: 15px;
-        }
-
-        .dashboard-page button,
-        .dashboard-page input,
-        .dashboard-page textarea,
-        .dashboard-page select {
-          font-family: "IBM Plex Sans Thai", sans-serif;
-        }
-
-        .brand-name { font-size: 24px; }
-        .side-nav { font-size: 15px; }
-        .side-logout { font-size: 13px; }
-        .side-logout span { font-size: 19px; }
-        .dashboard-header h1 { font-size: clamp(32px, 3.5vw, 43px); }
-        .dashboard-header p { font-size: 15px; }
-        .panel-heading h2, .section-heading h2 { font-size: 22px; }
-        .panel-heading span:not(.heading-badge),
-        .section-heading span:not(.text-btn) { font-size: 12px; }
-        .metric-top { font-size: 15px; }
-        .metric-icon { width: 31px; height: 31px; font-size: 16px; }
-        .metric-value { font-size: 40px; }
-        .metric-value em, .result-status { font-size: 11px; }
-        .metric-helper, .result-description { font-size: 11px; }
-        .health-empty-state strong { font-size: 14px; }
-        .health-empty-state p { font-size: 11px; }
-        .health-form { padding: 22px; }
-        .health-form-title strong { font-size: 17px; }
-        .health-form-title span:not(.health-form-orb) { font-size: 10.5px; }
-        .health-form-badge { font-size: 10px; padding: 8px 12px; }
-        .modern-field { min-height: 82px; padding: 13px 15px; gap: 13px; border-radius: 18px; }
-        .modern-field-icon { width: 42px; height: 42px; flex-basis: 42px; font-size: 18px; }
-        .modern-field label { font-size: 10px; margin-bottom: 3px; }
-        .modern-input-wrap input { height: 31px; font-size: 24px; }
-        .modern-input-wrap small { font-size: 9px; }
-        .health-calculate-btn { min-height: 82px; padding-left: 56px; border-radius: 12px; }
-        .health-calculate-btn > span { font-size: 15px; }
-        .health-calculate-btn small { font-size: 9px; }
-        .scale-labels { font-size: 9px; }
-        .energy-pill { font-size: 11px; }
-
-        /* ---------- COMPACT HEALTH COPY ---------- */
-        .health-empty-copy {
-          min-width: 0;
-          flex: 1;
-        }
-        .health-empty-state strong {
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .health-empty-state {
-          min-height: 78px;
-          padding: 12px 14px;
-          gap: 10px;
-        }
-        .empty-icon { width: 38px; height: 38px; flex-basis: 38px; font-size: 18px; }
-        .health-form { padding: 22px; margin-top: 22px; border-radius: 24px; }
-        .health-form-head { margin-bottom: 18px; }
-        .health-form-title { gap: 13px; }
-        .health-form-orb { width: 44px; height: 44px; flex-basis: 44px; border-radius: 14px; font-size: 18px; }
-        .health-form-title strong { font-size: 17px; }
-        .health-form-title span:not(.health-form-orb) { font-size: 10.5px; }
-        .modern-field { min-height: 82px; padding: 13px 15px; gap: 13px; border-radius: 18px; }
-        .modern-field-icon { width: 42px; height: 42px; flex-basis: 42px; border-radius: 13px; font-size: 18px; }
-        .modern-field label { font-size: 10px; margin-bottom: 3px; }
-        .modern-input-wrap input { height: 31px; font-size: 24px; }
-        .modern-input-wrap small { font-size: 9px; }
-        .health-calculate-btn { min-height: 82px; border-radius: 12px; padding-left: 56px; }
-        .health-calculate-btn > span { font-size: 15px; }
-        .health-calculate-btn small { font-size: 9px; }
-
-        /* Result cards: cleaner, larger, no downward arrows */
-        .health-empty-state {
-          min-height: 122px;
-          padding: 17px;
-          gap: 14px;
-          border: 1px solid #d7e7f7;
-          border-radius: 17px;
-          background: linear-gradient(135deg, #ffffff 0%, #f4f9ff 100%);
-          box-shadow: 0 8px 22px rgba(45,93,145,.06);
-        }
-        .empty-icon {
-          width: 46px; height: 46px; flex-basis: 46px;
-          border-radius: 14px; font-size: 21px;
-        }
-
-        .health-result {
-          min-height: 108px;
-          margin-top: 10px;
-          padding: 14px 15px 12px;
-          border-radius: 17px;
-        }
-        .result-main { gap: 12px; }
-        .bmi-result .metric-value { font-size: 42px; }
-        .tdee-value { font-size: 38px; }
-
-        .food-tags i, .card-action, .info-strip b, .meal-item strong { font-size: 11px; }
-        .workout-copy h3 { font-size: 23px; }
-        .workout-copy p { font-size: 12px; }
-        .meal-item p { font-size: 10.5px; }
-        .primary-btn, .start-now-btn { font-size: 12px; }
-        .text-btn { font-size: 12px; }
-        .profile-name { font-size: 13px; }
-        .profile-chevron { font-size: 21px; }
-
-        @media (max-width: 1050px) {
-          .health-input-row {
-            grid-template-columns: 1fr 1fr;
-          }
-
-          .health-calculate-btn {
-            grid-column: 1 / -1;
-          }
-
-
-          .dashboard-sidebar {
-            width: 200px;
-          }
-
-          .dashboard-main {
-            width: calc(100% - 200px);
-            margin-left: 200px;
-            padding: 0 20px 30px;
-          }
-
-          .dashboard-content {
-            grid-template-columns: 1fr;
-            grid-template-areas:
-              "workout"
-              "health"
-              "food"
-              "meals";
-          }
-        }
-
-        @media (max-width: 760px) {
-          .food-scan-box { aspect-ratio: 4 / 3; }
-          .food-result-top strong { font-size: 16px; }
-          .calorie-warning { align-items: flex-start; flex-direction: column; }
-          .food-exercise-btn { width: 100%; }
-
-          .dashboard-page {
-            display: block;
-          }
-
-          .dashboard-sidebar {
-            position: static;
-            width: 100%;
-            height: auto;
-            padding: 12px;
-            display: block;
-          }
-
-          .brand-block {
-            padding: 4px 8px 12px;
-          }
-
-          .sidebar-nav {
-            flex-direction: row;
-          }
-
-          .side-nav {
-            justify-content: center;
-            min-height: 43px;
-            padding: 0 8px;
-          }
-
-          .side-nav span {
-            display: none;
-          }
-
-          .side-logout {
-            display: none;
-          }
-
-          .dashboard-main {
-            width: 100%;
-            margin-left: 0;
-            padding: 0 12px 25px;
-          }
-
-          .dashboard-header {
-            min-height: 125px;
-            padding: 17px 65px 17px 8px;
-          }
-
-          .header-actions {
-            right: 0;
-            top: 21px;
-          }
-
-          .profile-name,
-          .profile-chevron {
-            display: none;
-          }
-
-          .profile-pill {
-            padding: 4px;
-          }
-
-          .notify-btn {
-            display: none;
-          }
-
-          .health-grid,
-          .workout-grid,
-          .meal-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .health-input-row {
-            grid-template-columns: 1fr 1fr;
-          }
-
-          .primary-btn {
-            grid-column: 1 / -1;
-          }
-
-          .info-strip {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        @media (max-width: 460px) {
-          .health-empty-state strong { white-space: normal; }
-          .food-scan-box { aspect-ratio: 1 / 1; }
-          .food-preview { aspect-ratio: 1 / 1; }
-          .food-result-top { align-items: flex-start; }
-          .food-kcal-badge { min-width: 68px; }
-
-          .dashboard-header h1 {
-            font-size: 24px;
-          }
-
-          .dashboard-header p {
-            font-size: 10px;
-          }
-
-          .panel {
-            padding: 16px;
-            border-radius: 15px;
-          }
-
-          .panel-heading h2,
-          .section-heading h2 {
-            font-size: 16px;
-          }
-
-          .heading-badge {
-            display: none;
-          }
-
-          .health-input-row {
-            grid-template-columns: 1fr;
-          }
-
-          .health-form-head {
-            align-items: flex-start;
-          }
-
-          .health-form-badge {
-            display: none;
-          }
-
-          .primary-btn {
-            grid-column: auto;
-          }
-
-          .workout-card {
-            min-height: 165px;
-            padding: 17px;
-          }
-
-          .meal-item p {
-            white-space: normal;
-          }
-
-          .meal-modal {
-            padding: 15px;
-          }
-
-          .meal-modal-top {
-            padding-bottom: 14px;
-          }
-
-          .meal-modal-heading h2 {
-            font-size: 20px;
-          }
-
-          .meal-modal-kcal {
-            font-size: 9px;
-            padding: 7px 10px;
-          }
-
-          .meal-ingredient-list {
-            grid-template-columns: 1fr;
-          }
-
-          .time-section p {
-            font-size: 14px;
-          }
-        }
-      /* ---------- HEALTH FORM FINAL BALANCE ---------- */
-      .health-form {
-        padding: 24px;
-        border-radius: 24px;
-      }
-
-      .health-form-head {
-        margin-bottom: 20px;
-      }
-
-      .health-form-title {
-        max-width: 620px;
-      }
-
-      .health-form-title strong {
-        font-size: 18px;
-      }
-
-      .health-form-title span:not(.health-form-orb) {
-        font-size: 10px;
-      }
-
-      .health-input-row {
-        width: 100%;
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
-      }
-
-      .modern-field,
-      .health-calculate-btn {
-        width: 100%;
-        min-width: 0;
-        height: 124px;
-        min-height: 124px;
-        box-sizing: border-box;
-      }
-
-      .modern-field {
-        padding: 15px;
-        gap: 8px;
-        border-radius: 18px;
-      }
-
-      .modern-field-icon {
-        width: 40px;
-        height: 40px;
-        flex-basis: 40px;
-        border-radius: 12px;
-      }
-
-      .modern-field-copy {
-        width: 100%;
-        min-width: 0;
-      }
-
-      .modern-field label {
-        font-size: 10px;
-        margin-bottom: 5px;
-      }
-
-      .modern-input-wrap {
-        width: 100%;
-        padding-bottom: 5px;
-      }
-
-      .modern-input-wrap input {
-        height: 28px;
-        font-size: 24px;
-      }
-
-      .modern-input-wrap small {
-        padding: 5px 7px;
-        font-size: 8px;
-      }
-
-      .health-calculate-btn {
-        padding: 14px;
-        border-radius: 12px;
-        gap: 6px;
-      }
-
-      .health-calculate-btn::before {
-        width: 40px;
-        height: 40px;
-        border-radius: 12px;
-      }
-
-      .health-calculate-btn > span {
-        font-size: 15px;
-      }
-
-      .health-calculate-btn small {
-        font-size: 8px;
-      }
-
-      @media (max-width: 1050px) {
-        .health-input-row {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-
-      @media (max-width: 520px) {
-        .health-form {
-          padding: 17px;
-        }
-
-        .health-form-title {
-          width: 100%;
-        }
-
-        .health-form-title strong {
-          font-size: 16px;
-        }
-
-        .health-form-title span:not(.health-form-orb) {
-          font-size: 9px;
-        }
-
-        .health-input-row {
-          grid-template-columns: 1fr;
-        }
-      }
-
-
-        /* ---------- CLEAN HEALTH ICON-FREE LAYOUT ---------- */
-        .health-panel > .panel-heading { justify-content: flex-start; }
-        .health-panel .metric-top { justify-content: flex-start; padding-left: 2px; }
-        .health-panel .health-form-title { gap: 0; width: 100%; }
-        .health-panel .health-form-title strong,
-        .health-panel .health-form-title span { text-align: center; }
-        .health-panel .health-form-title > div { width: 100%; }
-        .health-panel .modern-field { justify-content: center; }
-        .health-panel .health-calculate-btn::before { display: none; }
-        .health-panel .health-calculate-btn { padding: 14px 18px; }
-        .health-panel .health-calculate-btn > span,
-        .health-panel .health-calculate-btn small { text-align: center; }
-        .health-panel .energy-pill { padding-left: 0; background: transparent; color: #5f7fa3; border-radius: 0; }
-        .health-panel .health-empty-state { justify-content: center; text-align: center; }
-        .health-panel .health-empty-copy { width: 100%; }
-        .health-panel .health-empty-state strong { white-space: normal; overflow: visible; text-overflow: clip; }
-
-
-        @media (max-width: 560px) {
-          .health-panel .health-section-title {
-            font-size: 20px;
-          }
-        }
-
-        /* =========================================================
-           PREMIUM DASHBOARD REDESIGN
-           One font system + depth + motion + balanced spacing
-           ========================================================= */
-        :root {
-          --ui-blue-1: #2f8cff;
-          --ui-blue-2: #1769d8;
-          --ui-blue-3: #0e4fae;
-          --ui-ink: #123765;
-          --ui-muted: #7187a3;
-          --ui-line: rgba(125, 164, 207, .24);
-          --ui-surface: rgba(255,255,255,.86);
-          --ui-shadow: 0 18px 50px rgba(26, 79, 137, .11);
-          --ui-radius: 24px;
-        }
-
-        html, body, button, input, textarea, select,
-        .dashboard-page, .dashboard-page * {
-          font-family: "IBM Plex Sans Thai" !important;
-        }
-
-        body {
-          color: var(--ui-ink);
-          background: #edf5ff;
-        }
-
-        .dashboard-page {
-          position: relative;
-          isolation: isolate;
-          min-height: 100vh;
-          background:
-            radial-gradient(circle at 8% 8%, rgba(83,164,255,.22), transparent 25%),
-            radial-gradient(circle at 92% 18%, rgba(116,214,255,.17), transparent 24%),
-            radial-gradient(circle at 52% 92%, rgba(55,132,255,.10), transparent 30%),
-            linear-gradient(135deg, #f7fbff 0%, #edf5ff 48%, #f8fbff 100%);
-        }
-
-        .dashboard-page::before,
-        .dashboard-page::after {
-          content: "";
-          position: fixed;
-          z-index: -1;
-          width: 280px;
-          height: 280px;
-          border-radius: 50%;
-          filter: blur(55px);
-          pointer-events: none;
-          opacity: .38;
-          animation: uiFloat 10s ease-in-out infinite alternate;
-        }
-
-        .dashboard-page::before {
-          top: 8%; left: 24%;
-          background: rgba(55, 143, 255, .18);
-        }
-        .dashboard-page::after {
-          right: 4%; bottom: 8%;
-          background: rgba(67, 195, 255, .14);
-          animation-delay: -4s;
-        }
-
-        @keyframes uiFloat {
-          from { transform: translate3d(0, 0, 0) scale(1); }
-          to { transform: translate3d(18px, -14px, 0) scale(1.08); }
-        }
-
-        .dashboard-sidebar {
-          background: rgba(255,255,255,.84) !important;
-          backdrop-filter: blur(22px);
-          -webkit-backdrop-filter: blur(22px);
-          border-right: 1px solid rgba(137, 177, 220, .22) !important;
-          box-shadow: 12px 0 45px rgba(32, 84, 140, .07) !important;
-        }
-
-        .side-nav {
-          border: 1px solid transparent;
-          transition: transform .25s ease, background .25s ease, box-shadow .25s ease, color .25s ease;
-        }
-        .side-nav:hover {
-          transform: translateX(4px);
-          background: rgba(231,241,255,.82) !important;
-          box-shadow: 0 8px 22px rgba(40, 113, 197, .08);
-        }
-        .side-nav.active {
-          transform: translateX(3px);
-          background: linear-gradient(135deg, rgba(225,240,255,.95), rgba(242,248,255,.95)) !important;
-          border-color: rgba(73, 143, 221, .18);
-          box-shadow: 0 10px 25px rgba(36, 113, 196, .10);
-        }
-
-        .dashboard-main {
-          position: relative;
-        }
-
-        .dashboard-header {
-          min-height: 148px;
-          margin: 0 -31px;
-          padding: 30px 31px 24px;
-          border-bottom: 1px solid rgba(139, 177, 216, .18) !important;
-          background: linear-gradient(180deg, rgba(255,255,255,.48), rgba(255,255,255,.04));
-        }
-
-        .header-copy {
-          position: relative;
-          padding: 17px 34px;
-          border: 1px solid rgba(145, 183, 220, .18);
-          border-radius: 26px;
-          background: rgba(255,255,255,.42);
-          box-shadow: 0 12px 35px rgba(35, 89, 146, .06);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-        }
-
-        .header-copy::after {
-          content: "";
-          position: absolute;
-          inset: -1px;
-          border-radius: inherit;
-          padding: 1px;
-          background: linear-gradient(120deg, rgba(68,151,255,.45), transparent 42%, rgba(108,206,255,.35));
-          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          -webkit-mask-composite: xor;
-          mask-composite: exclude;
-          pointer-events: none;
-        }
-
-        .logo {
-          color: #2b7eea !important;
-          letter-spacing: 2.8px;
-        }
-        .dashboard-header h1 {
-          font-family: "IBM Plex Sans Thai" !important;
-          font-weight: 700;
-          letter-spacing: -.5px;
-          background: linear-gradient(90deg, #123e7b, #1f73d4, #123e7b);
-          background-size: 180% auto;
-          -webkit-background-clip: text;
-          background-clip: text;
-          color: transparent;
-          animation: titleFlow 7s ease-in-out infinite;
-        }
-        @keyframes titleFlow {
-          0%,100% { background-position: 0% center; }
-          50% { background-position: 100% center; }
-        }
-
-        .dashboard-content {
-          max-width: 1240px;
-          padding-top: 28px;
-          gap: 24px;
-          grid-template-columns: 1fr;
-          grid-template-areas:
-            "workout"
-            "health"
-            "food"
-            "meals";
-        }
-
-        .panel {
-          position: relative;
-          padding: 27px;
-          border: 1px solid var(--ui-line) !important;
-          border-radius: var(--ui-radius) !important;
-          background: linear-gradient(145deg, rgba(255,255,255,.94), rgba(248,252,255,.82)) !important;
-          box-shadow: var(--ui-shadow) !important;
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
-          transition: transform .3s cubic-bezier(.2,.75,.25,1), box-shadow .3s ease, border-color .3s ease;
-        }
-
-        .panel::before {
-          height: 4px !important;
-          background: linear-gradient(90deg, #2d8cff, #63c4ff 55%, transparent) !important;
-          opacity: .95;
-        }
-        .panel::after {
-          content: "";
-          position: absolute;
-          width: 150px;
-          height: 150px;
-          right: -75px;
-          top: -75px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(70,157,255,.12), transparent 68%);
-          pointer-events: none;
-          transition: transform .45s ease;
-        }
-        .panel:hover {
-          transform: translateY(-5px);
-          border-color: rgba(70, 143, 220, .34) !important;
-          box-shadow: 0 24px 60px rgba(27, 85, 145, .14) !important;
-        }
-        .panel:hover::after { transform: scale(1.25); }
-
-        .panel-heading, .section-heading {
-          margin-bottom: 20px;
-          gap: 13px;
-        }
-        .panel-heading h2, .section-heading h2 {
-          font-family: "IBM Plex Sans Thai" !important;
-          font-weight: 700 !important;
-          color: #143d76 !important;
-          letter-spacing: -.2px;
-        }
-        .panel-heading p, .section-heading p { color: #7890ab; }
-
-        .panel-icon {
-          width: 46px !important;
-          height: 46px !important;
-          flex-basis: 46px !important;
-          border-radius: 15px !important;
-          background: linear-gradient(145deg, #58aaff, #1769d8) !important;
-          box-shadow: 0 10px 24px rgba(24,119,242,.23) !important;
-          transition: transform .3s ease, box-shadow .3s ease;
-        }
-        .panel:hover .panel-icon {
-          transform: rotate(-4deg) scale(1.06);
-          box-shadow: 0 14px 28px rgba(24,119,242,.28) !important;
-        }
-
-        .workout-grid { gap: 16px; }
-        .workout-card {
-          min-height: 205px;
-          padding: 24px;
-          border: 1px solid rgba(255,255,255,.16) !important;
-          border-radius: 21px !important;
-          background: linear-gradient(135deg, #2d78cf 0%, #123f78 72%, #0c2c58 100%) !important;
-          box-shadow: 0 16px 32px rgba(18,61,115,.18) !important;
-          transition: transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease, filter .3s ease;
-        }
-        .workout-card::before {
-          opacity: .22;
-          background: radial-gradient(circle at 85% 15%, #fff, transparent 30%);
-        }
-        .workout-card:hover {
-          transform: translateY(-7px) scale(1.01);
-          filter: saturate(1.08);
-          box-shadow: 0 24px 45px rgba(18,61,115,.27) !important;
-        }
-
-        .health-input-row { gap: 14px !important; }
-        .modern-input-wrap {
-          border-radius: 15px !important;
-          border-color: rgba(130,166,204,.28) !important;
-          background: rgba(249,252,255,.9) !important;
-          transition: border-color .25s ease, box-shadow .25s ease, transform .25s ease;
-        }
-        .modern-input-wrap:focus-within {
-          border-color: rgba(47,140,255,.55) !important;
-          box-shadow: 0 0 0 4px rgba(47,140,255,.09), 0 10px 24px rgba(47,140,255,.08) !important;
-          transform: translateY(-2px);
-        }
-        .modern-input-wrap input {
-          font-family: "IBM Plex Sans Thai" !important;
-        }
-
-        .health-calculate-btn {
-          border-radius: 17px !important;
-          box-shadow: 0 16px 30px rgba(24,119,242,.23) !important;
-          transition: transform .28s ease, box-shadow .28s ease, filter .28s ease !important;
-        }
-        .health-calculate-btn:hover {
-          transform: translateY(-4px);
-          filter: brightness(1.04);
-          box-shadow: 0 22px 38px rgba(24,119,242,.29) !important;
-        }
-
-        .food-panel, .meals-panel { overflow: hidden; }
-        .food-panel .food-upload,
-        .food-panel .analysis-card,
-        .meal-item {
-          border-radius: 17px !important;
-        }
-        .meal-grid { gap: 15px; }
-        .meal-item {
-          border-color: rgba(130,166,204,.22) !important;
-          background: rgba(255,255,255,.78) !important;
-          box-shadow: 0 7px 20px rgba(35,82,137,.045);
-          transition: transform .28s ease, box-shadow .28s ease, border-color .28s ease;
-        }
-        .meal-item:hover {
-          transform: translateY(-5px) !important;
-          border-color: rgba(47,140,255,.30) !important;
-          box-shadow: 0 16px 30px rgba(35,82,137,.10) !important;
-        }
-
-        .dashboard-footer {
-          padding-top: 12px !important;
-          color: #8196af !important;
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          *, *::before, *::after {
-            animation-duration: .01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: .01ms !important;
-          }
-        }
-
-        @media (max-width: 1050px) {
-          .dashboard-header {
-            margin: 0 -20px;
-            padding-left: 20px;
-            padding-right: 20px;
-          }
-          .dashboard-content {
-            gap: 18px;
-          }
-        }
-
-        @media (max-width: 680px) {
-          .dashboard-header {
-            min-height: 125px;
-          }
-          .header-copy {
-            width: 100%;
-            padding: 15px 18px;
-            border-radius: 20px;
-          }
-          .dashboard-content { padding-top: 20px; gap: 16px; }
-          .panel { padding: 20px; border-radius: 20px !important; }
-          .workout-grid, .meal-grid { grid-template-columns: 1fr; }
-          .workout-card { min-height: 160px; }
-        }
-      `}</style>
+      </main>
     </div>
   );
+}
+
+/* ===================== FITTRACK VISUAL SYSTEM ===================== */
+const styles = `
+@import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Anuphan:wght@400;500;600;700&display=swap');
+
+/* หัวข้อใช้สีตามธีม (กัน h1/h2 จาก template Vite ที่เป็นสีเข้มทับ) และ alt ของรูปที่โหลดไม่ขึ้นก็อ่านออก */
+.fittrack-app h1,.fittrack-app h2,.fittrack-app h3{color:var(--text)}
+.fittrack-app img{color:var(--muted)}
+:root{--bg:#020609;--panel:#050b0e;--panel2:#081116;--line:#17313a;--green:#8cff32;--green2:#c6ff38;--cyan:#18d8ff;--purple:#b44cff;--text:#f4f7f6;--muted:#93a1a5;--red:#ff476d;--yellow:#ffe735}
+*{box-sizing:border-box}html,body,#root{margin:0;min-height:100%;background:var(--bg)}body{font-family:'Anuphan',sans-serif;color:var(--text);overflow-x:hidden}button,input{font:inherit}.fittrack-app{min-height:100vh;background:radial-gradient(circle at 75% 8%,rgba(50,255,100,.06),transparent 22%),radial-gradient(circle at 92% 65%,rgba(177,52,255,.045),transparent 22%),#020609}.sidebar{position:fixed;left:0;top:0;bottom:0;width:220px;background:linear-gradient(180deg,#020707 0%,#03090b 100%);border-right:1px solid #18343b;z-index:20;padding:22px 11px 18px;display:flex;flex-direction:column}.sidebar:after{display:none}.sidebar-logo-wrap{text-align:center;padding:4px 4px 25px}.sidebar-logo{display:block;width:190px;height:112px;object-fit:contain;margin:0 auto}.logo-caption{font-size:7px;letter-spacing:2px;color:#c4c8c8;margin-top:-7px}.side-menu{display:flex;flex-direction:column;gap:9px}.side-link{height:57px;border:1px solid transparent;border-radius:12px;background:transparent;color:#d8dddd;display:flex;align-items:center;gap:15px;padding:0 14px;cursor:pointer;font-size:14px;text-align:left;transition:.2s}.side-link:hover{border-color:#35534a;background:rgba(103,255,41,.05)}.side-link.active{color:#fff;background:linear-gradient(90deg,rgba(90,255,38,.17),rgba(90,255,38,.04));border-color:#7cff31;box-shadow:0 0 18px rgba(110,255,50,.18),inset 0 0 18px rgba(100,255,40,.05)}.side-icon{width:27px;font-size:24px;line-height:1;text-align:center;color:#eef4ef}.side-link.active .side-icon{color:var(--green)}.sidebar-quote{margin-top:auto;margin-bottom:24px;padding:12px 14px;color:#e9e9e9;font-family:'Kanit';font-size:15px;line-height:1.55;font-style:italic}.pulse-line{margin-top:12px;height:23px;position:relative;border-bottom:1px solid #9aff39}.pulse-line:before{content:'';position:absolute;left:0;right:0;top:12px;height:1px;background:#78ff33}.pulse-line i:first-child{position:absolute;left:46px;top:4px;width:2px;height:17px;background:#73ff35;transform:rotate(25deg)}.pulse-line b{position:absolute;left:50px;top:2px;width:20px;height:18px;border-bottom:2px solid #73ff35;transform:skew(-25deg) rotate(-12deg)}.pulse-line i:last-child{position:absolute;right:26px;top:9px;width:38px;height:1px;background:#c13dff}.logout-link{height:54px;border:0;border-top:1px solid #1a3239;background:transparent;color:#ddd;text-align:left;padding:0 14px;cursor:pointer;font-size:14px}.logout-link span{font-size:24px;margin-right:12px;color:#dce6e6}.main-area{margin-left:220px;min-height:100vh;padding:0 10px 40px;width:calc(100% - 220px)}.topbar{height:100px;border-bottom:1px solid #18343b;display:flex;align-items:center;justify-content:space-between;padding:0 5px 0 18px}.user-block{display:flex;align-items:center;gap:12px}.avatar-wrap{position:relative;width:58px;height:58px}.avatar-fallback{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:radial-gradient(circle at 35% 25%,#4c5053,#101719 60%);border:2px solid #8e9698;color:#fff;font-weight:700;font-size:20px;box-shadow:0 0 0 3px rgba(255,255,255,.03)}.online-dot{position:absolute;right:0;bottom:0;width:17px;height:17px;border-radius:50%;background:#6eff35;border:2px solid #06100c}.hello{font-size:13px;color:#ddd;line-height:1.1}.user-block strong{font-family:'Kanit';font-size:22px;line-height:1.15}.topbar-right{display:flex;align-items:center;gap:15px}.ai-note{text-align:right;font-size:12px;line-height:1.35;color:#e4e4e4;font-style:italic}.ai-note em{color:var(--green);font-style:normal;font-weight:700}.ai-note span{color:#a24aff;font-size:20px}.icon-button{position:relative;width:42px;height:42px;background:transparent;border:0;color:#f2f2f2;font-size:25px;cursor:pointer}.icon-button i{position:absolute;right:6px;top:6px;width:7px;height:7px;background:#ff4667;border-radius:50%}.icon-button.sun{font-size:28px}.date-box{border-right:1px solid #30434a;padding:3px 15px;color:#ddd;font-size:11px;line-height:1.4}.date-box small{font-size:10px}.content-grid{width:100%;max-width:none;margin:0;padding-top:26px;display:grid;grid-template-columns:minmax(0,1.65fr) minmax(350px,.78fr);grid-template-areas:'hero bmi' 'quick recommend' 'food recommend';gap:18px}.hero-card,.bmi-card,.quick-grid,.food-card,.recommend-card{min-width:0}.hero-card{grid-area:hero;position:relative;height:316px;border:1px solid #2a5a66;border-radius:15px;overflow:hidden;background:#050b0c;box-shadow:0 0 22px rgba(17,204,255,.03)}.hero-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:1;display:block;z-index:0}.hero-overlay{position:absolute;z-index:1;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(0,0,0,.62) 0%,rgba(0,0,0,.42) 38%,rgba(0,0,0,.12) 72%,rgba(0,0,0,.18) 100%),linear-gradient(180deg,rgba(0,0,0,.02),rgba(0,0,0,.22));}.hero-card:after{content:'';position:absolute;z-index:2;right:-20px;top:0;width:2px;height:100%;background:linear-gradient(180deg,transparent,var(--green),transparent)}.hero-content{position:relative;z-index:3;height:100%;padding:13px 31px;display:flex;flex-direction:column;align-items:flex-start}/* HERO LOGO — separate asset/style from sidebar logo */
+.hero-logo{width:400px;height:125px;object-fit:contain;transform:scale(1.18);transform-origin:left top;
+  object-position:left center;
+  display:block;
+  filter:drop-shadow(0 0 10px rgba(140,255,50,.18));
+}.hero-content h1{font-family:'Kanit';font-size:27px;line-height:1.4;font-weight:500;margin:10px 0 45px;letter-spacing:.2px}.hero-features{display:flex;align-items:center;gap:15px;color:#d7dada;font-size:11px}.hero-features span:first-letter{color:var(--green)}.hero-features i{height:23px;width:1px;background:#526169}.dark-card{background:linear-gradient(145deg,#050b0e,#071116);border:1px solid #2a5360;border-radius:15px;box-shadow:inset 0 0 25px rgba(0,0,0,.25)}.bmi-card{grid-area:bmi;padding:16px 17px 15px}.card-title,.section-title{display:flex;align-items:center;gap:10px}.card-title h2,.section-title h2{font-family:'Kanit';font-size:18px;margin:0;font-weight:500}.title-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;font-size:20px}.title-icon.purple{color:#df78ff;border:1px solid #9442ba;background:rgba(174,58,255,.1)}.title-icon.green{color:#91ff3e;border:1px solid #5ea02c;background:rgba(110,255,45,.07)}.title-icon.yellow{color:#e7ef36;border:1px solid #9b9f27;background:rgba(232,240,48,.05)}.bmi-inputs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:11px}.bmi-inputs label,.bmi-extra-row label{font-size:10px;color:#b8c1c3}.bmi-inputs input,.bmi-extra-row input{width:100%;margin-top:5px;height:38px;border-radius:8px;border:1px solid #304951;background:#061015;color:#fff;padding:0 10px;font-size:14px;outline:none}.bmi-inputs input:focus,.bmi-extra-row input:focus{border-color:#8bff39;box-shadow:0 0 0 2px rgba(139,255,57,.08)}.bmi-extra-row{display:grid;grid-template-columns:1fr 1.5fr;gap:10px;align-items:end;margin-top:9px}.lime-btn,.meal-row button,.warning-card button{height:37px;border:0;border-radius:8px;background:linear-gradient(90deg,#72ed2e,#baff3e);color:#071005;font-weight:700;cursor:pointer;box-shadow:0 0 16px rgba(125,255,45,.15)}.bmi-result{margin-top:12px;border:1px solid #2d4952;border-radius:12px;padding:11px 12px;background:rgba(2,8,10,.45)}.result-label{font-size:11px;color:#ddd}.result-label span{float:right;border:1px solid #65ff37;color:#aaff5d;border-radius:20px;padding:2px 13px;font-size:9px}.bmi-number{font-size:29px;font-family:'Kanit';margin-top:2px}.bmi-bar{height:13px;border-radius:10px;background:linear-gradient(90deg,#238fff 0 20%,#49dff1 20% 35%,#75f43c 35% 55%,#ffdf36 55% 72%,#ff7546 72% 88%,#ff3c78 88%);position:relative;margin-top:4px}.bmi-bar i{position:absolute;top:-4px;width:4px;height:21px;background:#fff;border-radius:4px;box-shadow:0 0 8px #fff;transform:translateX(-50%)}.bmi-scale-labels{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;text-align:center;font-size:7px;color:#99a5a9;line-height:1.25;margin-top:6px}.bmi-scale-labels b{color:#8fff3a}.daily-energy{display:flex;align-items:center;gap:10px;margin-top:12px;border:1px solid #2d4952;border-radius:11px;padding:9px 11px}.daily-energy>span{font-size:25px}.daily-energy div{flex:1}.daily-energy small{display:block;color:#c1c8c9;font-size:9px}.daily-energy strong{font-family:'Kanit';font-size:23px;color:#cfff3a;line-height:1.1}.daily-energy em{font-size:13px;font-style:normal}.daily-energy>b{color:#a5adb0}.quick-grid{grid-area:quick;display:grid;grid-template-columns:1fr 1fr;gap:14px}.feature-card{position:relative;min-height:190px;overflow:hidden;border-radius:13px;border:1px solid #79f832;background:linear-gradient(135deg,#07120c,#06130e 55%,#0d1a10);color:#fff;text-align:left;padding:20px;display:flex;flex-direction:column;justify-content:flex-end;cursor:pointer}.feature-card.history{border-color:#b145ff;background:linear-gradient(135deg,#0c0715,#10091a 60%,#180d22)}.feature-card:after{content:'';position:absolute;inset:auto -30px -80px auto;width:190px;height:190px;border-radius:50%;background:radial-gradient(circle,rgba(131,255,45,.16),transparent 68%)}.history:after{background:radial-gradient(circle,rgba(183,55,255,.15),transparent 68%)}.feature-art{position:absolute;top:18px;left:21px;width:70px;height:70px;border:1px solid #82ff36;border-radius:50%;display:grid;place-items:center;color:#9eff43;font-size:35px;background:rgba(3,18,8,.6)}.history .feature-art{border-color:#b455ff;color:#cb75ff}.feature-card h3{position:relative;margin:0;font-family:'Kanit';font-size:21px;font-weight:500}.feature-card p{position:relative;color:#b8c1c0;font-size:10px;line-height:1.55;margin:4px 0 0}.round-arrow{position:absolute;right:17px;bottom:16px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:#9eff39;color:#061008;font-size:22px}.history .round-arrow{background:#a74eff;color:#fff}.food-card{grid-area:food;padding:17px}.food-layout{display:grid;grid-template-columns:185px minmax(0,1fr);gap:14px;margin-top:10px}.upload-box{min-height:230px;border:1px dashed #31515b;border-radius:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;cursor:pointer;background:rgba(2,10,13,.4);overflow:hidden}.upload-box input{display:none}.upload-box img{width:100%;height:100%;object-fit:cover}.upload-icon{font-size:40px;color:#bbc3c5;margin-bottom:7px}.upload-box strong{font-size:13px}.upload-box small{font-size:9px;color:#8f9a9d;margin-top:4px}.upload-box>b{margin-top:14px;padding:9px 23px;border-radius:22px;background:linear-gradient(90deg,#76f22e,#b6ff3c);color:#071008;font-size:10px}.food-result-box{min-height:230px;border:1px solid #263f47;border-radius:12px;padding:12px 14px;background:rgba(1,7,9,.55)}.food-result-top{display:flex;gap:12px}.food-result-top img{width:115px;height:94px;object-fit:cover;border-radius:10px;border:1px solid #6a8a35}.food-result-top h3{margin:3px 0 8px;font-family:'Kanit';font-size:18px;font-weight:500}.food-chip{display:inline-block;border:1px solid #64843b;color:#b2dc60;background:#132014;border-radius:12px;padding:3px 8px;font-size:8px;margin-right:5px}.food-chip.muted{border-color:#37464d;color:#c2cbce;background:#111b20}.food-kcal{margin-top:9px}.food-kcal small{display:block;color:#b9c0c1;font-size:9px}.food-kcal strong{font-family:'Kanit';font-size:29px}.food-kcal em{color:#c6ff39;font-style:normal;font-size:13px}.food-note{font-size:9px;color:#9da8aa}.macro-row{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #263d44;margin-top:8px;padding-top:8px;text-align:center}.macro-row span{font-size:9px;color:#aab4b6;border-right:1px solid #283d43}.macro-row span:last-child{border-right:0}.macro-row b{font-size:13px;color:#f0f2f2}.food-placeholder{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#a9b4b6}.food-placeholder strong{font-family:'Kanit';font-size:16px}.food-placeholder span{font-size:9px;margin-top:5px}.food-loading{height:100%;display:grid;place-items:center;color:#aaff45;font-family:'Kanit'}.error-box{margin-top:8px;padding:8px 11px;border:1px solid #a62c4d;color:#ff7691;background:rgba(140,10,45,.12);border-radius:8px;font-size:10px}.calorie-bottom{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:11px}.calorie-progress-card,.warning-card{border:1px solid #263f47;border-radius:11px;padding:11px;background:rgba(1,8,10,.4)}.progress-title{font-size:10px;color:#c7cecf}.progress-track{height:13px;border-radius:20px;background:#26313b;overflow:hidden;margin:7px 0 9px}.progress-track span{display:block;height:100%;border-radius:20px;background:linear-gradient(90deg,#75f02e,#b9ff3c)}.calorie-stats{display:grid;grid-template-columns:1fr 1fr;gap:15px}.calorie-stats>div{font-size:9px;color:#bbc4c5;border-right:1px solid #263e45}.calorie-stats>div:last-child{border:0}.calorie-stats strong{display:block;color:#d4ff3d;font-family:'Kanit';font-size:20px}.calorie-stats small{font-size:7px;color:#98a3a5}.warning-card.danger{border-color:#713142;background:rgba(111,16,43,.15)}.warning-card.danger strong{color:#ff587a;font-size:12px}.warning-card p{font-size:8px;color:#b7bfc1;line-height:1.45;margin:6px 0}.warning-card button{height:30px;padding:0 13px;font-size:8px;background:transparent;border:1px solid #b73858;color:#ff7590}.warning-card.safe{border-color:#365e27}.warning-card.safe strong{color:#9cff43;font-size:12px}.warning-card.safe p{font-size:9px;color:#aeb9b9}.recommend-card{grid-area:recommend;padding:16px;height:max-content;align-self:start}.section-title h2 small{font-size:9px;color:#c2c9ca;font-family:'Anuphan';font-weight:400}.meal-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin:10px 0}.meal-tabs button{height:35px;border:1px solid #2d4850;border-radius:15px;background:transparent;color:#c9d0d1;font-size:9px;cursor:pointer}.meal-tabs button.active{background:linear-gradient(90deg,#76ef30,#b5ff3b);color:#061005;border-color:#a0ff45;font-weight:700}.meal-list{display:flex;flex-direction:column;gap:7px}.meal-row{min-height:73px;display:grid;grid-template-columns:59px minmax(0,1fr) 51px;align-items:center;gap:8px;border:1px solid #203a42;border-radius:11px;background:#071014;padding:6px}.meal-row img{width:56px;height:56px;border-radius:50%;object-fit:cover;border:1px solid #45606a;background:#101a1e}.meal-row div{min-width:0}.meal-row strong{display:block;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.meal-row span{display:inline-block;margin-top:4px;border-radius:12px;background:#14232a;color:#aebec2;border:1px solid #314b55;padding:2px 7px;font-size:7px}.meal-row button{height:27px;font-size:8px;padding:0 9px}.tips-box{border:1px solid #31434a;border-radius:11px;margin-top:10px;padding:10px 12px;background:rgba(4,12,15,.65)}.tips-box h3{margin:0 0 5px;font-family:'Kanit';font-size:12px;color:#dce334}.tips-box ul{margin:0;padding-left:16px;color:#bbc3c5;font-size:8px;line-height:1.75}.tips-box li::marker{color:#fff}.food-card,.recommend-card,.bmi-card,.feature-card,.hero-card{box-shadow:0 0 0 1px rgba(255,255,255,.005),0 12px 30px rgba(0,0,0,.28)}
+@media(max-width:1100px){.sidebar{width:190px}.main-area{margin-left:190px;width:calc(100% - 190px)}.content-grid{grid-template-columns:1fr;grid-template-areas:'hero' 'bmi' 'quick' 'food' 'recommend'}.recommend-card{height:auto}.hero-card{height:300px}.quick-grid{grid-template-columns:1fr 1fr}}@media(max-width:760px){.sidebar{position:relative;width:100%;height:auto;min-height:auto;padding:10px}.sidebar:after{display:none}.sidebar-logo{width:155px;height:88px}.side-menu{display:grid;grid-template-columns:repeat(4,1fr)}.side-link{height:48px;padding:0 5px;justify-content:center;flex-direction:column;gap:2px;font-size:9px}.side-icon{font-size:18px}.sidebar-quote,.logout-link{display:none}.main-area{margin-left:0;width:100%;padding:0 10px 25px}.topbar{height:auto;padding:13px 2px;gap:10px}.topbar-right{gap:5px}.ai-note,.date-box{display:none}.content-grid{padding-top:12px}.hero-card{height:275px}.hero-content{padding:12px 20px}.hero-logo{width:300px;height:92px;transform:scale(1.12);transform-origin:left top}.hero-content h1{font-size:23px;margin-bottom:35px}.hero-features{font-size:8px;gap:7px}.quick-grid,.calorie-bottom,.food-layout{grid-template-columns:1fr}.feature-card{min-height:155px}.bmi-inputs{grid-template-columns:1fr 1fr}.recommend-card{padding:12px}.meal-row{grid-template-columns:52px minmax(0,1fr) 45px}.meal-row img{width:49px;height:49px}}
+/* FINAL LAYOUT FIX:
+   Keep the sidebar divider, remove the unwanted divider on the right side
+   of the dashboard, and let the right-side content use the available width. */
+.sidebar{
+  border-right:1px solid #18343b !important;
+}
+.main-area,
+.content-grid{
+  border-right:0 !important;
+  outline-right:0 !important;
+}
+.main-area{
+  width:calc(100% - 220px) !important;
+  padding-right:0 !important;
+}
+.content-grid{
+  width:100% !important;
+  max-width:none !important;
+  margin-right:0 !important;
+}
+
+/* เส้นขาวด้านขวามาจาก #root ของ template Vite (App.css: width:1126px + border-inline)
+   ปลดล็อกให้ #root เต็มจอและไม่มีเส้นขอบ */
+html,body{
+  width:100% !important;
+  max-width:none !important;
+  margin:0 !important;
+}
+#root{
+  width:100% !important;
+  max-width:none !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  border-inline:0 !important;
+  box-shadow:none !important;
+}
+.fittrack-app{
+  width:100%;
+}
+
+/* ===================== LIGHT THEME =====================
+   ใช้งานเมื่อ <html data-theme="light"> (สลับด้วยปุ่มดวงอาทิตย์/พระจันทร์ที่ topbar)
+   โหมดมืดคือสไตล์เดิมทั้งหมด ไม่ถูกแก้ไข */
+html.theme-anim *{
+  transition:background-color .3s ease,border-color .3s ease,color .3s ease !important;
+}
+html[data-theme="dark"]{color-scheme:dark}
+html[data-theme="light"]{
+  color-scheme:light;
+  --bg:#edf3f1;--panel:#ffffff;--panel2:#f4f8f7;--line:#cfdcd8;
+  --green:#2a9d16;--green2:#3a9d1a;--text:#12201c;--muted:#5d6e6a;
+}
+html[data-theme="light"] .fittrack-app{
+  background:radial-gradient(circle at 75% 8%,rgba(60,200,100,.14),transparent 24%),radial-gradient(circle at 92% 65%,rgba(177,52,255,.08),transparent 24%),#edf3f1;
+}
+
+/* sidebar */
+html[data-theme="light"] .sidebar{background:linear-gradient(180deg,#ffffff 0%,#f3f8f6 100%);border-right:1px solid #cfdcd8 !important}
+/* โลโก้ PNG พื้นดำ-ตัวอักษรขาว: กลับสีให้เป็นพื้นขาว-ตัวอักษรดำ แล้วใช้ multiply กลืนกับพื้นหลัง */
+html[data-theme="light"] .sidebar-logo,
+html[data-theme="light"] .hero-logo{filter:invert(1) hue-rotate(180deg);mix-blend-mode:multiply}
+html[data-theme="light"] .side-link{color:#2a3a36}
+html[data-theme="light"] .side-link:hover{border-color:#9bc59a;background:rgba(60,170,40,.08)}
+html[data-theme="light"] .side-link.active{color:#12201c;background:linear-gradient(90deg,rgba(90,215,38,.2),rgba(90,215,38,.05));border-color:#4fb82b;box-shadow:0 0 14px rgba(80,200,40,.16)}
+html[data-theme="light"] .side-icon{color:#33433f}
+html[data-theme="light"] .side-link.active .side-icon{color:#2a9d16}
+html[data-theme="light"] .sidebar-quote{color:#2a3a36}
+html[data-theme="light"] .pulse-line{border-bottom-color:#4fb82b}
+html[data-theme="light"] .logout-link{color:#33433f;border-top-color:#d5e1dd}
+html[data-theme="light"] .logout-link span{color:#33433f}
+
+/* topbar */
+html[data-theme="light"] .topbar{border-bottom-color:#d3dfdb}
+html[data-theme="light"] .online-dot{border-color:#edf3f1}
+html[data-theme="light"] .hello{color:#4a5b57}
+html[data-theme="light"] .ai-note{color:#3a4a46}
+html[data-theme="light"] .icon-button{color:#1f2d29}
+html[data-theme="light"] .date-box{color:#3a4a46;border-right-color:#c9d7d3}
+
+/* การ์ดทั่วไป */
+html[data-theme="light"] .dark-card{background:linear-gradient(145deg,#ffffff,#f5f9f8);border-color:#cddbd7;box-shadow:none}
+html[data-theme="light"] .food-card,
+html[data-theme="light"] .recommend-card,
+html[data-theme="light"] .bmi-card,
+html[data-theme="light"] .feature-card,
+html[data-theme="light"] .hero-card{box-shadow:0 8px 24px rgba(20,60,50,.08)}
+html[data-theme="light"] .title-icon.purple{color:#9a2fd0;border-color:#c48be4;background:rgba(174,58,255,.08)}
+html[data-theme="light"] .title-icon.green{color:#2a8a14;border-color:#8fcf63;background:rgba(110,255,45,.12)}
+html[data-theme="light"] .title-icon.yellow{color:#8a7d00;border-color:#d4c94a;background:rgba(232,240,48,.15)}
+html[data-theme="light"] .section-title h2 small{color:#667773}
+
+/* BMI */
+html[data-theme="light"] .bmi-inputs label,
+html[data-theme="light"] .bmi-extra-row label{color:#5a6a66}
+html[data-theme="light"] .bmi-inputs input,
+html[data-theme="light"] .bmi-extra-row input{background:#ffffff;border-color:#c3d2ce;color:#12201c}
+html[data-theme="light"] .bmi-result{background:#f6faf9;border-color:#d0ddd9}
+html[data-theme="light"] .result-label{color:#33433f}
+html[data-theme="light"] .result-label span{color:#2a8a14;border-color:#4fb82b}
+html[data-theme="light"] .bmi-bar i{background:#12201c;box-shadow:0 0 6px rgba(0,0,0,.3)}
+html[data-theme="light"] .bmi-scale-labels{color:#667773}
+html[data-theme="light"] .bmi-scale-labels b{color:#2a9d16}
+html[data-theme="light"] .daily-energy{border-color:#d0ddd9;background:#f6faf9}
+html[data-theme="light"] .daily-energy small{color:#5d6e6a}
+html[data-theme="light"] .daily-energy strong{color:#2f8a10}
+html[data-theme="light"] .daily-energy>b{color:#7b8a86}
+
+/* การ์ดทางลัด */
+html[data-theme="light"] .feature-card{background:linear-gradient(135deg,#f4fcef,#ffffff 60%,#eefae6);border-color:#6cd62b;color:#12201c}
+html[data-theme="light"] .feature-card.history{background:linear-gradient(135deg,#f8f1ff,#ffffff 60%,#f3e8fd);border-color:#b145ff}
+html[data-theme="light"] .feature-card p{color:#5a6a66}
+html[data-theme="light"] .feature-art{background:rgba(255,255,255,.85);color:#2a9d16;border-color:#6cd62b}
+html[data-theme="light"] .history .feature-art{color:#9a3bd6;border-color:#b455ff}
+
+/* วิเคราะห์อาหาร */
+html[data-theme="light"] .upload-box{border-color:#b8cbc6;background:#f4f8f7}
+html[data-theme="light"] .upload-icon{color:#8a9a96}
+html[data-theme="light"] .upload-box small{color:#6f7f7b}
+html[data-theme="light"] .food-result-box{border-color:#d0ddd9;background:#f8fbfa}
+html[data-theme="light"] .food-chip{border-color:#9ccb6b;color:#3f7a15;background:#e9f6df}
+html[data-theme="light"] .food-chip.muted{border-color:#c6d3cf;color:#4f605c;background:#eef2f1}
+html[data-theme="light"] .food-kcal small{color:#5d6e6a}
+html[data-theme="light"] .food-kcal em{color:#2f8a10}
+html[data-theme="light"] .food-note{color:#667773}
+html[data-theme="light"] .macro-row{border-top-color:#d5e1dd}
+html[data-theme="light"] .macro-row span{color:#5d6e6a;border-right-color:#d5e1dd}
+html[data-theme="light"] .macro-row b{color:#12201c}
+html[data-theme="light"] .food-placeholder{color:#667773}
+html[data-theme="light"] .food-loading{color:#2f8a10}
+html[data-theme="light"] .calorie-progress-card,
+html[data-theme="light"] .warning-card{border-color:#d0ddd9;background:#f8fbfa}
+html[data-theme="light"] .progress-title{color:#4a5b57}
+html[data-theme="light"] .progress-track{background:#dfe8e5}
+html[data-theme="light"] .calorie-stats>div{color:#4a5b57;border-right-color:#d5e1dd}
+html[data-theme="light"] .calorie-stats strong{color:#2f8a10}
+html[data-theme="light"] .calorie-stats small{color:#667773}
+html[data-theme="light"] .warning-card p{color:#5d6e6a}
+html[data-theme="light"] .warning-card.danger{border-color:#e0a0b0;background:#fff0f3}
+html[data-theme="light"] .warning-card.danger strong{color:#d02a52}
+html[data-theme="light"] .warning-card button{color:#d02a52;border-color:#d97a92}
+html[data-theme="light"] .warning-card.safe{border-color:#9ccb6b}
+html[data-theme="light"] .warning-card.safe strong{color:#2f8a10}
+
+/* เมนูแนะนำ */
+html[data-theme="light"] .meal-tabs button{border-color:#c3d2ce;color:#3a4a46}
+html[data-theme="light"] .meal-tabs button.active{color:#061005;border-color:#a0ff45}
+html[data-theme="light"] .meal-row{border-color:#d5e1dd;background:#ffffff}
+html[data-theme="light"] .meal-row img{border-color:#c3d2ce;background:#e8efed}
+html[data-theme="light"] .meal-row span{background:#eef3f2;color:#4f605c;border-color:#c6d3cf}
+html[data-theme="light"] .tips-box{border-color:#d0ddd9;background:#f8fbfa}
+html[data-theme="light"] .tips-box h3{color:#8a7d00}
+html[data-theme="light"] .tips-box ul{color:#4f605c}
+html[data-theme="light"] .tips-box li::marker{color:#12201c}
+
+/* แบนเนอร์ hero */
+html[data-theme="light"] .hero-card{background:#f4faf8;border-color:#cddbd7}
+html[data-theme="light"] .hero-image{opacity:1}
+html[data-theme="light"] .hero-overlay{background:linear-gradient(90deg,rgba(255,255,255,.97) 0%,rgba(255,255,255,.82) 42%,rgba(255,255,255,.12) 78%,rgba(255,255,255,.35) 100%),linear-gradient(180deg,rgba(255,255,255,.05),rgba(237,243,241,.5))}
+html[data-theme="light"] .hero-content h1{color:#12201c}
+html[data-theme="light"] .hero-features{color:#33433f}
+html[data-theme="light"] .hero-features i{background:#b9c7c3}
+
+/* HERO IMAGE FIX */
+.hero-card{position:relative;overflow:hidden;background:#050b0d url("/fittrack-hero.jpg") center/cover no-repeat;}
+.hero-card .hero-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:1;display:block;z-index:1;}
+.hero-card .hero-overlay{position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.38),rgba(0,0,0,.10));z-index:2;pointer-events:none;}
+.hero-card .hero-content{position:relative;z-index:3;}
+html[data-theme="light"] .hero-card{background:#f4faf8 url("/fittrack-hero.jpg") center/cover no-repeat;}
+html[data-theme="light"] .hero-image{opacity:1;}
+html[data-theme="light"] .hero-overlay{background:linear-gradient(90deg,rgba(255,255,255,.35),rgba(255,255,255,.08));}
+
+
+/* SHIMMER EFFECT: visible glow on logos and a bright sweep across the banner */
+@keyframes fittrack-logo-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 2px rgba(140,255,50,.16)) brightness(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 5px rgba(160,255,65,.38)) drop-shadow(0 0 10px rgba(140,255,50,.18)) brightness(1.06);
+  }
+}
+@keyframes fittrack-banner-shine {
+  0% { transform: translateX(-180%) skewX(-22deg); opacity: 0; }
+  8% { opacity: .95; }
+  38% { opacity: .8; }
+  58%, 100% { transform: translateX(380%) skewX(-22deg); opacity: 0; }
+}
+.sidebar-logo {
+  animation: fittrack-logo-glow 3.4s ease-in-out infinite !important;
+  will-change: filter;
+}
+/* Move the exercise/history cards closer to the main banner */
+.content-grid {
+  row-gap: 7px;
+}
+
+/* Keep the large hero logo static: no shimmer or glow animation */
+.hero-logo {
+  animation: none !important;
+  will-change: auto;
+}
+.hero-card::before {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  top: -35%;
+  left: 0;
+  width: 42%;
+  height: 170%;
+  pointer-events: none;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(255,255,255,.12) 25%,
+    rgba(220,255,190,.72) 48%,
+    rgba(255,255,255,.28) 62%,
+    transparent 100%);
+  filter: blur(2px);
+  animation: fittrack-banner-shine 3.8s ease-in-out infinite;
+}
+.hero-card .hero-content { z-index: 4; }
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-logo, .hero-card::before { animation-duration: 8s !important; }
+}
+
+
+/* Desktop layout fix: place quick-action cards directly below the hero.
+   The BMI card spans the hero and quick-action rows so its height no longer
+   pushes the quick-action cards downward. */
+@media (min-width: 1101px) {
+  .content-grid {
+    grid-template-areas:
+      "hero bmi"
+      "quick bmi"
+      "food recommend";
+    row-gap: 7px;
+  }
+
+  .bmi-card {
+    grid-area: bmi;
+    align-self: stretch;
+    height: auto;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .bmi-card form,
+  .bmi-card .bmi-result {
+    flex: 0 0 auto;
+  }
+
+  /* Expand daily energy panel to fill the available blank space below BMI result */
+  .bmi-card .daily-energy {
+    flex: 1 1 auto;
+    min-height: 145px;
+    margin-top: 12px;
+    align-items: center;
+  }
+
+  .quick-grid {
+    grid-area: quick;
+    align-self: start;
+  }
+
+  .recommend-card {
+    grid-area: recommend;
+    align-self: start;
+  }
+}
+
+/* Energy panel: heading anchored at the top, calorie value centered */
+.bmi-card .daily-energy {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 145px;
+  padding: 42px 54px 16px;
+  text-align: center;
+}
+.bmi-card .daily-energy .energy-heading {
+  position: absolute;
+  top: 15px;
+  left: 48px;
+  right: 48px;
+  display: block;
+  color: #c1c8c9;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: center;
+}
+.bmi-card .daily-energy .energy-value {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  margin: 0;
+  color: #cfff3a;
+  font-family: 'Kanit';
+  font-size: 37px;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+}
+.bmi-card .daily-energy .energy-value em {
+  font-size: 16px;
+}
+.bmi-card .daily-energy .energy-flame {
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  display: block;
+  width: 30px;
+  height: 39px;
+  transform: translateY(-50%);
+  filter: drop-shadow(0 0 5px rgba(255,111,25,.18));
+}
+.bmi-card .daily-energy .energy-flame svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* Grounded, turbulent flame: irregular edges, ember bed and warm light bloom */
+.bmi-card .daily-energy .energy-flame {
+  filter: drop-shadow(0 0 5px rgba(255,112,16,.55)) drop-shadow(0 0 13px rgba(255,83,12,.28));
+  transform-origin: 50% 92%;
+  animation: fire-breathe .82s ease-in-out infinite alternate;
+}
+.bmi-card .daily-energy .fire-ember { transform-origin: 24px 55px; animation: ember-pulse .48s ease-in-out infinite alternate; }
+.bmi-card .daily-energy .fire-tongue-left { transform-origin: 20px 55px; animation: fire-left .72s ease-in-out infinite alternate; }
+.bmi-card .daily-energy .fire-tongue-right { transform-origin: 28px 55px; animation: fire-right .86s ease-in-out infinite alternate; }
+.bmi-card .daily-energy .fire-core { transform-origin: 24px 54px; animation: fire-core-flicker .58s ease-in-out infinite alternate; }
+.bmi-card .daily-energy .fire-heart { transform-origin: 24px 51px; animation: fire-heart-flicker .48s ease-in-out infinite alternate; }
+.bmi-card .daily-energy .fire-glow { transform-origin: 24px 43px; animation: fire-glow-pulse 1s ease-in-out infinite alternate; }
+@keyframes fire-breathe { from { transform: translateY(-50%) scale(.96,.98) rotate(-2deg); } to { transform: translateY(-50%) scale(1.04,1.03) rotate(2deg); } }
+@keyframes fire-left { from { transform: skewX(-3deg) scaleY(.94); } to { transform: skewX(4deg) scaleY(1.08); } }
+@keyframes fire-right { from { transform: skewX(4deg) scaleY(1.06); } to { transform: skewX(-4deg) scaleY(.92); } }
+@keyframes fire-core-flicker { from { transform: scale(.94, .94); opacity:.86; } to { transform: scale(1.06, 1.08); opacity:1; } }
+@keyframes fire-heart-flicker { from { opacity:.58; transform: scale(.86); } to { opacity:1; transform: scale(1.12); } }
+@keyframes fire-glow-pulse { from { opacity:.48; transform: scale(.86); } to { opacity:1; transform: scale(1.16); } }
+@keyframes ember-pulse { from { opacity:.58; transform: scaleX(.82); } to { opacity:1; transform: scaleX(1.12); } }
+@media (prefers-reduced-motion: reduce) { .bmi-card .daily-energy .energy-flame, .bmi-card .daily-energy .fire-tongue-left, .bmi-card .daily-energy .fire-tongue-right, .bmi-card .daily-energy .fire-core, .bmi-card .daily-energy .fire-heart, .bmi-card .daily-energy .fire-glow, .bmi-card .daily-energy .fire-ember { animation: none; } }
+.bmi-card .daily-energy .energy-info {
+  position: absolute;
+  right: 19px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #a5adb0;
+}
+/* Make the daily energy figure larger and lift it slightly within the panel */
+.bmi-card .daily-energy .energy-value {
+  font-size: 46px;
+  transform: translateY(-5px);
+  letter-spacing: .2px;
+}
+.bmi-card .daily-energy .energy-value em {
+  font-size: 18px;
+}
+@media (max-width: 760px) {
+  .bmi-card .daily-energy { min-height: 125px; padding-left: 43px; padding-right: 43px; }
+  .bmi-card .daily-energy .energy-heading { left: 40px; right: 40px; font-size: 11px; }
+  .bmi-card .daily-energy .energy-value { font-size: 38px; transform: translateY(-4px); }
+  .bmi-card .daily-energy .energy-value em { font-size: 14px; }
+  .bmi-card .daily-energy .energy-flame { left: 13px; width: 25px; height: 33px; }
+  .bmi-card .daily-energy .energy-info { right: 12px; }
+}
+
+
+/* In-app + browser notifications and live date display */
+.notification-wrap { position: relative; }
+.notification-wrap .icon-button { display: grid; place-items: center; }
+.notification-panel {
+  position: absolute; z-index: 100; top: calc(100% + 12px); right: -62px;
+  width: min(320px, calc(100vw - 28px)); padding: 14px;
+  border: 1px solid #2d535d; border-radius: 13px;
+  background: #071116; color: #f4f7f6; box-shadow: 0 14px 40px rgba(0,0,0,.55);
+}
+.notification-panel-title { display:flex; align-items:center; justify-content:space-between; gap:12px; font: 600 15px 'Kanit',sans-serif; margin-bottom: 9px; }
+.notification-panel-title button { border:0; background:transparent; color:#b9c5c7; font-size:22px; cursor:pointer; }
+.notification-item { display:flex; flex-direction:column; gap:4px; padding:10px 0; border-top:1px solid #203941; }
+.notification-item strong { color:#a8f34a; font-size:12px; }
+.notification-item span { font-size:11px; line-height:1.5; }
+.notification-item small,.notification-hint { color:#93a1a5; font-size:9px; line-height:1.5; }
+.notification-hint { display:block; padding-top:8px; border-top:1px solid #203941; }
+html[data-theme="light"] .notification-panel { background:#fff; color:#1d302b; border-color:#c8d8d2; box-shadow:0 14px 40px rgba(20,45,35,.18); }
+html[data-theme="light"] .notification-item { border-color:#e0e9e5; }
+html[data-theme="light"] .notification-hint { border-color:#e0e9e5; }
+@media(max-width:760px) { .notification-panel { right:-42px; top:calc(100% + 8px); } }
+
+
+/* ===================== LIGHT THEME CONTRAST REFINEMENT =====================
+   Soft mint surfaces with clear green / violet accents and readable text. */
+html[data-theme="light"] body,
+html[data-theme="light"] #root { background:#edf4f1; color:#172923; }
+html[data-theme="light"] .fittrack-app {
+  background:radial-gradient(circle at 74% 7%,rgba(111,210,80,.13),transparent 25%),
+             radial-gradient(circle at 92% 62%,rgba(170,91,225,.09),transparent 24%),#edf4f1;
+  color:#172923;
+}
+html[data-theme="light"] .main-area { color:#172923; }
+html[data-theme="light"] .topbar { background:rgba(249,252,250,.76); border-bottom-color:#c8d8d1; }
+html[data-theme="light"] .hello,
+html[data-theme="light"] .ai-note,
+html[data-theme="light"] .date-box { color:#40554d; }
+html[data-theme="light"] .user-block strong { color:#172923; }
+html[data-theme="light"] .icon-button { color:#263c33; }
+html[data-theme="light"] .icon-button:hover { color:#278b20; background:#e3f3df; border-radius:10px; }
+html[data-theme="light"] .sidebar { background:linear-gradient(180deg,#fbfefc 0%,#edf5f1 100%); border-right-color:#c8d8d1 !important; }
+html[data-theme="light"] .logo-caption { color:#53675f; }
+html[data-theme="light"] .side-link { color:#31473e; }
+html[data-theme="light"] .side-link:hover { background:#e8f4e5; border-color:#b7d7ae; }
+html[data-theme="light"] .side-link.active { color:#17351b; background:linear-gradient(100deg,#dff5d7,#f1faed); border-color:#65b947; box-shadow:0 5px 15px rgba(66,145,48,.12),inset 0 0 0 1px rgba(255,255,255,.65); }
+html[data-theme="light"] .side-icon { color:#40584e; }
+html[data-theme="light"] .side-link.active .side-icon { color:#258d20; }
+html[data-theme="light"] .sidebar-quote { color:#40564c; }
+html[data-theme="light"] .logout-link { color:#40564c; border-top-color:#cfddd7; }
+html[data-theme="light"] .logout-link span { color:#40564c; }
+
+/* Cards: separate related sections subtly while retaining the FitTrack palette. */
+html[data-theme="light"] .dark-card,
+html[data-theme="light"] .bmi-card,
+html[data-theme="light"] .food-card,
+html[data-theme="light"] .recommend-card {
+  color:#172923; border-color:#c5d8d0;
+  background:linear-gradient(145deg,#ffffff 0%,#f6fbf8 100%);
+  box-shadow:0 8px 24px rgba(29,76,56,.075),inset 0 1px 0 rgba(255,255,255,.9);
+}
+html[data-theme="light"] .bmi-card { background:linear-gradient(145deg,#f8fcff 0%,#eef8f8 100%); border-color:#b8d7d9; }
+html[data-theme="light"] .food-card { background:linear-gradient(145deg,#ffffff 0%,#f2faf4 100%); }
+html[data-theme="light"] .recommend-card { background:linear-gradient(145deg,#fff 0%,#f8f4ff 100%); border-color:#d5c7e7; }
+html[data-theme="light"] .card-title h2,
+html[data-theme="light"] .section-title h2 { color:#172923; }
+html[data-theme="light"] .section-title h2 small { color:#61746b; }
+html[data-theme="light"] .title-icon.green { color:#278b20; border-color:#a5d38f; background:#e8f7df; }
+html[data-theme="light"] .title-icon.purple { color:#8734b7; border-color:#d3a7e8; background:#f5e9fc; }
+html[data-theme="light"] .title-icon.yellow { color:#887500; border-color:#dfd17b; background:#fff9d9; }
+html[data-theme="light"] .bmi-inputs label,
+html[data-theme="light"] .bmi-extra-row label { color:#435a50; }
+html[data-theme="light"] .bmi-inputs input,
+html[data-theme="light"] .bmi-extra-row input { background:#fff; color:#172923; border-color:#b7ccc3; box-shadow:inset 0 1px 2px rgba(28,65,49,.035); }
+html[data-theme="light"] .bmi-inputs input::placeholder,
+html[data-theme="light"] .bmi-extra-row input::placeholder { color:#7a8d84; opacity:1; }
+html[data-theme="light"] .bmi-inputs input:focus,
+html[data-theme="light"] .bmi-extra-row input:focus { border-color:#55aa35; box-shadow:0 0 0 3px rgba(87,174,53,.13); }
+html[data-theme="light"] .bmi-result { background:linear-gradient(135deg,#f9fdfc,#edf7f5); border-color:#bdd5d0; }
+html[data-theme="light"] .result-label { color:#40554d; }
+html[data-theme="light"] .result-label span { background:#e7f7df; color:#287d1b; border-color:#81c75d; }
+html[data-theme="light"] .bmi-number { color:#1b3028; }
+html[data-theme="light"] .bmi-scale-labels { color:#52675e; }
+html[data-theme="light"] .bmi-scale-labels b { color:#278b20; }
+html[data-theme="light"] .daily-energy { background:linear-gradient(135deg,#f1faed,#fff); border-color:#c2dcb9; }
+html[data-theme="light"] .daily-energy small { color:#4a6055; }
+html[data-theme="light"] .daily-energy strong { color:#278b20; }
+html[data-theme="light"] .daily-energy .energy-value { color:#278b20; }
+html[data-theme="light"] .daily-energy .energy-info { color:#64766d; }
+
+/* Quick action cards keep green and purple identities with stronger contrast. */
+html[data-theme="light"] .feature-card { color:#18321e; background:linear-gradient(135deg,#e9f8e3 0%,#ffffff 62%,#eff9e9 100%); border-color:#77c84e; box-shadow:0 8px 22px rgba(54,125,36,.10); }
+html[data-theme="light"] .feature-card.history { color:#352044; background:linear-gradient(135deg,#f3e8fc 0%,#fff 62%,#f5edfc 100%); border-color:#b47ad9; box-shadow:0 8px 22px rgba(122,63,161,.09); }
+html[data-theme="light"] .feature-card h2,
+html[data-theme="light"] .feature-card strong { color:inherit; }
+html[data-theme="light"] .feature-card p { color:#52675b; }
+html[data-theme="light"] .feature-card.history p { color:#665472; }
+html[data-theme="light"] .feature-art { color:#278b20; background:#fff; border-color:#83c95f; box-shadow:0 3px 12px rgba(53,118,39,.08); }
+html[data-theme="light"] .feature-card.history .feature-art { color:#8d3db9; border-color:#c18be0; background:#fff; }
+html[data-theme="light"] .round-arrow { color:#fff; box-shadow:0 3px 10px rgba(36,95,24,.2); }
+html[data-theme="light"] .feature-card.history .round-arrow { background:#a044d1; }
+html[data-theme="light"] .lime-btn,
+html[data-theme="light"] .meal-row button { background:linear-gradient(100deg,#66d92e,#a4ed39); color:#15300e; box-shadow:0 4px 12px rgba(74,166,39,.16); }
+html[data-theme="light"] .lime-btn:hover,
+html[data-theme="light"] .meal-row button:hover { filter:saturate(1.08) brightness(.98); }
+
+/* Food analysis, meal recommendations and progress information. */
+html[data-theme="light"] .upload-box { background:#f4faf7; border-color:#b9cec5; color:#40564c; }
+html[data-theme="light"] .upload-box small,
+html[data-theme="light"] .upload-icon { color:#657970; }
+html[data-theme="light"] .food-result-box { background:#f7fcf9; border-color:#c3d9ce; color:#1b3028; }
+html[data-theme="light"] .food-chip { color:#34751c; background:#e7f5dd; border-color:#a8cf8e; }
+html[data-theme="light"] .food-chip.muted { color:#4e6258; background:#edf3f0; border-color:#c9d7d1; }
+html[data-theme="light"] .food-kcal small,
+html[data-theme="light"] .food-note { color:#60736a; }
+html[data-theme="light"] .food-kcal strong,
+html[data-theme="light"] .macro-row b { color:#1b3028; }
+html[data-theme="light"] .food-kcal em { color:#287f1b; }
+html[data-theme="light"] .macro-row { border-top-color:#d2dfd9; }
+html[data-theme="light"] .macro-row span { color:#586d63; border-right-color:#d2dfd9; }
+html[data-theme="light"] .food-placeholder { color:#657970; }
+html[data-theme="light"] .food-loading { color:#278b20; }
+html[data-theme="light"] .calorie-progress-card,
+html[data-theme="light"] .warning-card { background:#f8fcfa; border-color:#c7d9d1; color:#263d33; }
+html[data-theme="light"] .progress-title { color:#43594f; }
+html[data-theme="light"] .progress-track { background:#dce8e2; }
+html[data-theme="light"] .calorie-stats>div { color:#4d6258; border-right-color:#d0ded7; }
+html[data-theme="light"] .calorie-stats strong { color:#287f1b; }
+html[data-theme="light"] .calorie-stats small { color:#6a7d74; }
+html[data-theme="light"] .warning-card p { color:#596e64; }
+html[data-theme="light"] .warning-card.danger { background:#fff0f2; border-color:#e3a5b1; }
+html[data-theme="light"] .warning-card.danger strong,
+html[data-theme="light"] .warning-card button { color:#b52e4b; }
+html[data-theme="light"] .warning-card button { border-color:#d88b9a; background:#fff8f9; }
+html[data-theme="light"] .warning-card.safe { background:#f1fae9; border-color:#b6d99b; }
+html[data-theme="light"] .warning-card.safe strong { color:#287f1b; }
+html[data-theme="light"] .meal-tabs button { color:#40564c; background:#f7fbf9; border-color:#c2d3cb; }
+html[data-theme="light"] .meal-tabs button.active { color:#17300f; background:linear-gradient(100deg,#70dd39,#b1ed58); border-color:#8bcf58; }
+html[data-theme="light"] .meal-row { background:#fff; border-color:#d0ded7; color:#21372d; }
+html[data-theme="light"] .meal-row span { background:#eef5f0; color:#4b6256; border-color:#d0ded7; }
+html[data-theme="light"] .tips-box { background:#f8fcfa; border-color:#cbdad4; }
+html[data-theme="light"] .tips-box h3 { color:#806d00; }
+html[data-theme="light"] .tips-box ul { color:#4c6157; }
+html[data-theme="light"] .tips-box li::marker { color:#29851f; }
+html[data-theme="light"] .error-box { background:#fff0f2; color:#b52e4b; border-color:#e2a0ad; }
+html[data-theme="light"] .notification-panel { background:#fff; color:#20372d; border-color:#c8d9d1; box-shadow:0 14px 38px rgba(29,67,49,.17); }
+html[data-theme="light"] .notification-panel-title button { color:#52685e; }
+html[data-theme="light"] .notification-item { border-color:#dce7e1; }
+html[data-theme="light"] .notification-item strong { color:#287f1b; }
+html[data-theme="light"] .notification-item span { color:#2e4439; }
+html[data-theme="light"] .notification-item small,
+html[data-theme="light"] .notification-hint { color:#657970; }
+html[data-theme="light"] .notification-hint { border-color:#dce7e1; }
+
+/* Maintain clear hero copy over the banner image in light mode. */
+html[data-theme="light"] .hero-card { border-color:#bcd5cb; box-shadow:0 8px 24px rgba(29,76,56,.09); }
+html[data-theme="light"] .hero-overlay { background:linear-gradient(90deg,rgba(248,253,250,.93) 0%,rgba(248,253,250,.82) 42%,rgba(248,253,250,.24) 78%,rgba(248,253,250,.10) 100%),linear-gradient(180deg,rgba(248,253,250,.02),rgba(237,246,241,.25)); }
+html[data-theme="light"] .hero-content h1 { color:#172923; text-shadow:0 1px 0 rgba(255,255,255,.6); }
+html[data-theme="light"] .hero-features { color:#344b40; }
+html[data-theme="light"] .hero-features i { background:#b6c9bf; }
+html[data-theme="light"] .hero-features span:first-letter { color:#298b20; }
+
+
+/* Refined light theme: clearer hierarchy with a soft mint palette. */
+html[data-theme="light"] .fittrack-app {
+  background: radial-gradient(ellipse at 78% 0%, #e8f6ee 0%, #f4f8f5 38%, #f2f6f4 100%);
+  color: #182b24;
+}
+html[data-theme="light"] .sidebar {
+  background: linear-gradient(180deg, #ffffff 0%, #f0f7f3 100%) !important;
+  border-right: 1px solid #c5d9ce !important;
+  box-shadow: 5px 0 22px rgba(26, 74, 49, .045);
+}
+html[data-theme="light"] .topbar {
+  background: rgba(255,255,255,.82);
+  border-bottom: 1px solid #d2e2d9;
+}
+html[data-theme="light"] .bmi-card,
+html[data-theme="light"] .food-card,
+html[data-theme="light"] .recommend-card,
+html[data-theme="light"] .calorie-progress-card,
+html[data-theme="light"] .warning-card {
+  border: 1px solid #c6dcd0;
+  box-shadow: 0 10px 28px rgba(30, 75, 51, .085), 0 2px 5px rgba(30,75,51,.035);
+}
+html[data-theme="light"] .bmi-card { background: linear-gradient(145deg,#f0fbfa 0%,#ffffff 78%); }
+html[data-theme="light"] .food-card { background: linear-gradient(145deg,#f1faef 0%,#ffffff 76%); }
+html[data-theme="light"] .recommend-card { background: linear-gradient(145deg,#f7f0ff 0%,#ffffff 78%); border-color:#d9c9ed; }
+html[data-theme="light"] .daily-energy { background: linear-gradient(135deg,#e5f7dc 0%,#f8fff4 100%); border:1px solid #a9d28e; box-shadow:inset 0 1px 0 #fff, 0 5px 14px rgba(54,120,37,.08); }
+html[data-theme="light"] .daily-energy small,
+html[data-theme="light"] .daily-energy .energy-info { color:#49634f; }
+html[data-theme="light"] .daily-energy strong,
+html[data-theme="light"] .daily-energy .energy-value { color:#237b1b; }
+html[data-theme="light"] .feature-card { background:linear-gradient(135deg,#e2f7d8 0%,#f7fff4 100%); border:1px solid #8ac96d; box-shadow:0 9px 24px rgba(57,135,37,.11); }
+html[data-theme="light"] .feature-card.history { background:linear-gradient(135deg,#efe2fb 0%,#fcf8ff 100%); border:1px solid #c29be1; box-shadow:0 9px 24px rgba(117,64,159,.10); }
+html[data-theme="light"] .card-title h2,
+html[data-theme="light"] .section-title h2,
+html[data-theme="light"] .feature-card h2 { color:#183128; }
+html[data-theme="light"] .card-title p,
+html[data-theme="light"] .section-title h2 small,
+html[data-theme="light"] .feature-card p { color:#50665b; }
+html[data-theme="light"] input,
+html[data-theme="light"] textarea,
+html[data-theme="light"] select { background:#fff; color:#1a3026; border-color:#afcbbd; }
+html[data-theme="light"] .lime-btn,
+html[data-theme="light"] .meal-row button { background:linear-gradient(105deg,#4bbd2a,#8bdc43); color:#12320d; box-shadow:0 5px 14px rgba(55,145,29,.2); }
+html[data-theme="light"] .side-link.active { background:linear-gradient(90deg,#e1f6d9,#f3fbef); border-color:#7fbd65; color:#1b4b1b; box-shadow:inset 3px 0 #55ad32; }
+html[data-theme="light"] .progress-track { background:#d5e5dc; }
+html[data-theme="light"] .hero-card { box-shadow:0 12px 30px rgba(26,75,49,.12); border-color:#b7d4c5; }
+html[data-theme="light"] .hero-overlay { background:linear-gradient(90deg,rgba(249,255,251,.96) 0%,rgba(249,255,251,.86) 43%,rgba(249,255,251,.3) 80%,rgba(249,255,251,.12) 100%); }
+html[data-theme="light"] .hero-content h1 { color:#172d23; }
+html[data-theme="light"] .hero-features { color:#304d3d; }
+html[data-theme="light"] .icon-button { background:#f0f8f3; border:1px solid #c8ded1; color:#244b35; }
+html[data-theme="light"] .icon-button:hover { background:#e3f4e9; }
+
+/* Messenger-like notification feed and tactile quick-action hover states */
+.notification-wrap .notification-bell { border-radius: 0; background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 5px; transition: color .2s ease, transform .2s ease; }
+.notification-wrap .notification-bell svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.notification-wrap .notification-bell:hover { transform: translateY(-2px) scale(1.06); background: transparent !important; box-shadow: none !important; color: var(--green); }
+.notification-panel { width:min(360px,calc(100vw - 28px)); padding:0; overflow:hidden; border-radius:16px; animation: notif-pop .2s ease-out; }
+.notification-panel-title { padding:15px 16px 12px; margin:0; border-bottom:1px solid rgba(130,160,150,.2); }
+.notification-panel-title>span { display:flex; align-items:baseline; gap:8px; }
+.notification-panel-title>span>small { font:400 10px 'Anuphan',sans-serif; opacity:.65; }
+.notification-panel-title button { width:27px;height:27px;border-radius:50%;line-height:1; }
+.notification-panel-title button:hover { background:rgba(130,150,140,.15); }
+.notification-item { position:relative; flex-direction:row; align-items:flex-start; gap:10px; padding:12px 15px; border-top:0; transition:background .18s ease; }
+.notification-item:hover { background:rgba(120,160,140,.10); }
+.notification-avatar { flex:0 0 38px; width:38px;height:38px;display:grid;place-items:center;border-radius:50%;font-size:17px;background:linear-gradient(145deg,#244d37,#142c22);box-shadow:0 2px 8px rgba(0,0,0,.14); }
+.notification-avatar.goal-avatar { background:linear-gradient(145deg,#56317b,#322047); }
+.notification-message { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }
+.notification-message strong { color:inherit; font-size:11px; }
+.notification-message strong small { font-size:9px;font-weight:400;color:#94a39d; }
+.notification-message span { font-size:11px;line-height:1.5; }
+.notification-message>small { font-size:9px;line-height:1.4;color:#9aa9a3; }
+.notification-unread { flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:#4eaeef;margin:7px 1px 0 0;box-shadow:0 0 0 3px rgba(78,174,239,.12); }
+.notification-hint { display:block;padding:10px 15px 12px;border-top:1px solid rgba(130,160,150,.2); }
+.feature-card { transform:translateY(0) scale(1); transition:transform .24s cubic-bezier(.2,.8,.2,1), box-shadow .24s ease, filter .24s ease; }
+.feature-card:before { content:'';position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(110deg,transparent 25%,rgba(255,255,255,.17) 48%,transparent 70%);transform:translateX(-130%);transition:transform .55s ease; }
+.feature-card:hover { transform:translateY(-5px) scale(1.015);filter:saturate(1.12);box-shadow:0 15px 32px rgba(90,220,55,.2),0 0 0 1px rgba(140,255,90,.16); }
+.feature-card.history:hover { box-shadow:0 15px 32px rgba(165,75,230,.2),0 0 0 1px rgba(200,140,255,.18); }
+.feature-card:hover:before { transform:translateX(130%); }
+.feature-card:active { transform:translateY(-1px) scale(.985); }
+.feature-card .feature-art { transition:transform .25s ease, box-shadow .25s ease; }
+.feature-card:hover .feature-art { transform:rotate(-7deg) scale(1.09);box-shadow:0 0 22px rgba(130,255,70,.2); }
+.feature-card.history:hover .feature-art { box-shadow:0 0 22px rgba(190,100,255,.22); }
+.feature-card .round-arrow { transition:transform .22s ease, box-shadow .22s ease; }
+.feature-card:hover .round-arrow { transform:translateX(4px);box-shadow:0 0 16px rgba(150,255,80,.32); }
+.feature-card.history:hover .round-arrow { box-shadow:0 0 16px rgba(190,100,255,.32); }
+@keyframes notif-pop { from { opacity:0; transform:translateY(-6px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
+html[data-theme="light"] .notification-panel { background:#fff; color:#24372e; border-color:#c9ddd2; }
+html[data-theme="light"] .notification-panel-title { border-color:#e2ebe5; }
+html[data-theme="light"] .notification-item:hover { background:#f3f9f5; }
+html[data-theme="light"] .notification-avatar { background:linear-gradient(145deg,#dff4e5,#c5e9d1); }
+html[data-theme="light"] .notification-avatar.goal-avatar { background:linear-gradient(145deg,#f0e1ff,#dfc7f7); }
+html[data-theme="light"] .notification-message strong { color:#263d32; }
+html[data-theme="light"] .notification-message strong small, html[data-theme="light"] .notification-message>small { color:#6e8276; }
+html[data-theme="light"] .notification-hint { border-color:#e2ebe5; }
+@media (prefers-reduced-motion: reduce) { .feature-card,.feature-card:before,.feature-card .feature-art,.feature-card .round-arrow,.notification-panel { animation:none!important;transition:none!important; } }
+/* Clear, semantic action icons and a bare notification bell */
+.feature-art svg { width:42px; height:42px; display:block; }
+.feature-card.exercise .feature-art { color:#9eff43; }
+.feature-card.history .feature-art { color:#cb75ff; }
+.notification-wrap .notification-bell { appearance:none; -webkit-appearance:none; background:transparent!important; border:0!important; outline-offset:3px; box-shadow:none!important; border-radius:0!important; }
+.notification-wrap .notification-bell:hover, .notification-wrap .notification-bell:focus-visible { background:transparent!important; box-shadow:none!important; color:var(--green); }
+html[data-theme="light"] .notification-wrap .notification-bell { background:transparent!important; border:0!important; box-shadow:none!important; color:#244b35; }
+html[data-theme="light"] .notification-wrap .notification-bell:hover { background:transparent!important; color:#278b20; }
+
+
+/* BMI icon: person/measurement symbol */
+.title-icon .bmi-title-svg{width:23px;height:23px;display:block;flex:none}
+
+/* Notification redesign: separate email / social-style toast cards */
+.notification-wrap .notification-panel {
+  position: fixed; z-index: 9999; top: 88px; right: 24px;
+  width: min(370px, calc(100vw - 28px)); max-height: calc(100vh - 110px);
+  overflow: visible; padding: 0; border: 0; border-radius: 0;
+  background: transparent; color: inherit; box-shadow: none;
+  display: flex; flex-direction: column; gap: 10px;
+  animation: none;
+}
+.notification-panel-title {
+  order: -1; display:flex; align-items:center; justify-content:space-between;
+  margin:0 0 2px; padding:0 2px 4px; border:0; font-size:12px;
+  color:var(--muted,#82918b); text-shadow:0 1px 5px rgba(0,0,0,.12);
+}
+.notification-panel-title>span { display:flex; align-items:baseline; gap:7px; }
+.notification-panel-title>span>small { font-size:10px; }
+.notification-panel-title button { color:inherit; width:24px; height:24px; font-size:20px; }
+.notification-panel .notification-item {
+  box-sizing:border-box; width:100%; min-height:76px; padding:13px 14px;
+  display:flex; flex-direction:row; align-items:flex-start; gap:11px;
+  border:1px solid rgba(150,175,162,.24); border-radius:14px;
+  background:rgba(13,27,24,.97); color:#f5faf6;
+  box-shadow:0 8px 26px rgba(0,0,0,.24),0 2px 7px rgba(0,0,0,.12);
+  animation:toast-enter .42s cubic-bezier(.2,.8,.2,1) both;
+}
+.notification-panel .notification-item:nth-of-type(3) { animation-delay:.22s; }
+.notification-panel .notification-item:hover { transform:translateX(-3px); background:rgba(20,39,32,.99); }
+.notification-panel .notification-avatar { flex:0 0 38px; width:38px; height:38px; }
+.notification-panel .notification-message { flex:1; min-width:0; gap:4px; }
+.notification-panel .notification-message strong { font-size:12px; color:#f4faf5; }
+.notification-panel .notification-message strong small { font-size:10px; color:#a7b8ad; }
+.notification-panel .notification-message span { font-size:12px; line-height:1.5; color:#eef5f0; }
+.notification-panel .notification-message>small { font-size:10px; line-height:1.45; color:#aab9b0; }
+.notification-panel .notification-unread { margin-top:6px; }
+.notification-panel .notification-hint { display:none; }
+html[data-theme="light"] .notification-panel-title { color:#5c7065; text-shadow:none; }
+html[data-theme="light"] .notification-panel .notification-item {
+  background:rgba(255,255,255,.98); color:#24372e;
+  border-color:#dce9e0; box-shadow:0 8px 26px rgba(30,65,45,.14),0 2px 7px rgba(30,65,45,.07);
+}
+html[data-theme="light"] .notification-panel .notification-item:hover { background:#f9fffb; }
+html[data-theme="light"] .notification-panel .notification-message strong { color:#263d32; }
+html[data-theme="light"] .notification-panel .notification-message strong small,
+html[data-theme="light"] .notification-panel .notification-message>small { color:#718378; }
+html[data-theme="light"] .notification-panel .notification-message span { color:#2e4438; }
+@keyframes toast-enter { from { opacity:0; transform:translate3d(28px,-8px,0) scale(.97); } to { opacity:1; transform:translate3d(0,0,0) scale(1); } }
+@media(max-width:600px) { .notification-wrap .notification-panel { top:76px; right:12px; width:min(360px,calc(100vw - 24px)); } }
+@media(prefers-reduced-motion:reduce) { .notification-panel .notification-item { animation:none!important; transition:none!important; } }
+
+
+/* Consistent, minimal dumbbell mark and clean left-aligned notification typography */
+.notification-panel .notification-item { text-align:left; justify-content:flex-start; }
+.notification-panel .notification-message { text-align:left; align-items:flex-start; }
+.notification-panel .notification-message strong,
+.notification-panel .notification-message span,
+.notification-panel .notification-message>small { display:block; width:100%; text-align:left; }
+.notification-panel .notification-avatar.dumbbell-avatar {
+  flex:0 0 36px; width:36px; height:36px; border-radius:10px;
+  display:grid; place-items:center; background:transparent!important;
+  box-shadow:none!important; color:#83dc78; margin-top:1px;
+}
+.notification-panel .notification-avatar.dumbbell-avatar svg {
+  display:block; width:25px; height:25px; fill:none; stroke:currentColor;
+  stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round;
+}
+html[data-theme="light"] .notification-panel .notification-avatar.dumbbell-avatar { color:#278b43; }
+
+/* Keep notification toast cards; remove only any surface behind the message text */
+.notification-wrap .notification-panel {
+  background:transparent!important; border:0!important; box-shadow:none!important;
+}
+.notification-wrap .notification-panel .notification-item {
+  background:rgba(13,27,24,.97)!important;
+  border:1px solid rgba(150,175,162,.24)!important;
+  border-radius:14px!important;
+  box-shadow:0 8px 26px rgba(0,0,0,.24),0 2px 7px rgba(0,0,0,.12)!important;
+  color:#f5faf6;
+}
+html[data-theme="light"] .notification-wrap .notification-panel .notification-item {
+  background:rgba(255,255,255,.98)!important;
+  border-color:#dce9e0!important;
+  box-shadow:0 8px 26px rgba(30,65,45,.14),0 2px 7px rgba(30,65,45,.07)!important;
+  color:#24372e;
+}
+.notification-wrap .notification-panel .notification-message,
+.notification-wrap .notification-panel .notification-message strong,
+.notification-wrap .notification-panel .notification-message span,
+.notification-wrap .notification-panel .notification-message>small {
+  background:transparent!important; box-shadow:none!important;
+}
+.notification-wrap .notification-panel .notification-item:hover { transform:translateX(-3px); }
+html[data-theme="light"] .notification-wrap .notification-panel .notification-item:hover { background:#f9fffb!important; }
+
+
+/* Medium hero logo size; preserve its reserved height so banner content does not shift. */
+.hero-logo {
+  width: 380px !important;
+  height: 125px !important;
+  object-fit: cover !important;
+  object-position: center center !important;
+  transform: scale(1.06) !important;
+  transform-origin: left top !important;
+}
+@media (max-width: 760px) {
+  .hero-logo {
+    width: 260px !important;
+    height: 92px !important;
+    object-fit: cover !important;
+    object-position: center center !important;
+    transform: scale(1.04) !important;
+    transform-origin: left top !important;
+  }
+}
+
+`;
+
+if (typeof document !== "undefined" && !document.getElementById("fittrack-final-styles")) {
+  const style = document.createElement("style");
+  style.id = "fittrack-final-styles";
+  style.textContent = styles;
+  document.head.appendChild(style);
 }
