@@ -290,8 +290,8 @@ export default function Dashboard() {
         <nav className="side-menu">
           <button className="side-link active" onClick={() => navigate("/")}><span className="side-icon">⌂</span>หน้าหลัก</button>
           <button className="side-link" onClick={() => navigate("/exercises")}><span className="side-icon side-icon-dumbbell" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 18v12M14 14v20M34 14v20M40 18v12M14 24h20M8 24h6M34 24h6" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 18v12M11 14v20M37 14v20M43 18v12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg></span>ออกกำลังกาย</button>
-          <button className="side-link" onClick={() => navigate("/history")}><span className="side-icon">◷</span>ประวัติ</button>
-          <button className="side-link" onClick={() => navigate("/profile")}><span className="side-icon">⚙</span>ตั้งค่า</button>
+          <button className="side-link" onClick={() => navigate("/history")}><span className="side-icon">◷</span>ประวัติการออกกำลังกาย</button>
+          <button className="side-link" onClick={() => navigate("/settings")}><span className="side-icon">⚙</span>ตั้งค่า</button>
         </nav>
 
         <div className="sidebar-quote">
@@ -1586,6 +1586,60 @@ html[data-theme="light"] .footer-brand{color:#20382d}
   .footer-brand{width:100%;justify-content:center}
   .footer-description{font-size:10px;width:100%}
   .footer-copyright{font-size:9px;width:100%;text-align:center}
+}
+
+
+/* Keep food upload and analysis panels stable when an image is selected. */
+.food-layout {
+  align-items: stretch;
+  min-width: 0;
+}
+.upload-box {
+  position: relative;
+  height: 230px;
+  min-height: 230px;
+  max-height: 230px;
+  flex: 0 0 230px;
+  min-width: 0;
+}
+.upload-box > img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.food-result-box {
+  height: 230px;
+  min-height: 230px;
+  max-height: 230px;
+  min-width: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(145,255,62,.35) transparent;
+}
+.food-placeholder,
+.food-loading {
+  min-height: 100%;
+  height: 100%;
+}
+@media (max-width: 760px) {
+  .upload-box {
+    height: 210px;
+    min-height: 210px;
+    max-height: 210px;
+    flex-basis: 210px;
+  }
+  .food-result-box {
+    height: 210px;
+    min-height: 210px;
+    max-height: 210px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .upload-box, .upload-box * { transition-duration: .01ms !important; }
 }
 
 `;
