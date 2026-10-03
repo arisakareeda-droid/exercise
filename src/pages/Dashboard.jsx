@@ -1710,6 +1710,18 @@ html[data-theme="light"] .footer-brand{color:#20382d}
   .upload-box, .upload-box * { transition-duration: .01ms !important; }
 }
 
+
+/* โหมดสว่าง: แอนิเมชันเรืองแสงของโลโก้ต้องคงการกลับสี (invert) ไว้ ไม่งั้น filter ของ animation จะทับ
+   จนตัวอักษรสีขาวของโลโก้หายไปบนพื้นขาว */
+@keyframes fittrack-logo-glow-light {
+  0%, 100% { filter: invert(1) hue-rotate(180deg) drop-shadow(0 0 2px rgba(60,170,40,.10)); }
+  50% { filter: invert(1) hue-rotate(180deg) drop-shadow(0 0 5px rgba(60,170,40,.28)); }
+}
+html[data-theme="light"] .sidebar-logo {
+  filter: invert(1) hue-rotate(180deg);
+  mix-blend-mode: multiply;
+  animation-name: fittrack-logo-glow-light !important;
+}
 `;
 
 if (typeof document !== "undefined" && !document.getElementById("fittrack-final-styles")) {

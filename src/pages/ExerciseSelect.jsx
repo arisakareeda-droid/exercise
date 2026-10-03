@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import BodyMap, { BodyThumb, PREFERRED_VIEW, VISIBLE_PARTS } from "./BodyMap";
 
 // แคชชื่อผู้ใช้ไว้ เพื่อให้เปลี่ยนหน้าแล้วชื่อขึ้นทันที ไม่กระพริบเป็นชื่ออื่น
 const NAME_CACHE_KEY = "fittrack-user-name";
@@ -34,65 +35,447 @@ const getSavedDailyCalories = () => {
   }
 };
 
+// ======================================================================
+// ข้อมูลท่าออกกำลังกาย — ใช้กรองด้วย 3 ตัวแปรร่วมกัน:
+// ส่วนร่างกาย (parts) + ประเภท (equipmentType) + ชนิดอุปกรณ์ (equipment)
+// ======================================================================
+const PART_LABEL = {
+  shoulder: "ไหล่",
+  chest: "อก",
+  back: "หลัง",
+  arm: "แขน",
+  core: "ท้อง",
+  leg: "สะโพก",
+  leg2: "ต้นขา",
+  calf: "น่อง",
+};
+
+const NONE = "none";
+
+const partNames = (parts) => parts.map((p) => PART_LABEL[p]).join(" · ");
+const equipmentLabel = (item) =>
+  item.equipmentType === "bodyweight" ? "ไม่ใช้อุปกรณ์" : item.equipment;
+const equipmentIcon = (item) => (item.equipmentType === "bodyweight" ? "🧍" : "🏋️");
+
+// [id, name, thaiName, parts, equipment, sets, reps, level, howTo]
+const makeExercise = (row, extra = {}) => {
+  const [id, name, thaiName, parts, equipment, sets, reps, level, howTo] = row;
+  const names = parts.map((p) => PART_LABEL[p]).join(" และ ");
+  return {
+    id,
+    name,
+    thaiName,
+    parts,
+    bodyPart: parts[0],
+    muscle: names,
+    equipmentType: equipment === NONE ? "bodyweight" : "equipment",
+    equipment,
+    sets: `${sets} เซ็ต`,
+    reps,
+    level,
+    howTo,
+    description:
+      equipment === NONE
+        ? `บริหารกล้ามเนื้อ${names} ด้วยน้ำหนักตัว`
+        : `บริหารกล้ามเนื้อ${names} โดยใช้ ${equipment}`,
+    video: null,
+    ...extra,
+  };
+};
+
+const BODYWEIGHT_ROWS = [
+  // ไหล่
+  ["pike_push_up", "Pike Push Up", "พุชอัพแบบพับสะโพก", ["shoulder"], NONE, 3, "8-12 ครั้ง", "กลาง", "ตั้งท่าวิดพื้นแล้วยกสะโพกขึ้นให้ลำตัวเป็นรูปตัว V คว่ำ งอศอกลดศีรษะลงใกล้พื้น แล้วดันตัวกลับขึ้น"],
+  ["handstand_push_up", "Handstand Push Up", "แฮนด์สแตนด์พุชอัพ", ["shoulder", "arm"], NONE, 3, "3-6 ครั้ง", "ยาก", "ตั้งมือกับพื้นห่างกำแพงเล็กน้อย เตะขาขึ้นพิงกำแพง งอศอกลดศีรษะลงช้า ๆ แล้วดันกลับขึ้น"],
+  ["plank_shoulder_tap", "Plank Shoulder Tap", "แพลงก์แตะไหล่", ["shoulder", "core"], NONE, 3, "20 ครั้ง", "กลาง", "ตั้งท่าแพลงก์แขนตรง กางเท้าให้กว้างพอทรงตัว สลับยกมือแตะไหล่ฝั่งตรงข้ามโดยไม่ให้สะโพกส่าย"],
+  ["arm_circle", "Arm Circle", "หมุนแขน", ["shoulder"], NONE, 2, "20 ครั้ง", "ง่าย", "ยืนกางแขนระดับไหล่ หมุนแขนเป็นวงกลมเล็กไปวงใหญ่ ทั้งไปข้างหน้าและข้างหลัง โดยให้ไหล่ผ่อนคลาย"],
+  // อก
+  ["push_up", "Push Up", "วิดพื้น", ["chest", "arm"], NONE, 3, "10-15 ครั้ง", "กลาง", "วางมือกว้างกว่าไหล่เล็กน้อย ลำตัวตรงเป็นเส้นเดียว งอศอกลดอกลงใกล้พื้น แล้วดันกลับขึ้น"],
+  ["wide_push_up", "Wide Push Up", "วิดพื้นมือกว้าง", ["chest"], NONE, 3, "8-12 ครั้ง", "กลาง", "วางมือกว้างกว่าไหล่ชัดเจน ลำตัวตรง ลดอกลงช้า ๆ ให้ศอกชี้ออกด้านข้าง แล้วดันกลับ"],
+  ["diamond_push_up", "Diamond Push Up", "วิดพื้นมือเพชร", ["arm", "chest"], NONE, 3, "8-12 ครั้ง", "ยาก", "วางมือชิดกันใต้อกให้นิ้วโป้งและนิ้วชี้ประกบเป็นรูปข้าวหลามตัด ลดอกลงโดยให้ศอกแนบลำตัว แล้วดันกลับ"],
+  ["incline_push_up", "Incline Push Up", "วิดพื้นมือสูง", ["chest"], NONE, 3, "10-15 ครั้ง", "ง่าย", "วางมือบนขอบโต๊ะหรือพื้นที่สูงที่มั่นคง ลำตัวตรง ลดอกลงเข้าหาขอบแล้วดันกลับ ท่านี้ง่ายกว่าวิดพื้นปกติ"],
+  ["decline_push_up", "Decline Push Up", "วิดพื้นเท้าสูง", ["chest", "shoulder"], NONE, 3, "8-12 ครั้ง", "ยาก", "วางเท้าบนที่สูงที่มั่นคง มือบนพื้น ลำตัวตรง ลดอกลงแล้วดันกลับ ท่านี้เน้นอกส่วนบนและไหล่"],
+  // หลัง
+  ["superman", "Superman", "ซูเปอร์แมน", ["back"], NONE, 3, "12-15 ครั้ง", "ง่าย", "นอนคว่ำเหยียดแขนไปข้างหน้า ยกแขนและขาขึ้นจากพื้นพร้อมกัน ค้างไว้ 2 วินาที แล้วลดลงช้า ๆ"],
+  ["bird_dog", "Bird Dog", "เบิร์ดด็อก", ["back", "core"], NONE, 3, "10 ครั้ง/ข้าง", "ง่าย", "ตั้งท่าคลาน เหยียดแขนข้างหนึ่งไปข้างหน้าและขาฝั่งตรงข้ามไปข้างหลังพร้อมกัน ค้างแล้วสลับข้างโดยลำตัวไม่เอียง"],
+  ["reverse_snow_angel", "Reverse Snow Angel", "สโนว์แองเจิลย้อนกลับ", ["back", "shoulder"], NONE, 3, "12 ครั้ง", "กลาง", "นอนคว่ำยกแขนลอยจากพื้น กวาดแขนเป็นครึ่งวงกลมจากข้างลำตัวไปเหนือศีรษะแล้วกลับมาช้า ๆ"],
+  // แขน
+  ["tricep_dip", "Tricep Dip", "ดิปไตรเซปส์", ["arm"], NONE, 3, "10-15 ครั้ง", "กลาง", "นั่งขอบเก้าอี้ที่มั่นคง วางมือข้างสะโพก เลื่อนก้นออกมา งอศอกลดตัวลงแล้วดันกลับขึ้น"],
+  ["close_grip_push_up", "Close Grip Push Up", "วิดพื้นมือแคบ", ["arm", "chest"], NONE, 3, "8-12 ครั้ง", "กลาง", "วางมือแคบกว่าไหล่ ศอกแนบลำตัว ลดอกลงช้า ๆ แล้วดันกลับ ท่านี้เน้นกล้ามเนื้อด้านหลังแขน"],
+  // ท้อง
+  ["crunch", "Crunch", "ครันช์", ["core"], NONE, 3, "15-20 ครั้ง", "ง่าย", "นอนหงายงอเข่า วางมือข้างศีรษะ ยกไหล่ขึ้นจากพื้นโดยใช้หน้าท้อง ไม่ดึงคอ แล้วลดลงช้า ๆ"],
+  ["plank", "Plank", "แพลงก์", ["core"], NONE, 3, "30-45 วินาที", "ง่าย", "ค้ำตัวบนข้อศอกและปลายเท้า ลำตัวตรงเป็นเส้นเดียว เกร็งหน้าท้องและก้นค้างไว้ตามเวลา"],
+  ["leg_raise", "Leg Raise", "ยกขา", ["core"], NONE, 3, "10-15 ครั้ง", "กลาง", "นอนหงายเหยียดขา ยกขาชิดกันขึ้นจนตั้งฉากกับพื้น แล้วลดลงช้า ๆ โดยไม่แอ่นหลัง"],
+  ["russian_twist", "Russian Twist", "รัสเซียนทวิสต์", ["core"], NONE, 3, "20 ครั้ง", "กลาง", "นั่งเอนตัวเล็กน้อย ประสานมือแล้วบิดลำตัวสลับซ้ายขวา จะยกเท้าลอยหรือวางพื้นก็ได้"],
+  ["bicycle_crunch", "Bicycle Crunch", "ครันช์ปั่นจักรยาน", ["core"], NONE, 3, "20 ครั้ง", "กลาง", "นอนหงายมือข้างศีรษะ ยกขาแล้วปั่นสลับ พร้อมบิดศอกเข้าหาเข่าฝั่งตรงข้าม"],
+  ["mountain_climber", "Mountain Climber", "ปีนเขา", ["core", "leg2"], NONE, 3, "30 วินาที", "กลาง", "ตั้งท่าวิดพื้นแขนตรง สลับดึงเข่าเข้าหาอกอย่างรวดเร็วโดยสะโพกไม่ยกสูง"],
+  // ขา / สะโพก / น่อง
+  ["lunges", "Lunges", "ลันจ์", ["leg2", "leg"], NONE, 3, "10 ครั้ง/ข้าง", "ง่าย", "ก้าวเท้าข้างหนึ่งไปข้างหน้า ย่อเข่าทั้งสองจนต้นขาหน้าขนานพื้น แล้วดันกลับ สลับข้าง"],
+  ["reverse_lunges", "Reverse Lunges", "ลันจ์ถอยหลัง", ["leg2", "leg"], NONE, 3, "10 ครั้ง/ข้าง", "ง่าย", "ก้าวเท้าข้างหนึ่งถอยไปด้านหลัง ย่อเข่าลง แล้วดันกลับสู่ท่ายืน สลับข้าง"],
+  ["jump_squat", "Jump Squat", "กระโดดสควอท", ["leg2", "leg"], NONE, 3, "12 ครั้ง", "กลาง", "ย่อสควอทแล้วกระโดดขึ้นอย่างมีแรง ลงพื้นนุ่ม ๆ ด้วยปลายเท้าแล้วย่อต่อเนื่อง"],
+  ["bulgarian_split_squat", "Bulgarian Split Squat", "บัลแกเรียนสปลิตสควอท", ["leg2", "leg"], NONE, 3, "8-10 ครั้ง/ข้าง", "ยาก", "วางเท้าหลังบนเก้าอี้หรือม้านั่งที่มั่นคง ย่อเข่าขาหน้าลงจนต้นขาขนานพื้น แล้วดันกลับ"],
+  ["calf_raise", "Calf Raise", "เขย่งน่อง", ["calf"], NONE, 3, "15-20 ครั้ง", "ง่าย", "ยืนแยกเท้าเท่าสะโพก เขย่งขึ้นสุดปลายเท้า ค้างสั้น ๆ แล้วลดส้นลงช้า ๆ"],
+  ["glute_bridge", "Glute Bridge", "สะพานสะโพก", ["leg"], NONE, 3, "12-15 ครั้ง", "ง่าย", "นอนหงายงอเข่า วางเท้าราบกับพื้น ยกสะโพกขึ้นจนลำตัวเป็นเส้นตรง เกร็งก้นค้างไว้แล้วลดลง"],
+  ["hip_thrust", "Hip Thrust", "ฮิปทรัสต์", ["leg"], NONE, 3, "12-15 ครั้ง", "กลาง", "พิงหลังส่วนบนกับขอบเก้าอี้หรือโซฟาที่มั่นคง งอเข่า ดันสะโพกขึ้นจนลำตัวขนานพื้น เกร็งก้นแล้วลดลง"],
+  ["donkey_kick", "Donkey Kick", "ดองกี้คิก", ["leg"], NONE, 3, "12 ครั้ง/ข้าง", "ง่าย", "ตั้งท่าคลาน งอเข่าข้างหนึ่งแล้วเตะขึ้นฟ้าโดยฝ่าเท้าชี้ขึ้น เกร็งก้นแล้วลดลง สลับข้าง"],
+  ["fire_hydrant", "Fire Hydrant", "ไฟร์ไฮดรานต์", ["leg"], NONE, 3, "12 ครั้ง/ข้าง", "ง่าย", "ตั้งท่าคลาน ยกเข่าข้างหนึ่งออกด้านข้างโดยคงมุมงอเข่า ค้างสั้น ๆ แล้วลดลง สลับข้าง"],
+];
+
+const EQUIPMENT_ROWS = [
+  // ไหล่
+  ["db_shoulder_press", "Dumbbell Shoulder Press", "ดัมเบลช็อลเดอร์เพรส", ["shoulder", "arm"], "ดัมเบล", 3, "10-12 ครั้ง", "กลาง", "นั่งหรือยืนหลังตรง ถือดัมเบลระดับหู ดันขึ้นเหนือศีรษะจนแขนเกือบตรง แล้วลดลงช้า ๆ"],
+  ["lateral_raise", "Lateral Raise", "ยกดัมเบลด้านข้าง", ["shoulder"], "ดัมเบล", 3, "12-15 ครั้ง", "ง่าย", "ยืนถือดัมเบลข้างลำตัว ยกแขนออกด้านข้างจนเสมอไหล่ โดยงอศอกเล็กน้อย แล้วลดลงช้า ๆ"],
+  ["front_raise", "Front Raise", "ยกดัมเบลด้านหน้า", ["shoulder"], "ดัมเบล", 3, "10-12 ครั้ง", "ง่าย", "ยืนถือดัมเบลหน้าต้นขา ยกแขนตรงไปข้างหน้าจนเสมอไหล่ แล้วลดลงช้า ๆ โดยไม่เหวี่ยงตัว"],
+  ["arnold_press", "Arnold Press", "อาร์โนลด์เพรส", ["shoulder"], "ดัมเบล", 3, "8-12 ครั้ง", "กลาง", "เริ่มถือดัมเบลหน้าอกโดยฝ่ามือหันเข้าหาตัว ดันขึ้นพร้อมหมุนฝ่ามือออกด้านหน้า แล้วกลับท่าเดิม"],
+  ["upright_row", "Upright Row", "อัพไรต์โรว์", ["shoulder"], "บาร์เบล", 3, "10-12 ครั้ง", "กลาง", "ถือบาร์เบลหน้าต้นขา ดึงบาร์ขึ้นชิดลำตัวถึงระดับอก โดยให้ศอกนำสูงกว่าข้อมือ แล้วลดลงช้า ๆ"],
+  ["reverse_fly", "Reverse Fly", "รีเวิร์สฟลาย", ["shoulder", "back"], "เครื่องออกกำลังกาย", 3, "12-15 ครั้ง", "ง่าย", "นั่งหน้าเครื่องแล้วจับด้ามจับ ดึงแขนออกไปด้านหลังพร้อมบีบสะบัก แล้วกลับช้า ๆ"],
+  ["barbell_overhead_press", "Barbell Overhead Press", "บาร์เบลโอเวอร์เฮดเพรส", ["shoulder", "arm"], "บาร์เบล", 3, "6-10 ครั้ง", "ยาก", "ยืนเกร็งหน้าท้อง ถือบาร์ที่ระดับไหล่ ดันขึ้นเหนือศีรษะจนแขนตรงโดยไม่แอ่นหลัง แล้วลดลง"],
+  ["band_face_pull", "Band Face Pull", "เฟซพูลยางยืด", ["shoulder", "back"], "ยางยืด", 3, "12-15 ครั้ง", "ง่าย", "ผูกยางยืดระดับหน้า ดึงเข้าหาใบหน้าโดยศอกสูง บีบสะบักเข้าหากัน แล้วปล่อยกลับช้า ๆ"],
+  ["kb_press", "Kettlebell Press", "เคตเทิลเบลเพรส", ["shoulder", "arm"], "Kettlebell", 3, "8-10 ครั้ง", "กลาง", "ถือเคตเทิลเบลที่ระดับไหล่ ข้อมือตรง ดันขึ้นเหนือศีรษะแล้วลดลงช้า ๆ"],
+  ["cable_lateral_raise", "Cable Lateral Raise", "ยกด้านข้างด้วยเคเบิล", ["shoulder"], "เคเบิล", 3, "12-15 ครั้ง", "กลาง", "ยืนข้างเครื่อง จับสายเคเบิลด้วยมือที่อยู่ไกล ยกแขนออกด้านข้างจนเสมอไหล่ แล้วลดช้า ๆ"],
+  // อก
+  ["bb_bench_press", "Barbell Bench Press", "เบนช์เพรสบาร์เบล", ["chest", "arm"], "บาร์เบล", 4, "6-10 ครั้ง", "ยาก", "นอนบนม้านั่ง จับบาร์กว้างกว่าไหล่เล็กน้อย ลดบาร์ลงแตะกลางอกเบา ๆ แล้วดันขึ้น ควรมีผู้ช่วยดู"],
+  ["db_bench_press", "Dumbbell Bench Press", "เบนช์เพรสดัมเบล", ["chest", "arm"], "ดัมเบล", 3, "8-12 ครั้ง", "กลาง", "นอนบนม้านั่งถือดัมเบลสองข้าง ดันขึ้นเหนืออกจนแขนเกือบตรง แล้วลดลงช้า ๆ"],
+  ["incline_db_press", "Incline Dumbbell Press", "อินไคลน์เพรสดัมเบล", ["chest"], "ดัมเบล", 3, "8-12 ครั้ง", "กลาง", "ปรับม้านั่งให้เอียงเล็กน้อย ถือดัมเบลดันขึ้นเหนืออกส่วนบน แล้วลดลงช้า ๆ"],
+  ["cable_fly", "Cable Fly", "เคเบิลฟลาย", ["chest"], "เคเบิล", 3, "12-15 ครั้ง", "กลาง", "ยืนกลางเครื่องจับสายเคเบิลสองข้าง งอศอกเล็กน้อย โน้มแขนมาบรรจบกันหน้าอก แล้วกลับช้า ๆ"],
+  ["chest_press_machine", "Chest Press Machine", "เครื่องเชสต์เพรส", ["chest", "arm"], "เครื่องออกกำลังกาย", 3, "10-12 ครั้ง", "ง่าย", "ปรับเบาะให้ด้ามจับอยู่ระดับกลางอก ดันออกจนแขนเกือบตรง แล้วกลับช้า ๆ"],
+  ["band_chest_press", "Band Chest Press", "เชสต์เพรสยางยืด", ["chest"], "ยางยืด", 3, "12-15 ครั้ง", "ง่าย", "คล้องยางยืดไว้ที่หลังส่วนบน จับปลายสองข้าง ดันมือไปข้างหน้าจนแขนตรง แล้วกลับช้า ๆ"],
+  ["kb_floor_press", "Kettlebell Floor Press", "ฟลอร์เพรสเคตเทิลเบล", ["chest", "arm"], "Kettlebell", 3, "8-10 ครั้ง/ข้าง", "กลาง", "นอนหงายถือเคตเทิลเบลมือเดียว ดันขึ้นเหนืออกจนแขนตรง ลดลงจนศอกแตะพื้นแล้วดันใหม่"],
+  // หลัง
+  ["bb_row", "Bent-Over Barbell Row", "บาร์เบลโรว์", ["back"], "บาร์เบล", 4, "8-10 ครั้ง", "ยาก", "โน้มตัวหลังตรง ถือบาร์เบล ดึงบาร์เข้าหาท้องน้อยพร้อมบีบสะบัก แล้วลดลงช้า ๆ"],
+  ["db_row", "Dumbbell Row", "โรว์ดัมเบล", ["back", "arm"], "ดัมเบล", 3, "10-12 ครั้ง/ข้าง", "ง่าย", "ใช้มือและเข่าข้างหนึ่งพิงม้านั่ง หลังตรง ดึงดัมเบลเข้าหาสะโพก แล้วลดลงช้า ๆ"],
+  ["lat_pulldown", "Lat Pulldown", "แลตพูลดาวน์", ["back"], "เครื่องออกกำลังกาย", 3, "10-12 ครั้ง", "ง่าย", "นั่งล็อกต้นขา จับบาร์กว้างกว่าไหล่ ดึงบาร์ลงถึงระดับอกส่วนบนโดยไม่เอนตัวมาก แล้วปล่อยช้า ๆ"],
+  ["seated_cable_row", "Seated Cable Row", "ซีทเคเบิลโรว์", ["back"], "เคเบิล", 3, "10-12 ครั้ง", "กลาง", "นั่งหลังตรง ดึงด้ามจับเข้าหาท้องพร้อมบีบสะบัก แล้วปล่อยกลับช้า ๆ"],
+  ["band_pull_apart", "Band Pull Apart", "ดึงยางยืดแยกมือ", ["back", "shoulder"], "ยางยืด", 3, "15 ครั้ง", "ง่าย", "ถือยางยืดสองมือระดับอก แขนตรง ดึงแยกออกด้านข้างจนยางแตะอก บีบสะบัก แล้วกลับช้า ๆ"],
+  ["kb_swing", "Kettlebell Swing", "เคตเทิลเบลสวิง", ["back", "leg"], "Kettlebell", 3, "12-15 ครั้ง", "กลาง", "ยืนกว้างกว่าไหล่ ถือเคตเทิลเบลสองมือ ดันสะโพกไปข้างหน้าเหวี่ยงให้ลอยถึงระดับอก ใช้แรงจากสะโพก ไม่ใช่แขน"],
+  ["deadlift", "Deadlift", "เดดลิฟต์", ["back", "leg", "leg2"], "บาร์เบล", 4, "5-8 ครั้ง", "ยาก", "ยืนเท้าชิดบาร์ หลังตรง งอสะโพกจับบาร์ ดันเท้าลงพื้นยืดตัวขึ้นพร้อมบาร์ แล้ววางลงอย่างควบคุม"],
+  ["chest_supported_row", "Chest-Supported Row", "โรว์พิงม้านั่ง", ["back"], "ม้านั่ง", 3, "10-12 ครั้ง", "ง่าย", "นอนคว่ำบนม้านั่งเอียง ถือดัมเบลสองข้าง ดึงศอกขึ้นด้านหลังพร้อมบีบสะบัก แล้วลดลงช้า ๆ"],
+  // แขน
+  ["db_curl", "Dumbbell Curl", "เคิร์ลดัมเบล", ["arm"], "ดัมเบล", 3, "10-12 ครั้ง", "ง่าย", "ยืนถือดัมเบลฝ่ามือหันไปข้างหน้า งอศอกยกดัมเบลขึ้นโดยศอกอยู่กับที่ แล้วลดลงช้า ๆ"],
+  ["bb_curl", "Barbell Curl", "เคิร์ลบาร์เบล", ["arm"], "บาร์เบล", 3, "8-12 ครั้ง", "กลาง", "ยืนถือบาร์เบลฝ่ามือหงาย งอศอกยกบาร์ขึ้นโดยไม่เหวี่ยงตัว แล้วลดลงช้า ๆ"],
+  ["hammer_curl", "Hammer Curl", "แฮมเมอร์เคิร์ล", ["arm"], "ดัมเบล", 3, "10-12 ครั้ง", "ง่าย", "ถือดัมเบลฝ่ามือหันเข้าหาลำตัว งอศอกยกขึ้นแล้วลดลงช้า ๆ"],
+  ["overhead_tricep_ext", "Overhead Tricep Extension", "เหยียดไตรเซปส์เหนือศีรษะ", ["arm"], "ดัมเบล", 3, "10-12 ครั้ง", "กลาง", "ถือดัมเบลสองมือเหนือศีรษะ งอศอกลดไปด้านหลังศีรษะ แล้วเหยียดแขนกลับโดยศอกชี้ขึ้น"],
+  ["cable_pushdown", "Cable Tricep Pushdown", "ผลักเคเบิลไตรเซปส์", ["arm"], "เคเบิล", 3, "12-15 ครั้ง", "ง่าย", "ยืนจับบาร์หรือเชือกที่ระดับอก ศอกแนบลำตัว กดลงจนแขนตรง แล้วปล่อยกลับช้า ๆ"],
+  ["band_curl", "Band Curl", "เคิร์ลยางยืด", ["arm"], "ยางยืด", 3, "12-15 ครั้ง", "ง่าย", "เหยียบยางยืดไว้ใต้เท้า จับปลายสองข้าง งอศอกดึงขึ้นแล้วลดลงช้า ๆ"],
+  ["bench_dip", "Bench Dip", "ดิปม้านั่ง", ["arm", "chest"], "ม้านั่ง", 3, "10-15 ครั้ง", "กลาง", "วางมือบนขอบม้านั่งด้านหลัง เหยียดขาไปข้างหน้า งอศอกลดตัวลงแล้วดันกลับ"],
+  // ท้อง
+  ["cable_crunch", "Cable Crunch", "ครันช์เคเบิล", ["core"], "เคเบิล", 3, "12-15 ครั้ง", "กลาง", "คุกเข่าหน้าเครื่องถือเชือกไว้ข้างศีรษะ ม้วนลำตัวลงโดยใช้หน้าท้อง แล้วกลับช้า ๆ"],
+  ["ab_machine", "Ab Machine Crunch", "ครันช์เครื่องบริหารหน้าท้อง", ["core"], "เครื่องออกกำลังกาย", 3, "12-15 ครั้ง", "ง่าย", "ปรับเบาะและน้ำหนัก ใช้หน้าท้องม้วนลำตัวเข้าหาเข่า แล้วกลับช้า ๆ"],
+  ["kb_russian_twist", "Kettlebell Russian Twist", "รัสเซียนทวิสต์ถือเคตเทิลเบล", ["core"], "Kettlebell", 3, "20 ครั้ง", "กลาง", "นั่งเอนตัวเล็กน้อย ถือเคตเทิลเบลสองมือ แล้วบิดลำตัวสลับซ้ายขวา"],
+  ["pallof_press", "Band Pallof Press", "พาลอฟเพรสยางยืด", ["core"], "ยางยืด", 3, "10-12 ครั้ง/ข้าง", "กลาง", "ยืนข้างจุดยึดยาง ถือยางที่หน้าอก ดันออกไปข้างหน้าพร้อมต้านการบิดของลำตัว แล้วกลับ"],
+  ["decline_sit_up", "Decline Sit Up", "ซิทอัพม้านั่งเอียง", ["core"], "ม้านั่ง", 3, "10-15 ครั้ง", "กลาง", "นอนบนม้านั่งเอียง ล็อกเท้า ยกลำตัวขึ้นโดยใช้หน้าท้อง แล้วลดลงช้า ๆ"],
+  ["db_side_bend", "Dumbbell Side Bend", "เอนข้างถือดัมเบล", ["core"], "ดัมเบล", 3, "12-15 ครั้ง/ข้าง", "ง่าย", "ยืนถือดัมเบลมือเดียว เอนลำตัวลงด้านข้างช้า ๆ แล้วใช้หน้าท้องด้านข้างดึงกลับ"],
+  ["barbell_rollout", "Barbell Rollout", "โรลเอาท์บาร์เบล", ["core"], "บาร์เบล", 3, "8-10 ครั้ง", "ยาก", "คุกเข่าจับบาร์เบลที่ติดแผ่นน้ำหนัก ค่อย ๆ กลิ้งไปข้างหน้าโดยหลังตรง แล้วดึงกลับด้วยหน้าท้อง"],
+  // สะโพก
+  ["bb_hip_thrust", "Barbell Hip Thrust", "ฮิปทรัสต์บาร์เบล", ["leg"], "บาร์เบล", 4, "8-12 ครั้ง", "กลาง", "พิงหลังส่วนบนบนม้านั่ง วางบาร์เบลบนสะโพก (ใช้แผ่นรอง) ดันสะโพกขึ้นจนลำตัวขนานพื้น เกร็งก้นแล้วลดลง"],
+  ["cable_kickback", "Cable Glute Kickback", "เตะหลังเคเบิล", ["leg"], "เคเบิล", 3, "12-15 ครั้ง/ข้าง", "กลาง", "คล้องสายที่ข้อเท้า เกาะเครื่องไว้ เตะขาไปด้านหลังโดยเกร็งก้น แล้วกลับช้า ๆ"],
+  ["hip_abduction", "Hip Abduction Machine", "เครื่องกางสะโพก", ["leg"], "เครื่องออกกำลังกาย", 3, "12-15 ครั้ง", "ง่าย", "นั่งหลังพิงเบาะ ดันเข่าออกด้านข้างเต็มช่วง แล้วกลับช้า ๆ"],
+  ["band_lateral_walk", "Band Lateral Walk", "เดินข้างยางยืด", ["leg"], "ยางยืด", 3, "12 ก้าว/ข้าง", "ง่าย", "สวมยางเหนือเข่า ย่อเข่าเล็กน้อย ก้าวเท้าไปด้านข้างโดยให้ยางตึงตลอด"],
+  ["db_rdl", "Dumbbell Romanian Deadlift", "รูมาเนียนเดดลิฟต์ดัมเบล", ["leg", "leg2"], "ดัมเบล", 3, "10-12 ครั้ง", "กลาง", "ถือดัมเบลหน้าต้นขา งอสะโพกเลื่อนก้นไปด้านหลังโดยหลังตรงและเข่างอเล็กน้อย จนรู้สึกตึงต้นขาด้านหลัง แล้วดันกลับ"],
+  // ต้นขา
+  ["bb_squat", "Barbell Back Squat", "สควอทบาร์เบล", ["leg2", "leg"], "บาร์เบล", 4, "6-10 ครั้ง", "ยาก", "วางบาร์บนบ่าหลัง ย่อตัวลงจนต้นขาขนานพื้นโดยหลังตรง แล้วดันเท้ากลับขึ้น ควรมีที่รองรับบาร์หรือผู้ช่วยดู"],
+  ["goblet_squat", "Goblet Squat", "ก็อบเล็ตสควอท", ["leg2", "leg"], "ดัมเบล", 3, "10-12 ครั้ง", "ง่าย", "ถือดัมเบลแนบอก ยืนกว้างเท่าไหล่ ย่อตัวลงโดยอกตั้ง แล้วดันกลับขึ้น"],
+  ["leg_press", "Leg Press", "เลกเพรส", ["leg2", "leg"], "เครื่องออกกำลังกาย", 3, "10-12 ครั้ง", "ง่าย", "นั่งหลังแนบเบาะ วางเท้ากว้างเท่าไหล่บนแท่น ดันออกจนเข่าเกือบตรงโดยไม่ล็อก แล้วกลับช้า ๆ"],
+  ["leg_extension", "Leg Extension", "เลกเอกซ์เทนชัน", ["leg2"], "เครื่องออกกำลังกาย", 3, "12-15 ครั้ง", "ง่าย", "ปรับแผ่นรองให้อยู่เหนือข้อเท้า เหยียดเข่าจนตรง ค้างสั้น ๆ แล้วลดลงช้า ๆ"],
+  ["kb_goblet_squat", "Kettlebell Goblet Squat", "ก็อบเล็ตสควอทเคตเทิลเบล", ["leg2", "leg"], "Kettlebell", 3, "10-12 ครั้ง", "ง่าย", "ถือเคตเทิลเบลแนบอกสองมือ ย่อสควอทโดยอกตั้ง แล้วดันกลับ"],
+  ["db_lunge", "Dumbbell Lunge", "ลันจ์ถือดัมเบล", ["leg2", "leg"], "ดัมเบล", 3, "10 ครั้ง/ข้าง", "กลาง", "ถือดัมเบลสองข้าง ก้าวเท้าไปข้างหน้า ย่อเข่าลง แล้วดันกลับ สลับข้าง"],
+  ["band_squat", "Band Squat", "สควอทยางยืด", ["leg2", "leg"], "ยางยืด", 3, "12-15 ครั้ง", "ง่าย", "เหยียบยางยืดไว้ใต้เท้า จับปลายยางที่ไหล่ ย่อสควอทแล้วดันกลับโดยให้ยางตึงตลอด"],
+  ["bench_step_up", "Bench Step Up", "ก้าวขึ้นม้านั่ง", ["leg2", "leg"], "ม้านั่ง", 3, "10 ครั้ง/ข้าง", "ง่าย", "ยืนหน้าม้านั่ง ก้าวเท้าหนึ่งขึ้นแล้วยืดตัวให้สะโพกเหยียด ก้าวลงช้า ๆ สลับข้าง"],
+  // น่อง
+  ["standing_calf_raise", "Standing Calf Raise Machine", "เครื่องเขย่งน่องยืน", ["calf"], "เครื่องออกกำลังกาย", 4, "12-15 ครั้ง", "ง่าย", "วางไหล่ใต้แผ่นรอง เขย่งปลายเท้าขึ้นสุด ค้างสั้น ๆ แล้วลดส้นลงต่ำกว่าแท่นเล็กน้อย"],
+  ["db_calf_raise", "Dumbbell Calf Raise", "เขย่งน่องถือดัมเบล", ["calf"], "ดัมเบล", 3, "15 ครั้ง", "ง่าย", "ยืนถือดัมเบลสองข้าง เขย่งขึ้นสุดปลายเท้าแล้วลดลงช้า ๆ"],
+  ["bb_calf_raise", "Barbell Calf Raise", "เขย่งน่องบาร์เบล", ["calf"], "บาร์เบล", 3, "12-15 ครั้ง", "กลาง", "วางบาร์บนบ่าหลัง ยืนให้มั่นคง เขย่งปลายเท้าขึ้นแล้วลดลงช้า ๆ"],
+  ["seated_calf_raise", "Seated Calf Raise Machine", "เครื่องเขย่งน่องนั่ง", ["calf"], "เครื่องออกกำลังกาย", 3, "12-15 ครั้ง", "ง่าย", "นั่งวางเข่าใต้แผ่นรอง ดันปลายเท้าขึ้นสุด แล้วลดส้นลงช้า ๆ"],
+];
+
+// ท่าเดิมที่มีวิดีโอในโปรเจกต์ — คง id / วิดีโอ / คำอธิบายเดิมไว้ทั้งหมด
+const EXISTING_EXERCISES = [
+  makeExercise(
+    ["squat", "Squat", "สควอท", ["leg", "leg2"], NONE, 3, "10-15 ครั้ง", "ง่าย", "ยืนกว้างเท่าไหล่ ย่อสะโพกลงเหมือนนั่งเก้าอี้ โดยหลังตรงและเข่าไม่เลยปลายเท้ามากนัก แล้วดันส้นเท้ากลับขึ้น"],
+    { description: "บริหารกล้ามเนื้อต้นขา สะโพก และแกนกลางลำตัว", video: "/squats.mp4" }
+  ),
+  makeExercise(
+    ["jumping_jack", "Jumping Jack", "กระโดดตบ", ["leg2", "calf"], NONE, 3, "30 วินาที", "ง่าย", "ยืนเท้าชิด กระโดดแยกเท้าพร้อมยกแขนเหนือศีรษะ แล้วกระโดดกลับท่าเดิมอย่างต่อเนื่อง"],
+    { description: "เพิ่มอัตราการเต้นของหัวใจและช่วยเผาผลาญพลังงาน", video: "/jumping_jack.mp4" }
+  ),
+  makeExercise(
+    ["high_knees", "High Knees", "ยกเข่าสูง", ["leg2", "leg"], NONE, 3, "30 วินาที", "ง่าย", "วิ่งอยู่กับที่พร้อมยกเข่าสลับให้สูงถึงระดับสะโพก แกว่งแขนสลับ และลงพื้นเบา ๆ ด้วยปลายเท้า"],
+    { description: "วิ่งอยู่กับที่พร้อมยกเข่าสูง เพิ่มความเร็วหัวใจและฝึกกล้ามเนื้อต้นขา", video: "/high_knees.mp4" }
+  ),
+  makeExercise(
+    ["punches", "Punches", "ชกหมัด", ["arm", "shoulder"], NONE, 3, "30 วินาที", "ง่าย", "ยืนแยกเท้าเล็กน้อย ชกหมัดสลับซ้าย-ขวาไปข้างหน้าอย่างต่อเนื่อง เกร็งหน้าท้อง และหมุนลำตัวเล็กน้อยตามหมัด"],
+    { description: "ชกหมัดสลับซ้าย-ขวา เพิ่มความเร็วหัวใจและฝึกกล้ามเนื้อแขน ไหล่ และแกนกลางลำตัว", video: "/punches.mp4" }
+  ),
+];
+
+const EXERCISES = [
+  ...EXISTING_EXERCISES,
+  ...BODYWEIGHT_ROWS.map((row) => makeExercise(row)),
+  ...EQUIPMENT_ROWS.map((row) => makeExercise(row)),
+];
+
+const LEVEL_RANK = { "ง่าย": 0, "กลาง": 1, "ยาก": 2 };
+
+// ---------- ข้อควรระวัง / เวลาพัก ----------
+const PART_CAUTION = {
+  shoulder: "ไม่ยกเกินช่วงที่ไหล่รู้สึกตึงหรือเจ็บแปลบ และหลีกเลี่ยงการเหวี่ยงตัวช่วย",
+  chest: "ดึงสะบักเข้าหากันและไม่แอ่นหลังมากเกินไปขณะออกแรง",
+  back: "รักษาแนวหลังให้เป็นกลาง ไม่ก้มหลังโค้งขณะออกแรง",
+  arm: "ไม่ล็อกข้อศอกสุดช่วง และควบคุมจังหวะขึ้น-ลงให้สม่ำเสมอ",
+  core: "หายใจสม่ำเสมอ ไม่กลั้นหายใจ และไม่ดึงคอขณะทำท่า",
+  leg: "ควบคุมสะโพกไม่ให้เอียง และไม่แอ่นหลังส่วนล่าง",
+  leg2: "ให้เข่าชี้ไปทางเดียวกับปลายเท้า ไม่ให้เข่าบิดเข้าด้านใน",
+  calf: "ทรงตัวให้มั่นคง ควบคุมจังหวะ ระวังข้อเท้าพลิก",
+};
+
+const EQUIPMENT_CAUTION = {
+  [NONE]: "ใช้พื้นที่โล่ง พื้นไม่ลื่น และสวมรองเท้าที่เหมาะสม",
+  "ดัมเบล": "เลือกน้ำหนักที่ควบคุมได้ตลอดท่า",
+  "บาร์เบล": "ควรมีผู้ช่วยดูหรือใช้ที่รองรับบาร์เมื่อยกน้ำหนักมาก",
+  "เคเบิล": "ตรวจสอบสายและที่ล็อกน้ำหนักก่อนใช้งาน",
+  "เครื่องออกกำลังกาย": "ปรับที่นั่งและจุดหมุนให้พอดีกับร่างกายก่อนเริ่ม",
+  "ยางยืด": "ตรวจดูรอยฉีกขาดของยางก่อนใช้ และยึดปลายยางให้แน่น",
+  Kettlebell: "จับให้มั่นคง และระวังเหวี่ยงชนตัวเองหรือผู้อื่น",
+  "ม้านั่ง": "ตรวจสอบความมั่นคงของม้านั่งหรือเก้าอี้ก่อนใช้",
+};
+
+const getCautions = (item) => [
+  PART_CAUTION[item.parts[0]],
+  EQUIPMENT_CAUTION[item.equipment] || EQUIPMENT_CAUTION[NONE],
+  "หยุดทันทีหากรู้สึกเจ็บผิดปกติ เวียนศีรษะ หรือหายใจไม่ทัน",
+].filter(Boolean);
+
+const getRest = (item) => {
+  if (item.reps.includes("วินาที")) return "30-45 วินาที";
+  return item.equipmentType === "equipment" ? "60-90 วินาที" : "30-45 วินาที";
+};
+
+// ---------- โปรแกรมแนะนำ + คำแนะนำ AI (เปลี่ยนตามส่วนร่างกายและประเภท) ----------
+const buildProgram = (part, type, equipChip, list) => {
+  const partName = part === "all" ? "ทั้งตัว" : PART_LABEL[part];
+  const withEquip = type === "equipment";
+  const title =
+    type === "all"
+      ? `โปรแกรมฝึก${partName}`
+      : `โปรแกรมฝึก${partName}${withEquip ? "ด้วยอุปกรณ์" : "แบบไม่ใช้อุปกรณ์"}`;
+  const subtitle = withEquip
+    ? equipChip !== "ทั้งหมด" ? `(${equipChip})` : "(อุปกรณ์ทุกประเภท)"
+    : type === "bodyweight" ? "(Bodyweight)" : "(ผสมทุกประเภท)";
+  const items = [...list]
+    .sort((a, b) => LEVEL_RANK[a.level] - LEVEL_RANK[b.level])
+    .slice(0, 4);
+  return {
+    title,
+    subtitle,
+    days: withEquip ? "3-4 วัน/สัปดาห์" : type === "all" ? "3-4 วัน/สัปดาห์" : "3 วัน/สัปดาห์",
+    duration: withEquip ? "45-60 นาที" : type === "all" ? "40-50 นาที" : "30-40 นาที",
+    level: withEquip ? "ระดับกลาง" : type === "all" ? "ปรับตามท่า" : "ผู้เริ่มต้น",
+    items,
+  };
+};
+
+const PART_TIPS = {
+  all: ["วอร์มอัพทั้งตัวเบา ๆ 5-10 นาที ก่อนเริ่มออกกำลังกาย", "สลับกลุ่มกล้ามเนื้อที่ฝึกในแต่ละวัน เพื่อให้ร่างกายได้พักฟื้น"],
+  shoulder: ["วอร์มอัพไหล่ 5-10 นาที ด้วยการหมุนแขนและยืดไหล่เบา ๆ", "ควบคุมท่าทาง ไม่เหวี่ยงตัวหรือยกไหล่ขึ้นหาใบหู"],
+  chest: ["วอร์มอัพ 5-10 นาที โดยเปิดอกและหมุนไหล่เบา ๆ ก่อนเริ่ม", "ดึงสะบักเข้าหากัน และคุมจังหวะลง-ขึ้นให้ช้าสม่ำเสมอ"],
+  back: ["วอร์มอัพ 5-10 นาที ด้วยการบิดลำตัวและยืดหลังเบา ๆ", "รักษาแนวหลังให้เป็นกลาง และนึกถึงการบีบสะบักทุกครั้งที่ดึง"],
+  arm: ["วอร์มอัพข้อมือ ข้อศอก และไหล่ 5-10 นาที ก่อนเริ่ม", "ให้ศอกอยู่กับที่ ใช้กล้ามเนื้อแขนออกแรง ไม่เหวี่ยงตัวช่วย"],
+  core: ["วอร์มอัพ 5-10 นาที ด้วยท่าบิดลำตัวและหมุนสะโพกเบา ๆ", "หายใจสม่ำเสมอ เกร็งหน้าท้องตลอดท่า และไม่ดึงคอ"],
+  leg: ["วอร์มอัพสะโพก 5-10 นาที ด้วยการหมุนสะโพกและก้าวเดินเบา ๆ", "เกร็งก้นทุกครั้งที่ออกแรง และไม่แอ่นหลังส่วนล่าง"],
+  leg2: ["วอร์มอัพขา 5-10 นาที ด้วยการเดินเร็วหรือย่อเข่าเบา ๆ", "ให้เข่าชี้ไปทางเดียวกับปลายเท้า และลงน้ำหนักที่ส้นเท้า"],
+  calf: ["วอร์มอัพข้อเท้าและน่อง 5-10 นาที ก่อนเริ่ม", "ควบคุมจังหวะขึ้น-ลงให้ช้า และลงส้นเท้าให้สุดช่วง"],
+};
+
+const TYPE_TIPS = {
+  bodyweight: ["เริ่มจากจำนวนครั้งที่ทำได้ด้วยฟอร์มที่ถูกต้อง แล้วค่อยเพิ่มทีละน้อย", "ปรับความยากด้วยการเปลี่ยนองศาหรือชะลอจังหวะ โดยไม่ต้องรีบเพิ่มจำนวนครั้ง"],
+  equipment: ["เลือกน้ำหนักที่ทำครบจำนวนครั้งได้โดยฟอร์มไม่เสีย แล้วค่อยเพิ่มทีละน้อย", "ตรวจสอบอุปกรณ์ก่อนใช้ทุกครั้ง และให้มีผู้ช่วยดูเมื่อยกน้ำหนักมาก"],
+  all: ["ผสมท่าที่ไม่ใช้อุปกรณ์และใช้อุปกรณ์ให้เหมาะกับสถานที่ฝึกของคุณ", "เริ่มจากท่าที่ง่ายก่อน แล้วค่อยขยับไปท่าที่ยากขึ้น"],
+};
+
+const buildAiTips = (part, type) => [
+  ...(PART_TIPS[part] || PART_TIPS.all),
+  ...(TYPE_TIPS[type] || TYPE_TIPS.all),
+  "พักกล้ามเนื้อกลุ่มเดิมอย่างน้อย 48 ชม. ก่อนฝึกซ้ำ และหยุดทันทีหากเจ็บผิดปกติ",
+];
+
+const AI_TIP_ICONS = ["➜", "♧", "◷", "⌁", "⌁"];
+
+// ---------- โปรแกรมของฉัน (เก็บไว้ในเครื่อง ไม่กระทบหน้าอื่น) ----------
+const PROGRAM_KEY = "fittrack-my-program";
+const loadSavedProgram = () => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(PROGRAM_KEY) || "[]");
+    if (!Array.isArray(raw)) return [];
+    return [...new Set(raw)].filter((id) => EXERCISES.some((e) => e.id === id));
+  } catch {
+    return [];
+  }
+};
+
+// ======================================================================
+// Components เฉพาะหน้า "ออกกำลังกาย" (ใช้ในไฟล์นี้เท่านั้น)
+// ======================================================================
+function ExerciseMedia({ exercise }) {
+  if (exercise.video) {
+    return (
+      <video autoPlay loop muted playsInline preload="metadata">
+        <source src={exercise.video} type="video/mp4" />
+      </video>
+    );
+  }
+  return (
+    <div className="media-fallback" aria-hidden="true">
+      <span>{equipmentIcon(exercise)}</span>
+      <small>{partNames(exercise.parts)}</small>
+    </div>
+  );
+}
+
+// ปิดด้วยปุ่ม Esc และล็อกการเลื่อนหน้าเบื้องหลังขณะเปิด Modal
+function useModalBehavior(onClose) {
+  useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+}
+
+function ExerciseDetailModal({ exercise, added, onClose, onToggle, onStart }) {
+  useModalBehavior(onClose);
+
+  return (
+    <div className="ft-modal-backdrop" onClick={onClose}>
+      <div
+        className="ft-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exercise-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="ft-modal-close" aria-label="ปิด" onClick={onClose} autoFocus>
+          ×
+        </button>
+
+        <div className="ft-modal-media">
+          <ExerciseMedia exercise={exercise} />
+        </div>
+
+        <div className="ft-modal-body">
+          <h2 id="exercise-modal-title">{exercise.name}</h2>
+          <p className="ft-modal-thai">{exercise.thaiName}</p>
+
+          <div className="exercise-tags">
+            <span>{partNames(exercise.parts)}</span>
+            <span>{equipmentIcon(exercise)} {equipmentLabel(exercise)}</span>
+          </div>
+
+          <div className="ft-stats">
+            <div><b>{exercise.sets}</b><span>จำนวนเซ็ต</span></div>
+            <div><b>{exercise.reps}</b><span>จำนวนครั้ง</span></div>
+            <div><b>{getRest(exercise)}</b><span>เวลาพัก</span></div>
+            <div><b>{exercise.level}</b><span>ระดับ</span></div>
+          </div>
+
+          <h3>กล้ามเนื้อที่ใช้</h3>
+          <p>{partNames(exercise.parts)}</p>
+
+          <h3>อุปกรณ์</h3>
+          <p>{equipmentIcon(exercise)} {equipmentLabel(exercise)}</p>
+
+          <h3>วิธีทำ</h3>
+          <p>{exercise.howTo}</p>
+
+          <h3>ข้อควรระวัง</h3>
+          <ul className="ft-caution">
+            {getCautions(exercise).map((text) => (
+              <li key={text}>{text}</li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="ft-modal-actions">
+          <button type="button" className="ft-btn-primary" onClick={() => onStart(exercise)}>
+            เริ่มท่านี้
+          </button>
+          <button type="button" className="ft-btn-ghost" onClick={() => onToggle(exercise.id)}>
+            {added ? "นำออกจากโปรแกรม" : "เพิ่มเข้าโปรแกรม"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProgramDetailModal({ program, selectedIds, onClose, onAddAll, onOpenExercise }) {
+  useModalBehavior(onClose);
+  const allAdded = program.items.every((item) => selectedIds.includes(item.id));
+
+  return (
+    <div className="ft-modal-backdrop" onClick={onClose}>
+      <div
+        className="ft-modal ft-modal-program"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="program-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button type="button" className="ft-modal-close" aria-label="ปิด" onClick={onClose} autoFocus>
+          ×
+        </button>
+
+        <div className="ft-modal-body">
+          <h2 id="program-modal-title">{program.title}</h2>
+          <p className="ft-modal-thai">{program.subtitle}</p>
+
+          <div className="ft-stats">
+            <div><b>{program.days}</b><span>ความถี่</span></div>
+            <div><b>{program.duration}</b><span>ระยะเวลา</span></div>
+            <div><b>{program.level}</b><span>ระดับ</span></div>
+            <div><b>{program.items.length} ท่า</b><span>จำนวนท่า</span></div>
+          </div>
+
+          <h3>ท่าในโปรแกรม</h3>
+          <ul className="ft-program-items">
+            {program.items.map((item) => (
+              <li key={item.id}>
+                <button type="button" onClick={() => onOpenExercise(item)}>
+                  <strong>{item.name}</strong>
+                  <span>{item.sets} · {item.reps}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="ft-modal-actions">
+          <button
+            type="button"
+            className="ft-btn-primary"
+            disabled={allAdded}
+            onClick={() => onAddAll(program.items.map((item) => item.id))}
+          >
+            {allAdded ? "เพิ่มเข้าโปรแกรมของฉันแล้ว" : "ใช้โปรแกรมนี้"}
+          </button>
+          <button type="button" className="ft-btn-ghost" onClick={onClose}>
+            ปิด
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ExerciseSelect() {
   const navigate = useNavigate();
 
-  const exercises = [
-    {
-      id: "squat",
-      icon: "⌁",
-      name: "Squat",
-      thaiName: "สควอท",
-      video: "/squats.mp4",
-      description: "บริหารกล้ามเนื้อต้นขา สะโพก และแกนกลางลำตัว",
-      muscle: "ขา",
-      equipment: "ไม่มีอุปกรณ์",
-      sets: "3 เซ็ต",
-      reps: "10-15 ครั้ง",
-      color: "#b7ff21",
-    },
-    {
-      id: "jumping_jack",
-      icon: "✦",
-      name: "Jumping Jack",
-      thaiName: "กระโดดตบ",
-      video: "/jumping_jack.mp4",
-      description: "เพิ่มอัตราการเต้นของหัวใจและช่วยเผาผลาญพลังงาน",
-      muscle: "คาร์ดิโอ",
-      equipment: "ไม่มีอุปกรณ์",
-      sets: "3 เซ็ต",
-      reps: "30 วินาที",
-      color: "#b7ff21",
-    },
-    {
-      id: "high_knees",
-      icon: "↟",
-      name: "High Knees",
-      thaiName: "ยกเข่าสูง",
-      video: "/high_knees.mp4",
-      description:
-        "วิ่งอยู่กับที่พร้อมยกเข่าสูง เพิ่มความเร็วหัวใจและฝึกกล้ามเนื้อต้นขา",
-      muscle: "ขา",
-      equipment: "ไม่มีอุปกรณ์",
-      sets: "3 เซ็ต",
-      reps: "30 วินาที",
-      color: "#b7ff21",
-    },
-    {
-      id: "punches",
-      icon: "✧",
-      name: "Punches",
-      thaiName: "ชกหมัด",
-      video: "/punches.mp4",
-      description:
-        "ชกหมัดสลับซ้าย-ขวา เพิ่มความเร็วหัวใจและฝึกกล้ามเนื้อแขน ไหล่ และแกนกลางลำตัว",
-      muscle: "แขน",
-      equipment: "ไม่มีอุปกรณ์",
-      sets: "3 เซ็ต",
-      reps: "30 วินาที",
-      color: "#b7ff21",
-    },
-  ];
+  const exercises = EXERCISES;
 
   const bodyParts = [
     { id: "all", name: "ทั้งหมด", short: "ALL" },
@@ -110,16 +493,50 @@ export default function ExerciseSelect() {
     "ทั้งหมด",
     "ดัมเบล",
     "บาร์เบล",
-    "เคตเทิล",
+    "เคเบิล",
     "เครื่องออกกำลังกาย",
     "ยางยืด",
     "Kettlebell",
     "ม้านั่ง",
   ];
 
-  const [selectedPart, setSelectedPart] = useState("all");
+  const [selectedPart, setSelectedPart] = useState("shoulder");
   const [selectedEquipment, setSelectedEquipment] = useState("ทั้งหมด");
-  const [useEquipment, setUseEquipment] = useState(false);
+  // "bodyweight" = ไม่ใช้อุปกรณ์ | "equipment" = ใช้อุปกรณ์ | "all" = ทั้งหมด (ใช้ตอนกด “แสดงทั้งหมด”)
+  const [equipmentType, setEquipmentType] = useState("bodyweight");
+  const useEquipment = equipmentType === "equipment";
+  const [bodyView, setBodyView] = useState("front");
+  const [selectedExercises, setSelectedExercises] = useState(loadSavedProgram);
+  const [selectedExercise, setSelectedExercise] = useState(null);
+  const [showExerciseDetail, setShowExerciseDetail] = useState(false);
+  const [showProgramDetail, setShowProgramDetail] = useState(false);
+
+  const changeEquipmentType = (type) => {
+    setEquipmentType(type);
+    if (type !== "equipment") setSelectedEquipment("ทั้งหมด");
+  };
+
+  // บันทึกโปรแกรมของฉันไว้ในเครื่อง (key ใหม่ ไม่ชนกับหน้าอื่น)
+  useEffect(() => {
+    try {
+      localStorage.setItem(PROGRAM_KEY, JSON.stringify(selectedExercises));
+    } catch { /* storage optional */ }
+  }, [selectedExercises]);
+
+  // กดส่วนร่างกาย (จากปุ่มด้านข้าง หรือกดที่กล้ามเนื้อบนรูปร่างโดยตรง)
+  // กดซ้ำที่ส่วนเดิม = ยกเลิก กลับไปแสดงทั้งหมด
+  const handlePartSelect = (id) => {
+    if (id === selectedPart) {
+      setSelectedPart("all");
+      return;
+    }
+    setSelectedPart(id);
+    const preferred = PREFERRED_VIEW[id];
+    if (bodyView !== "side") {
+      if (preferred) setBodyView(preferred);
+      else if (!VISIBLE_PARTS[bodyView].includes(id)) setBodyView("front");
+    }
+  };
 
   // ---------- ชื่อผู้ใช้ (ดึงจาก Firestore เหมือนหน้า Dashboard) ----------
   const [displayName, setDisplayName] = useState(getInitialName);
@@ -189,38 +606,69 @@ export default function ExerciseSelect() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [dailyCalories, setDailyCalories] = useState(getSavedDailyCalories);
 
-  const filteredExercises = useMemo(() => {
-    let result = [...exercises];
+  // กรองจาก 3 ตัวแปรร่วมกัน: ส่วนร่างกาย + ประเภท (ใช้/ไม่ใช้อุปกรณ์) + ชนิดอุปกรณ์
+  const filteredExercises = useMemo(
+    () =>
+      EXERCISES.filter((item) => {
+        if (selectedPart !== "all" && !item.parts.includes(selectedPart)) return false;
+        if (equipmentType !== "all" && item.equipmentType !== equipmentType) return false;
+        if (
+          equipmentType === "equipment" &&
+          selectedEquipment !== "ทั้งหมด" &&
+          item.equipment !== selectedEquipment
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [selectedPart, equipmentType, selectedEquipment]
+  );
 
-    if (selectedPart !== "all") {
-      const partMap = {
-        shoulder: ["ไหล่"],
-        chest: ["อก"],
-        back: ["หลัง"],
-        arm: ["แขน"],
-        core: ["ท้อง"],
-        leg: ["ขา"],
-        leg2: ["ขา"],
-        calf: ["ขา"],
-      };
+  const partTitle = selectedPart === "all" ? "ทั้งหมด" : PART_LABEL[selectedPart];
 
-      const target = partMap[selectedPart] || [];
-      if (target.length) {
-        result = result.filter((item) => target.includes(item.muscle));
-      }
-    }
+  const recommendedProgram = useMemo(
+    () => buildProgram(selectedPart, equipmentType, selectedEquipment, filteredExercises),
+    [selectedPart, equipmentType, selectedEquipment, filteredExercises]
+  );
 
-    if (selectedEquipment !== "ทั้งหมด") {
-      result = result.filter(
-        (item) => item.equipment === selectedEquipment
-      );
-    }
+  const aiTips = useMemo(
+    () => buildAiTips(selectedPart, equipmentType),
+    [selectedPart, equipmentType]
+  );
 
-    return result;
-  }, [selectedPart, selectedEquipment]);
+  const myProgramItems = useMemo(
+    () => selectedExercises.map((id) => EXERCISES.find((e) => e.id === id)).filter(Boolean),
+    [selectedExercises]
+  );
 
+  // เริ่มท่า: ไปหน้าตั้งค่าการฝึกเหมือนเดิม (ฟังก์ชันเดิมของระบบ)
   const selectExercise = (exercise) => {
     navigate(`/settings?exercise=${exercise.id}`);
+  };
+
+  const openExerciseDetail = (exercise) => {
+    setSelectedExercise(exercise);
+    setShowExerciseDetail(true);
+  };
+
+  const closeExerciseDetail = () => setShowExerciseDetail(false);
+  const closeProgramDetail = () => setShowProgramDetail(false);
+
+  // เพิ่ม/ลบท่าในโปรแกรมของฉัน (ไม่เพิ่มซ้ำ)
+  const toggleProgramExercise = (id) =>
+    setSelectedExercises((current) =>
+      current.includes(id) ? current.filter((x) => x !== id) : [...current, id]
+    );
+
+  const addProgramExercises = (ids) =>
+    setSelectedExercises((current) => [
+      ...current,
+      ...ids.filter((id, index) => !current.includes(id) && ids.indexOf(id) === index),
+    ]);
+
+  const startMyProgram = () => {
+    if (myProgramItems.length === 0) return;
+    selectExercise(myProgramItems[0]);
   };
 
   const calorieNotice = dailyCalories === 0
@@ -347,7 +795,7 @@ export default function ExerciseSelect() {
                     <div className="notification-message">
                       <strong>FitTrack <small>· วันนี้</small></strong>
                       <span>{exerciseNotice}</span>
-                      <small>กดปุ่ม “เลือก” ที่ท่าที่ต้องการเพื่อไปตั้งค่าการฝึก</small>
+                      <small>กดปุ่ม “เลือก” เพื่อเพิ่มท่าเข้าโปรแกรมของฉัน</small>
                     </div>
                     <i className="notification-unread" />
                   </div>
@@ -384,7 +832,7 @@ export default function ExerciseSelect() {
 
             <div>
               <h1>ออกกำลังกาย</h1>
-              <p>เลือกส่วนที่ต้องการฝึก และดูท่าออกกำลังกายที่เหมาะสมกับคุณ</p>
+              <p>เลือกส่วนที่ต้องการฝึก และดูท่าออกกำลังกายที่เหมาะกับคุณ</p>
             </div>
 
             <div className="ai-title">
@@ -407,190 +855,11 @@ export default function ExerciseSelect() {
             <div className="body-panel">
               <div className="body-visual">
                 <div className="body-glow"></div>
-
-                <svg
-                  className="human-svg"
-                  viewBox="0 0 260 520"
-                  aria-label="แผนผังกล้ามเนื้อ"
-                >
-                  {/* head */}
-                  <circle
-                    cx="130"
-                    cy="50"
-                    r="28"
-                    className="body-outline"
-                  />
-
-                  {/* neck */}
-                  <path
-                    d="M113 73 L113 95 L130 105 L147 95 L147 73"
-                    className="body-shape"
-                  />
-
-                  {/* torso */}
-                  <path
-                    d="
-                      M113 90
-                      C95 94 82 108 77 129
-                      L89 205
-                      C94 220 105 230 111 238
-                      L105 300
-                      L130 315
-                      L155 300
-                      L149 238
-                      C155 230 166 220 171 205
-                      L183 129
-                      C178 108 165 94 147 90
-                      L130 104
-                      Z
-                    "
-                    className="body-shape"
-                  />
-
-                  {/* left arm */}
-                  <path
-                    d="
-                      M81 113
-                      C68 118 61 133 56 151
-                      L42 215
-                      C40 226 47 234 56 232
-                      C63 230 67 223 69 215
-                      L82 170
-                    "
-                    className="body-shape"
-                  />
-
-                  {/* right arm */}
-                  <path
-                    d="
-                      M179 113
-                      C192 118 199 133 204 151
-                      L218 215
-                      C220 226 213 234 204 232
-                      C197 230 193 223 191 215
-                      L178 170
-                    "
-                    className="body-shape"
-                  />
-
-                  {/* left leg */}
-                  <path
-                    d="
-                      M111 238
-                      L106 300
-                      L99 390
-                      L96 466
-                      C95 480 103 488 112 488
-                      C121 488 126 480 126 468
-                      L130 395
-                      L134 315
-                      Z
-                    "
-                    className="body-shape"
-                  />
-
-                  {/* right leg */}
-                  <path
-                    d="
-                      M149 238
-                      L154 300
-                      L161 390
-                      L164 466
-                      C165 480 157 488 148 488
-                      C139 488 134 480 134 468
-                      L130 395
-                      L126 315
-                      Z
-                    "
-                    className="body-shape"
-                  />
-
-                  {/* muscle zones */}
-                  <ellipse
-                    cx="94"
-                    cy="122"
-                    rx="19"
-                    ry="29"
-                    className="muscle green"
-                  />
-
-                  <ellipse
-                    cx="166"
-                    cy="122"
-                    rx="19"
-                    ry="29"
-                    className="muscle green"
-                  />
-
-                  <ellipse
-                    cx="101"
-                    cy="160"
-                    rx="12"
-                    ry="32"
-                    className="muscle purple"
-                  />
-
-                  <ellipse
-                    cx="159"
-                    cy="160"
-                    rx="12"
-                    ry="32"
-                    className="muscle purple"
-                  />
-
-                  <path
-                    d="M107 115 Q130 105 153 115 L150 175 Q130 190 110 175Z"
-                    className="muscle blue"
-                  />
-
-                  <ellipse
-                    cx="107"
-                    cy="260"
-                    rx="13"
-                    ry="38"
-                    className="muscle green"
-                  />
-
-                  <ellipse
-                    cx="153"
-                    cy="260"
-                    rx="13"
-                    ry="38"
-                    className="muscle green"
-                  />
-
-                  <ellipse
-                    cx="108"
-                    cy="350"
-                    rx="17"
-                    ry="46"
-                    className="muscle purple"
-                  />
-
-                  <ellipse
-                    cx="152"
-                    cy="350"
-                    rx="17"
-                    ry="46"
-                    className="muscle purple"
-                  />
-
-                  <ellipse
-                    cx="107"
-                    cy="432"
-                    rx="12"
-                    ry="30"
-                    className="muscle blue"
-                  />
-
-                  <ellipse
-                    cx="153"
-                    cy="432"
-                    rx="12"
-                    ry="30"
-                    className="muscle blue"
-                  />
-                </svg>
+                <BodyMap
+                  view={bodyView}
+                  selectedPart={selectedPart}
+                  onSelectPart={handlePartSelect}
+                />
               </div>
 
               {/* body side menu */}
@@ -602,7 +871,7 @@ export default function ExerciseSelect() {
                     className={`body-part ${
                       selectedPart === part.id ? "selected" : ""
                     }`}
-                    onClick={() => setSelectedPart(part.id)}
+                    onClick={() => handlePartSelect(part.id)}
                   >
                     <span className="part-mini">
                       <span></span>
@@ -615,32 +884,21 @@ export default function ExerciseSelect() {
 
               {/* body views */}
               <div className="body-views">
-                <button
-                  type="button"
-                  className="body-view active"
-                  onClick={() => setSelectedPart("all")}
-                >
-                  <div className="tiny-person front"></div>
-                  <span>ด้านหน้า</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="body-view"
-                  onClick={() => setSelectedPart("back")}
-                >
-                  <div className="tiny-person back"></div>
-                  <span>ด้านหลัง</span>
-                </button>
-
-                <button
-                  type="button"
-                  className="body-view"
-                  onClick={() => setSelectedPart("leg")}
-                >
-                  <div className="tiny-person side"></div>
-                  <span>ด้านข้าง</span>
-                </button>
+                {[
+                  ["front", "ด้านหน้า"],
+                  ["back", "ด้านหลัง"],
+                  ["side", "ด้านข้าง"],
+                ].map(([v, label]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className={`body-view ${bodyView === v ? "active" : ""}`}
+                    onClick={() => setBodyView(v)}
+                  >
+                    <BodyThumb view={v} />
+                    <span>{label}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -656,139 +914,130 @@ export default function ExerciseSelect() {
 
                 <div>
                   <h2>
-                    ท่าออกกำลังกายสำหรับ :{" "}
-                    <span>
-                      {selectedPart === "all"
-                        ? "ทั้งหมด"
-                        : bodyParts.find((p) => p.id === selectedPart)
-                            ?.name || "ทั้งหมด"}
-                    </span>
+                    ท่าออกกำลังกายสำหรับ:{" "}
+                    <span>{partTitle}</span>
                   </h2>
-                  <p>ประเภทการออกกำลังกาย</p>
+                  <p>เลือกท่าที่เหมาะสมกับเป้าหมายของคุณ</p>
                 </div>
               </div>
 
-              {/* equipment toggle */}
-              <div className="equipment-toggle">
+              {/* ประเภทการออกกำลังกาย: ไม่ใช้อุปกรณ์ / ใช้อุปกรณ์ */}
+              <div className="equipment-title">ประเภทการออกกำลังกาย</div>
+              <div className="equipment-toggle" role="group" aria-label="ประเภทการออกกำลังกาย">
                 <button
                   type="button"
-                  className={!useEquipment ? "active" : ""}
-                  onClick={() => setUseEquipment(false)}
+                  className={equipmentType === "bodyweight" ? "active" : ""}
+                  aria-pressed={equipmentType === "bodyweight"}
+                  onClick={() => changeEquipmentType("bodyweight")}
                 >
-                  <span className="toggle-icon">♙</span>
-                  ไม่มีอุปกรณ์
+                  <span className="toggle-icon">🧍</span>
+                  ไม่ใช้อุปกรณ์
                 </button>
 
                 <button
                   type="button"
-                  className={useEquipment ? "active" : ""}
-                  onClick={() => setUseEquipment(true)}
+                  className={equipmentType === "equipment" ? "active" : ""}
+                  aria-pressed={equipmentType === "equipment"}
+                  onClick={() => changeEquipmentType("equipment")}
                 >
-                  <span className="toggle-icon">↔</span>
+                  <span className="toggle-icon">🏋️</span>
                   ใช้อุปกรณ์
                 </button>
               </div>
 
-              <div className="equipment-title">
-                เลือกประเภทอุปกรณ์{" "}
-                <span>(เมื่อเลือก “ใช้อุปกรณ์”)</span>
-              </div>
-
-              <div className="equipment-tabs">
-                {equipmentTypes.map((type, index) => (
-                  <button
-                    key={`${type}-${index}`}
-                    type="button"
-                    disabled={!useEquipment}
-                    className={
-                      selectedEquipment === type && useEquipment
-                        ? "selected"
-                        : type === "ทั้งหมด" && !useEquipment
-                        ? "selected"
-                        : ""
-                    }
-                    onClick={() => setSelectedEquipment(type)}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
+              {/* ชนิดอุปกรณ์ — แสดงทันทีเมื่อเลือก “ใช้อุปกรณ์” */}
+              {useEquipment && (
+                <>
+                  <div className="equipment-title">เลือกชนิดอุปกรณ์</div>
+                  <div className="equipment-tabs" role="group" aria-label="ชนิดอุปกรณ์">
+                    {equipmentTypes.map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        aria-pressed={selectedEquipment === type}
+                        className={selectedEquipment === type ? "selected" : ""}
+                        onClick={() => setSelectedEquipment(type)}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
 
               {/* exercise list */}
-              <div className="exercise-list">
+              <div className="exercise-list" aria-live="polite">
                 {filteredExercises.length > 0 ? (
-                  filteredExercises.map((exercise) => (
-                    <article className="exercise-row" key={exercise.id}>
-                      <div className="exercise-thumb">
-                        <video
-                          autoPlay
-                          loop
-                          muted
-                          playsInline
-                          preload="metadata"
+                  filteredExercises.map((exercise) => {
+                    const added = selectedExercises.includes(exercise.id);
+                    return (
+                      <article
+                        className={`exercise-row ${added ? "is-added" : ""}`}
+                        key={exercise.id}
+                      >
+                        <div className="exercise-thumb">
+                          <ExerciseMedia exercise={exercise} />
+                          {exercise.video && <span className="thumb-play">▶</span>}
+                        </div>
+
+                        <div className="exercise-row-info">
+                          <h3>{exercise.name}</h3>
+                          <p className="exercise-desc">{exercise.description}</p>
+
+                          <div className="exercise-tags">
+                            <span>{partNames(exercise.parts)}</span>
+                            <span>
+                              {equipmentIcon(exercise)} {equipmentLabel(exercise)}
+                            </span>
+                          </div>
+
+                          <div className="exercise-meta">
+                            <span>
+                              <i>◷</i>
+                              {exercise.sets}
+                            </span>
+
+                            <span>
+                              <i>◉</i>
+                              {exercise.reps}
+                            </span>
+
+                            <span>
+                              <i>◆</i>
+                              ระดับ{exercise.level}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="play-button"
+                          onClick={() => openExerciseDetail(exercise)}
+                          aria-label={`ดูวิธีทำ ${exercise.thaiName}`}
                         >
-                          <source
-                            src={exercise.video}
-                            type="video/mp4"
-                          />
-                        </video>
+                          ▶
+                        </button>
 
-                        <span className="thumb-play">▶</span>
-                      </div>
-
-                      <div className="exercise-row-info">
-                        <h3>{exercise.name}</h3>
-
-                        <div className="exercise-tags">
-                          <span>{exercise.thaiName}</span>
-                          <span>{exercise.equipment}</span>
-                        </div>
-
-                        <div className="exercise-meta">
-                          <span>
-                            <i>◷</i>
-                            {exercise.sets}
-                          </span>
-
-                          <span>
-                            <i>◉</i>
-                            {exercise.reps}
-                          </span>
-
-                          <span>
-                            <i>♙</i>
-                            {exercise.equipment}
-                          </span>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        className="play-button"
-                        onClick={() => selectExercise(exercise)}
-                        aria-label={`เลือก ${exercise.thaiName}`}
-                      >
-                        ▶
-                      </button>
-
-                      <button
-                        type="button"
-                        className="choose-button"
-                        onClick={() => selectExercise(exercise)}
-                      >
-                        เลือก
-                      </button>
-                    </article>
-                  ))
+                        <button
+                          type="button"
+                          className={`choose-button ${added ? "added" : ""}`}
+                          aria-pressed={added}
+                          onClick={() => toggleProgramExercise(exercise.id)}
+                        >
+                          {added ? "เลือกแล้ว" : "เลือก"}
+                        </button>
+                      </article>
+                    );
+                  })
                 ) : (
                   <div className="empty-exercises">
-                    <div>ไม่พบรายการท่าออกกำลังกาย</div>
+                    <div>ไม่พบท่าออกกำลังกายที่ตรงกับตัวเลือก</div>
                     <button
                       type="button"
                       onClick={() => {
                         setSelectedPart("all");
                         setSelectedEquipment("ทั้งหมด");
-                        setUseEquipment(false);
+                        setEquipmentType("all");
                       }}
                     >
                       แสดงทั้งหมด
@@ -807,7 +1056,7 @@ export default function ExerciseSelect() {
                 <span className="star-icon">★</span>
                 <div>
                   <h2>โปรแกรมแนะนำ</h2>
-                  <span>(สำหรับผู้เริ่มต้น)</span>
+                  <span>({recommendedProgram.level})</span>
                 </div>
               </div>
 
@@ -817,17 +1066,18 @@ export default function ExerciseSelect() {
                 </div>
 
                 <div className="program-info">
-                  <h3>โปรแกรมฝึกไหล่</h3>
-                  <p>(Dumbbell + Bodyweight)</p>
+                  <h3>{recommendedProgram.title}</h3>
+                  <p>{recommendedProgram.subtitle}</p>
 
                   <div className="program-meta">
-                    <span>▣ 3-4 วัน/สัปดาห์</span>
-                    <span>◷ 45-60 นาที</span>
+                    <span>▣ {recommendedProgram.days}</span>
+                    <span>◷ {recommendedProgram.duration}</span>
                   </div>
 
                   <button
                     type="button"
-                    onClick={() => selectExercise(exercises[0])}
+                    disabled={recommendedProgram.items.length === 0}
+                    onClick={() => setShowProgramDetail(true)}
                   >
                     ดูรายละเอียด
                   </button>
@@ -845,30 +1095,12 @@ export default function ExerciseSelect() {
               </div>
 
               <div className="ai-content">
-                <div className="ai-item">
-                  <span>➜</span>
-                  <p>ควรวอร์มอัพ 5-10 นาที ก่อนเริ่มออกกำลังกาย</p>
-                </div>
-
-                <div className="ai-item">
-                  <span>♧</span>
-                  <p>ควรพักกล้ามเนื้ออย่างน้อย 48 ชม. ก่อนฝึกซ้ำ</p>
-                </div>
-
-                <div className="ai-item">
-                  <span>◷</span>
-                  <p>ดื่มน้ำให้เพียงพอระหว่างการออกกำลังกาย</p>
-                </div>
-
-                <div className="ai-item">
-                  <span>⌁</span>
-                  <p>เลือกน้ำหนักที่เหมาะสมกับระดับของตนเอง</p>
-                </div>
-
-                <div className="ai-item">
-                  <span>⌁</span>
-                  <p>หากมีอาการเจ็บผิดปกติให้หยุดออกกำลังกาย</p>
-                </div>
+                {aiTips.map((tip, index) => (
+                  <div className="ai-item" key={tip}>
+                    <span>{AI_TIP_ICONS[index % AI_TIP_ICONS.length]}</span>
+                    <p>{tip}</p>
+                  </div>
+                ))}
               </div>
 
               <div className="ai-quote">
@@ -886,8 +1118,81 @@ export default function ExerciseSelect() {
               </div>
             </div>
           </section>
+
+          {/* ================= MY PROGRAM ================= */}
+          <section className="my-program-panel">
+            <div className="bottom-title">
+              <span className="star-icon">✓</span>
+              <div>
+                <h2>โปรแกรมของฉัน</h2>
+                <span>({myProgramItems.length} ท่า)</span>
+              </div>
+            </div>
+
+            {myProgramItems.length > 0 ? (
+              <ul className="my-program-list">
+                {myProgramItems.map((item) => (
+                  <li key={item.id}>
+                    <span className="mp-check">✓</span>
+                    <span className="mp-name">{item.name}</span>
+                    <em>{item.sets} · {item.reps}</em>
+                    <button
+                      type="button"
+                      aria-label={`นำ ${item.name} ออกจากโปรแกรม`}
+                      onClick={() => toggleProgramExercise(item.id)}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="my-program-empty">
+                ยังไม่ได้เลือกท่า กดปุ่ม “เลือก” ที่ท่าออกกำลังกายเพื่อเพิ่มเข้าโปรแกรมของคุณ
+              </p>
+            )}
+
+            <div className="my-program-actions">
+              <button
+                type="button"
+                className="mp-start"
+                disabled={myProgramItems.length === 0}
+                onClick={startMyProgram}
+              >
+                เริ่มออกกำลังกาย
+              </button>
+              {myProgramItems.length > 0 && (
+                <button type="button" className="mp-clear" onClick={() => setSelectedExercises([])}>
+                  ล้างทั้งหมด
+                </button>
+              )}
+            </div>
+          </section>
         </div>
       </main>
+
+      {showExerciseDetail && selectedExercise && (
+        <ExerciseDetailModal
+          exercise={selectedExercise}
+          added={selectedExercises.includes(selectedExercise.id)}
+          onClose={closeExerciseDetail}
+          onToggle={toggleProgramExercise}
+          onStart={selectExercise}
+        />
+      )}
+
+      {showProgramDetail && recommendedProgram.items.length > 0 && (
+        <ProgramDetailModal
+          program={recommendedProgram}
+          selectedIds={selectedExercises}
+          onClose={closeProgramDetail}
+          onAddAll={addProgramExercises}
+          onOpenExercise={(item) => {
+            setShowProgramDetail(false);
+            openExerciseDetail(item);
+          }}
+        />
+      )}
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap');
@@ -1601,8 +1906,9 @@ export default function ExerciseSelect() {
 
         .exercise-row {
           position: relative;
-          min-height: 94px;
-          padding: 7px;
+          flex: 0 0 auto;          /* กันแถวถูกบีบจน thumbnail/ข้อความล้นกรอบ */
+          min-height: 108px;
+          padding: 8px;
           display: grid;
           grid-template-columns: 100px minmax(0, 1fr) 37px 58px;
           gap: 9px;
@@ -1626,6 +1932,9 @@ export default function ExerciseSelect() {
 
         .exercise-thumb {
           position: relative;
+          flex-shrink: 0;
+          align-self: center;
+          justify-self: center;
           width: 100px;
           height: 78px;
           overflow: hidden;
@@ -1634,10 +1943,14 @@ export default function ExerciseSelect() {
           background: #071114;
         }
 
-        .exercise-thumb video {
+        .exercise-thumb video,
+        .exercise-thumb .media-fallback {
+          position: absolute;
+          inset: 0;
           width: 100%;
           height: 100%;
           object-fit: cover;
+          object-position: center 25%;   /* เน้นตัวคน ไม่ตัดหัว */
           display: block;
         }
 
@@ -2046,6 +2359,484 @@ export default function ExerciseSelect() {
           stroke: #b7ff21;
           stroke-width: 1.3;
           filter: drop-shadow(0 0 4px rgba(183,255,33,.6));
+        }
+
+        /* =====================================================
+           เพิ่มใหม่: การ์ดท่า / โปรแกรมของฉัน / Modal
+           (ใช้เฉพาะหน้า ออกกำลังกาย)
+        ===================================================== */
+
+        .equipment-toggle {
+          margin-bottom: 10px;
+        }
+
+        .toggle-icon {
+          line-height: 1;
+          vertical-align: middle;
+        }
+
+        .equipment-tabs {
+          animation: ft-fade-in .22s ease;
+        }
+
+        @keyframes ft-fade-in {
+          from { opacity: 0; transform: translateY(-4px); }
+          to { opacity: 1; transform: none; }
+        }
+
+        /* รายการท่าเลื่อนอยู่ในกรอบเอง (เดสก์ท็อป/แล็ปท็อป) เพื่อให้ 2 คอลัมน์สูงสมดุลกัน
+           จอเล็กปล่อยไหลตามปกติ (ดูใน @media ด้านล่าง) */
+        .exercise-list {
+          max-height: 640px;
+          overflow-y: auto;
+          padding: 2px 4px 2px 0;
+          scrollbar-width: thin;
+          scrollbar-color: #1c6b8a transparent;
+        }
+
+        .exercise-thumb .media-fallback {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 4px;
+          text-align: center;
+          background:
+            radial-gradient(circle at 50% 35%, rgba(183,255,33,.16), transparent 62%),
+            linear-gradient(145deg, #06161b, #030b0e);
+        }
+
+        .media-fallback span {
+          font-size: 26px;
+          line-height: 1;
+        }
+
+        .media-fallback small {
+          max-width: 90%;
+          color: #8fb4a3;
+          font-size: 9px;
+          line-height: 1.2;
+        }
+
+        .exercise-desc {
+          margin: 2px 0 5px;
+          color: #8fa19d;
+          font-size: 9px;
+          line-height: 1.35;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .exercise-row.is-added {
+          border-color: #a8ff1e;
+          box-shadow: 0 0 13px rgba(183,255,33,.12);
+        }
+
+        .choose-button.added {
+          color: #d9ffa0;
+          border: 1px solid #a8ff1e;
+          background: rgba(131, 255, 14, .14);
+          box-shadow: none;
+        }
+
+        .play-button,
+        .choose-button,
+        .ft-btn-primary,
+        .ft-btn-ghost {
+          touch-action: manipulation;
+        }
+
+        .program-card .empty-note {
+          color: #91a29e;
+          font-size: 11px;
+        }
+
+        .program-info button:disabled {
+          opacity: .5;
+          cursor: default;
+        }
+
+        /* ---------- โปรแกรมของฉัน ---------- */
+        .my-program-panel {
+          position: relative;
+          margin-top: 12px;
+          padding: 13px 15px;
+          border: 1px solid #0089c4;
+          border-radius: 14px;
+          overflow: hidden;
+          background:
+            linear-gradient(145deg, rgba(3, 16, 19, .96), rgba(1, 8, 11, .96));
+        }
+
+        .my-program-panel::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 2px;
+          background: linear-gradient(90deg, #b7ff21, #00b9ff, transparent);
+        }
+
+        .my-program-list {
+          margin: 0 0 10px;
+          padding: 0;
+          list-style: none;
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+          gap: 7px;
+        }
+
+        .my-program-list li {
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 7px 8px 7px 10px;
+          border: 1px solid #278a52;
+          border-radius: 10px;
+          background: rgba(11, 29, 21, .55);
+        }
+
+        .mp-check {
+          color: #b7ff21;
+          font-size: 13px;
+        }
+
+        .mp-name {
+          flex: 1;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          color: #edf5f1;
+          font-family: "Kanit", sans-serif;
+          font-size: 12px;
+        }
+
+        .my-program-list em {
+          color: #8fa19d;
+          font-size: 9px;
+          font-style: normal;
+          white-space: nowrap;
+        }
+
+        .my-program-list li button {
+          width: 26px;
+          height: 26px;
+          display: grid;
+          place-items: center;
+          border: 1px solid #315c6d;
+          border-radius: 50%;
+          color: #cfe0db;
+          background: transparent;
+          cursor: pointer;
+          font-size: 15px;
+          line-height: 1;
+        }
+
+        .my-program-list li button:hover {
+          border-color: #ff6b6b;
+          color: #ff9a9a;
+        }
+
+        .my-program-empty {
+          margin: 0 0 10px;
+          color: #8fa19d;
+          font-size: 11px;
+        }
+
+        .my-program-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .mp-start,
+        .mp-clear,
+        .ft-btn-primary,
+        .ft-btn-ghost {
+          min-height: 38px;
+          padding: 0 20px;
+          border-radius: 20px;
+          cursor: pointer;
+          font-family: "Kanit", sans-serif;
+          font-size: 12px;
+          font-weight: 500;
+          transition: .2s ease;
+        }
+
+        .mp-start,
+        .ft-btn-primary {
+          color: #071207;
+          border: 0;
+          background: linear-gradient(135deg, #d2ff31, #83ff1b);
+          box-shadow: 0 0 11px rgba(183,255,33,.28);
+        }
+
+        .mp-start:hover:not(:disabled),
+        .ft-btn-primary:hover:not(:disabled) {
+          box-shadow: 0 0 17px rgba(183,255,33,.5);
+        }
+
+        .mp-start:disabled,
+        .ft-btn-primary:disabled {
+          opacity: .45;
+          cursor: default;
+          box-shadow: none;
+        }
+
+        .mp-clear,
+        .ft-btn-ghost {
+          color: #dce8e4;
+          border: 1px solid #117eb4;
+          background: rgba(3, 19, 25, .78);
+        }
+
+        .mp-clear:hover,
+        .ft-btn-ghost:hover {
+          border-color: #2ac0ef;
+        }
+
+        /* ---------- Modal ---------- */
+        .ft-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 10000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 18px;
+          background: rgba(0, 4, 6, .78);
+          backdrop-filter: blur(4px);
+          animation: ft-fade-in .18s ease;
+        }
+
+        .ft-modal {
+          position: relative;
+          width: 100%;
+          max-width: 640px;
+          max-height: calc(100vh - 36px);
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          border: 1px solid #0089c4;
+          border-radius: 16px;
+          background: linear-gradient(145deg, rgba(5, 20, 25, .99), rgba(1, 9, 12, .99));
+          box-shadow: 0 0 40px rgba(0, 160, 220, .16), 0 0 22px rgba(183,255,33,.07);
+        }
+
+        .ft-modal::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 2px;
+          z-index: 2;
+          background: linear-gradient(90deg, #b7ff21, #00b9ff, transparent);
+        }
+
+        .ft-modal-close {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          z-index: 3;
+          width: 34px;
+          height: 34px;
+          display: grid;
+          place-items: center;
+          border: 1px solid #315c6d;
+          border-radius: 50%;
+          color: #e5ece9;
+          background: rgba(2, 10, 13, .8);
+          cursor: pointer;
+          font-size: 20px;
+          line-height: 1;
+        }
+
+        .ft-modal-close:hover {
+          border-color: #b7ff21;
+          color: #b7ff21;
+        }
+
+        .ft-modal-media {
+          flex: 0 0 auto;
+          height: 220px;
+          background: #071114;
+          border-bottom: 1px solid #1c4553;
+        }
+
+        .ft-modal-media video {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+
+        .ft-modal-media .media-fallback {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          background:
+            radial-gradient(circle at 50% 40%, rgba(183,255,33,.18), transparent 60%),
+            linear-gradient(145deg, #06161b, #030b0e);
+        }
+
+        .ft-modal-media .media-fallback span {
+          font-size: 58px;
+        }
+
+        .ft-modal-media .media-fallback small {
+          font-size: 12px;
+        }
+
+        .ft-modal-body {
+          flex: 1 1 auto;
+          min-height: 0;
+          overflow-y: auto;
+          padding: 16px 20px 6px;
+        }
+
+        .ft-modal-program .ft-modal-body {
+          padding-top: 24px;
+        }
+
+        .ft-modal-body h2 {
+          margin: 0;
+          padding-right: 38px;
+          color: #edf5f1;
+          font-family: "Kanit", sans-serif;
+          font-size: 22px;
+          font-weight: 500;
+          line-height: 1.2;
+        }
+
+        .ft-modal-thai {
+          margin: 2px 0 10px;
+          color: #9ba9a5;
+          font-size: 12px;
+        }
+
+        .ft-modal-body h3 {
+          margin: 14px 0 4px;
+          color: #b7ff21;
+          font-family: "Kanit", sans-serif;
+          font-size: 12px;
+          font-weight: 500;
+        }
+
+        .ft-modal-body p {
+          margin: 0;
+          color: #c9d6d2;
+          font-size: 12px;
+          line-height: 1.6;
+        }
+
+        .ft-modal .exercise-tags {
+          margin-bottom: 4px;
+        }
+
+        .ft-stats {
+          margin-top: 12px;
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 8px;
+        }
+
+        .ft-stats div {
+          padding: 8px 6px;
+          text-align: center;
+          border: 1px solid #1c4553;
+          border-radius: 10px;
+          background: rgba(3, 19, 25, .7);
+        }
+
+        .ft-stats b {
+          display: block;
+          color: #edf5f1;
+          font-family: "Kanit", sans-serif;
+          font-size: 12px;
+          font-weight: 500;
+          line-height: 1.3;
+        }
+
+        .ft-stats span {
+          display: block;
+          margin-top: 2px;
+          color: #8fa19d;
+          font-size: 9px;
+        }
+
+        .ft-caution {
+          margin: 0;
+          padding-left: 18px;
+          color: #c9d6d2;
+          font-size: 12px;
+          line-height: 1.6;
+        }
+
+        .ft-caution li::marker {
+          color: #d7ff26;
+        }
+
+        .ft-program-items {
+          margin: 0;
+          padding: 0;
+          list-style: none;
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+        }
+
+        .ft-program-items button {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+          padding: 10px 12px;
+          text-align: left;
+          border: 1px solid #278a52;
+          border-radius: 10px;
+          color: #edf5f1;
+          background: rgba(11, 29, 21, .55);
+          cursor: pointer;
+          font-family: "Kanit", sans-serif;
+        }
+
+        .ft-program-items button:hover {
+          border-color: #a8ff1e;
+        }
+
+        .ft-program-items strong {
+          font-size: 13px;
+          font-weight: 500;
+        }
+
+        .ft-program-items span {
+          color: #8fa19d;
+          font-size: 10px;
+          white-space: nowrap;
+        }
+
+        .ft-modal-actions {
+          flex: 0 0 auto;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          padding: 12px 20px 16px;
+          border-top: 1px solid #12333d;
+        }
+
+        .ft-modal-actions button {
+          flex: 1 1 150px;
         }
 
         /* =====================================================
@@ -2525,6 +3316,121 @@ export default function ExerciseSelect() {
 
         html[data-theme="dark"] { color-scheme: dark; }
 
+        /* ===================== เพิ่มใหม่: Responsive ของส่วนที่เพิ่ม ===================== */
+
+        @media (max-width: 950px) {
+          .equipment-tabs {
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding-bottom: 6px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+          }
+
+          .equipment-tabs button {
+            flex: 0 0 auto;
+            height: 38px;
+            font-size: 11px;
+          }
+
+          .equipment-toggle button {
+            min-height: 52px;
+          }
+
+          .choose-button,
+          .play-button {
+            min-height: 36px;
+          }
+
+          .exercise-list {
+            max-height: none;
+            overflow: visible;
+            padding-right: 0;
+          }
+        }
+
+        @media (max-width: 650px) {
+          .ft-modal-backdrop {
+            padding: 0;
+            align-items: flex-end;
+          }
+
+          .ft-modal {
+            max-width: none;
+            max-height: 94vh;
+            border-radius: 16px 16px 0 0;
+          }
+
+          .ft-modal-media {
+            height: 170px;
+          }
+
+          .ft-stats {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .my-program-list {
+            grid-template-columns: 1fr;
+          }
+
+          .mp-start,
+          .mp-clear {
+            flex: 1 1 140px;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .equipment-tabs,
+          .ft-modal-backdrop { animation: none; }
+        }
+
+        /* ===================== เพิ่มใหม่: โหมดสว่างของส่วนที่เพิ่ม ===================== */
+
+        html[data-theme="light"] .exercise-thumb .media-fallback,
+        html[data-theme="light"] .ft-modal-media .media-fallback {
+          background:
+            radial-gradient(circle at 50% 35%, rgba(110, 215, 40, .22), transparent 62%),
+            linear-gradient(145deg, #eef6f3, #dfeae6);
+        }
+        html[data-theme="light"] .media-fallback small { color: #4a6a5c; }
+        html[data-theme="light"] .exercise-desc { color: #5d6e6a; }
+        html[data-theme="light"] .exercise-row.is-added { border-color: #4fb82b; box-shadow: none; }
+        html[data-theme="light"] .choose-button.added { color: #1d4a0c; border-color: #4fb82b; background: #e3f5d6; }
+
+        html[data-theme="light"] .my-program-panel {
+          border-color: #8cc7de;
+          background: linear-gradient(145deg, #ffffff, #f4f9f8);
+          box-shadow: 0 8px 24px rgba(20, 60, 50, .08);
+        }
+        html[data-theme="light"] .my-program-list li { border-color: #9ccb6b; background: #f4fbef; }
+        html[data-theme="light"] .mp-check { color: #3f9a1c; }
+        html[data-theme="light"] .mp-name { color: #12201c; }
+        html[data-theme="light"] .my-program-list em,
+        html[data-theme="light"] .my-program-empty { color: #5d6e6a; }
+        html[data-theme="light"] .my-program-list li button { border-color: #a9cfe0; color: #33433f; }
+        html[data-theme="light"] .mp-clear,
+        html[data-theme="light"] .ft-btn-ghost { color: #2a3a36; border-color: #8cc7de; background: #ffffff; }
+
+        html[data-theme="light"] .ft-modal-backdrop { background: rgba(18, 32, 28, .5); }
+        html[data-theme="light"] .ft-modal {
+          border-color: #8cc7de;
+          background: linear-gradient(145deg, #ffffff, #f4f9f8);
+          box-shadow: 0 18px 50px rgba(20, 60, 50, .22);
+        }
+        html[data-theme="light"] .ft-modal-close { color: #1f2d29; border-color: #a9cfe0; background: rgba(255,255,255,.9); }
+        html[data-theme="light"] .ft-modal-media { background: #e8efed; border-bottom-color: #c3d2ce; }
+        html[data-theme="light"] .ft-modal-body h2 { color: #12201c; }
+        html[data-theme="light"] .ft-modal-thai { color: #5d6e6a; }
+        html[data-theme="light"] .ft-modal-body h3 { color: #2f8a10; }
+        html[data-theme="light"] .ft-modal-body p,
+        html[data-theme="light"] .ft-caution { color: #33433f; }
+        html[data-theme="light"] .ft-stats div { border-color: #c3d9d2; background: #f4f9f8; }
+        html[data-theme="light"] .ft-stats b { color: #12201c; }
+        html[data-theme="light"] .ft-stats span { color: #5d6e6a; }
+        html[data-theme="light"] .ft-program-items button { color: #12201c; border-color: #9ccb6b; background: #f4fbef; }
+        html[data-theme="light"] .ft-program-items span { color: #5d6e6a; }
+        html[data-theme="light"] .ft-modal-actions { border-top-color: #d2e2d9; }
+
         /* ===================== LIGHT THEME =====================
            ใช้เมื่อ <html data-theme="light"> (ปุ่มดวงอาทิตย์/พระจันทร์ที่ header)
            โหมดมืดคือสไตล์เดิมทั้งหมด ไม่ถูกแก้ไข */
@@ -2618,10 +3524,19 @@ export default function ExerciseSelect() {
           box-shadow: none;
         }
         html[data-theme="light"] .toggle-icon { color: #2a9d16; }
-        html[data-theme="light"] .equipment-title { color: #33433f; }
-        html[data-theme="light"] .equipment-title span { color: #667773; }
-        html[data-theme="light"] .equipment-tabs button { border-color: #9ccbe0; color: #3a4a46; background: #ffffff; }
+        html[data-theme="light"] .equipment-title { color: #1f2f2b; }
+        html[data-theme="light"] .equipment-title span { color: #4a5b57; }
+        html[data-theme="light"] .equipment-tabs button { border-color: #9ccbe0; color: #2a3a36; background: #ffffff; }
         html[data-theme="light"] .equipment-tabs button.selected { color: #071006; border-color: #8bcf58; box-shadow: none; }
+        /* ปุ่มที่ยังใช้ไม่ได้ (ยังไม่เลือก "ใช้อุปกรณ์"): ไม่ลด opacity ทั้งปุ่มแล้ว เพราะทำให้ตัวอักษรจาง
+           ใช้พื้นเทาอ่อน + ตัวอักษรเข้มแทน ยังดูออกว่ากดไม่ได้แต่อ่านชัด */
+        html[data-theme="light"] .equipment-tabs button:disabled:not(.selected) {
+          opacity: 1;
+          color: #3f504c;
+          background: #eef4f3;
+          border-color: #a9cfe0;
+        }
+        html[data-theme="light"] .equipment-tabs button.selected:disabled { opacity: 1; }
         html[data-theme="light"] .exercise-row {
           border-color: #9ccbe0;
           background: linear-gradient(100deg, #ffffff, #f4f9f8);
@@ -2670,7 +3585,19 @@ export default function ExerciseSelect() {
         html[data-theme="light"] .notification-message strong small,
         html[data-theme="light"] .notification-message > small { color: #6e8276; }
         html[data-theme="light"] .notification-message span { color: #2e4438; }
-      `}</style>
+      
+/* โหมดสว่าง: แอนิเมชันเรืองแสงของโลโก้ต้องคงการกลับสี (invert) ไว้ ไม่งั้น filter ของ animation จะทับ
+   จนตัวอักษรสีขาวของโลโก้หายไปบนพื้นขาว */
+@keyframes fittrack-logo-glow-light {
+  0%, 100% { filter: invert(1) hue-rotate(180deg) drop-shadow(0 0 2px rgba(60,170,40,.10)); }
+  50% { filter: invert(1) hue-rotate(180deg) drop-shadow(0 0 5px rgba(60,170,40,.28)); }
+}
+html[data-theme="light"] .sidebar-logo {
+  filter: invert(1) hue-rotate(180deg);
+  mix-blend-mode: multiply;
+  animation-name: fittrack-logo-glow-light !important;
+}
+`}</style>
     </div>
   );
 }

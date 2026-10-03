@@ -1,13 +1,42 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { collection, query, where, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
-const EXERCISE_LABELS = {
-  squat: { name: 'Squat (ลุกนั่ง)', icon: '🏋️', calPerRep: 0.32 },
-  jumping_jack: { name: 'Jumping Jack (กระโดดตบ)', icon: '⭐', calPerRep: 0.20 },
+// ข้อมูลท่าออกกำลังกาย (id เดียวกับหน้าเลือกท่า) — calPerRep/secPerRep ใช้ประมาณค่าเมื่อเอกสารไม่ได้เก็บไว้
+const EXERCISES = {
+  squat: { name: 'Squat', thai: 'สควอท', muscle: 'ขา', equipment: 'ไม่มีอุปกรณ์', video: '/squats.mp4', calPerRep: 0.32, secPerRep: 4 },
+  jumping_jack: { name: 'Jumping Jack', thai: 'กระโดดตบ', muscle: 'คาร์ดิโอ', equipment: 'ไม่มีอุปกรณ์', video: '/jumping_jack.mp4', calPerRep: 0.2, secPerRep: 1.5 },
+  high_knees: { name: 'High Knees', thai: 'ยกเข่าสูง', muscle: 'ขา', equipment: 'ไม่มีอุปกรณ์', video: '/high_knees.mp4', calPerRep: 0.15, secPerRep: 1 },
+  punches: { name: 'Punches', thai: 'ชกหมัด', muscle: 'แขน', equipment: 'ไม่มีอุปกรณ์', video: '/punches.mp4', calPerRep: 0.25, secPerRep: 1 },
 };
+const getExerciseInfo = (id) =>
+  EXERCISES[id] || { name: id || 'ไม่ทราบท่า', thai: '', muscle: 'อื่นๆ', equipment: 'ไม่มีอุปกรณ์', video: '', calPerRep: 0.32, secPerRep: 3 };
+
+// เป้าหมายของผู้ใช้ (เก็บในเครื่อง)
+const GOALS_KEY = 'fittrack-history-goals';
+const DEFAULT_GOALS = { weeklyBurn: 10000, daysMin: 3, daysMax: 5, minMin: 45, minMax: 60, dailyKcal: 1650 };
+const loadGoals = () => {
+  try { return { ...DEFAULT_GOALS, ...JSON.parse(localStorage.getItem(GOALS_KEY) || '{}') }; } catch { return DEFAULT_GOALS; }
+};
+
+const DAY_MS = 86400000;
+const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const KCAL_PER_RICE_PLATE = 600; // ข้าวมันไก่ ~600 kcal/จาน (ค่าประมาณ)
+const KCAL_PER_KG = 7700;
+
+const fmtInt = (n) => Math.round(n || 0).toLocaleString('en-US');
+const fmtKcal = (n) => (n >= 100 ? fmtInt(n) : String(Math.round((n || 0) * 10) / 10));
+const durationParts = (sec) => {
+  if (sec < 60) return [{ v: Math.round(sec), u: 'วิ' }];
+  const m = Math.round(sec / 60);
+  if (m < 60) return [{ v: m, u: 'นาที' }];
+  return [{ v: Math.floor(m / 60), u: 'ชม.' }, { v: m % 60, u: 'นาที' }];
+};
+const fmtDuration = (sec) => durationParts(sec).map((p) => `${p.v} ${p.u}`).join(' ');
+const pctChange = (cur, prev) => (prev > 0 ? Math.round(((cur - prev) / prev) * 100) : null);
 
 // แคชชื่อผู้ใช้ไว้ เพื่อให้เปลี่ยนหน้าแล้วชื่อขึ้นทันที ไม่กระพริบเป็นชื่ออื่น
 const NAME_CACHE_KEY = 'fittrack-user-name';
@@ -42,9 +71,49 @@ const getSavedDailyCalories = () => {
 // พลังงานของแต่ละเซสชัน
 const getSessionCalories = (w) => {
   if (w.calories !== undefined) return Number(w.calories) || 0;
-  const calPerRep = EXERCISE_LABELS[w.exercise]?.calPerRep || 0.32;
-  return Number(((w.count || 0) * calPerRep).toFixed(2));
+  return Number(((w.count || 0) * getExerciseInfo(w.exercise).calPerRep).toFixed(2));
 };
+
+// ระยะเวลาของแต่ละเซสชัน (วินาที): ใช้ค่าที่บันทึกไว้ถ้ามี ไม่งั้นประมาณจากจำนวนครั้ง
+const getSessionSeconds = (w) => {
+  const d = Number(w.durationSeconds ?? w.duration ?? w.seconds);
+  if (d > 0) return d;
+  return Math.max(30, Math.round((w.count || 0) * getExerciseInfo(w.exercise).secPerRep));
+};
+
+/* ไอคอนเส้น (SVG) */
+const ICONS = {
+  doc: 'M6 3h9l4 4v14H6zM14 3v5h5M9 12h6M9 16h6',
+  flame: 'M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9z',
+  clock: 'M12 7v5l3 2M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM10 2h4',
+  dumbbell: 'M6 8v8M3 10v4M9 6v12M15 6v12M18 8v8M21 10v4M9 12h6',
+  chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+  cal: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01',
+  trophy: 'M8 4h8v5a4 4 0 0 1-8 0zM8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M10 17h4',
+  scale: 'M6 4h12l2 16H4zM9 9a3 3 0 0 1 6 0',
+  chev: 'M9 6l6 6-6 6',
+  settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12l2-1-2-4-2 1-2-1-.5-2h-4L10 7 8 8 6 7 4 11l2 1v2l-2 1 2 4 2-1 2 1 .5 2h4L14 19l2-1 2 1 2-4-2-1z',
+};
+const Ico = ({ n, size = 22 }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={ICONS[n]} />
+  </svg>
+);
+
+const StatCard = ({ icon, label, children, delta, ring, color }) => (
+  <div className="hx-stat" style={{ '--c': color }}>
+    <span className="hx-stat-icon"><Ico n={icon} size={30} /></span>
+    <div className="hx-stat-body">
+      <span className="hx-stat-label">{label}</span>
+      <strong className="hx-stat-value">{children}</strong>
+      <span className={`hx-delta ${delta.dir}`}>{delta.text}</span>
+    </div>
+    <span className="hx-ring" style={{ '--p': Math.min(100, Math.max(0, ring.pct)) }} title={ring.title}>
+      <Ico n={ring.icon} size={24} />
+    </span>
+  </div>
+);
 
 export default function History() {
   const navigate = useNavigate();
@@ -156,9 +225,6 @@ export default function History() {
     });
   };
 
-  const totalReps = workouts.reduce((sum, w) => sum + (w.count || 0), 0);
-  const totalCalories = workouts.reduce((sum, w) => sum + getSessionCalories(w), 0).toFixed(2);
-
   // ---------- การแจ้งเตือน ----------
   const todayKey = getLocalDateKey(currentDateTime);
   const todayWorkouts = workouts.filter(
@@ -195,6 +261,135 @@ export default function History() {
       }
     }
   };
+
+  // ---------- ข้อมูลสรุป / กราฟ / ตัวกรอง ----------
+  const [chartRange, setChartRange] = useState(7);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [periodFilter, setPeriodFilter] = useState('month');
+  const [visibleCount, setVisibleCount] = useState(6);
+  const [expandedId, setExpandedId] = useState(null);
+  const [hoverBar, setHoverBar] = useState(null);
+  const [goals, setGoals] = useState(loadGoals);
+  const [goalOpen, setGoalOpen] = useState(false);
+  const [goalDraft, setGoalDraft] = useState(DEFAULT_GOALS);
+
+  const sessions = useMemo(
+    () =>
+      workouts
+        .filter((w) => w.completedAt?.toDate)
+        .map((w) => ({
+          id: w.id,
+          exercise: w.exercise,
+          info: getExerciseInfo(w.exercise),
+          count: w.count || 0,
+          date: w.completedAt.toDate(),
+          kcal: getSessionCalories(w),
+          sec: getSessionSeconds(w),
+        }))
+        .sort((x, y) => y.date - x.date),
+    [workouts]
+  );
+
+  const stats = useMemo(() => {
+    const today0 = startOfDay(currentDateTime);
+    const tomorrow = addDays(today0, 1);
+    const weekStart = addDays(today0, -6);
+    const prevStart = addDays(today0, -13);
+    const monthStart = new Date(currentDateTime.getFullYear(), currentDateTime.getMonth(), 1);
+    const agg = (list) => ({
+      n: list.length,
+      kcal: list.reduce((s, x) => s + x.kcal, 0),
+      sec: list.reduce((s, x) => s + x.sec, 0),
+      reps: list.reduce((s, x) => s + x.count, 0),
+    });
+    const within = (from, to) => sessions.filter((s) => s.date >= from && s.date < to);
+    const weekList = within(weekStart, tomorrow);
+    return {
+      today0, tomorrow, weekStart, monthStart,
+      total: agg(sessions),
+      week: agg(weekList),
+      prev: agg(within(prevStart, weekStart)),
+      month: agg(within(monthStart, tomorrow)),
+      activeDays: new Set(weekList.map((s) => getLocalDateKey(s.date))).size,
+    };
+  }, [sessions, todayKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const chart = useMemo(() => {
+    const { today0 } = stats;
+    const fmt = (d) => d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+    let buckets = [];
+    if (chartRange === 90) {
+      for (let i = 12; i >= 0; i--) {
+        const end = addDays(today0, -i * 7 + 1);
+        const start = addDays(end, -7);
+        const sum = sessions.filter((s) => s.date >= start && s.date < end).reduce((a, s) => a + s.kcal, 0);
+        buckets.push({ label: fmt(addDays(start, 1)), tip: `สัปดาห์ ${fmt(addDays(start, 1))} – ${fmt(addDays(end, -1))}`, kcal: sum });
+      }
+    } else {
+      for (let i = chartRange - 1; i >= 0; i--) {
+        const day = addDays(today0, -i);
+        const next = addDays(day, 1);
+        const sum = sessions.filter((s) => s.date >= day && s.date < next).reduce((a, s) => a + s.kcal, 0);
+        buckets.push({ label: fmt(day), tip: fmt(day), kcal: sum });
+      }
+    }
+    const rough = Math.max(...buckets.map((b) => b.kcal), 40) / 4;
+    const mag = 10 ** Math.floor(Math.log10(rough));
+    const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= rough);
+    const top = step * 4;
+    return { buckets, top, ticks: [0, 1, 2, 3, 4].map((i) => i * step), every: Math.ceil(buckets.length / 7) };
+  }, [sessions, chartRange, stats]);
+
+  const typeOptions = useMemo(() => ['all', ...Array.from(new Set(sessions.map((s) => s.info.muscle)))], [sessions]);
+
+  const filtered = useMemo(() => {
+    const from =
+      periodFilter === 'week' ? stats.weekStart
+      : periodFilter === 'month' ? stats.monthStart
+      : periodFilter === '3m' ? addDays(stats.today0, -89)
+      : null;
+    return sessions.filter((s) => (typeFilter === 'all' || s.info.muscle === typeFilter) && (!from || s.date >= from));
+  }, [sessions, typeFilter, periodFilter, stats]);
+
+  const pickFilter = (setter) => (e) => { setter(e.target.value); setVisibleCount(6); setExpandedId(null); };
+
+  const openGoals = () => { setGoalDraft(goals); setGoalOpen(true); };
+  const saveGoals = (e) => {
+    e.preventDefault();
+    const n = (v, d) => Math.max(1, Math.round(Number(v)) || d);
+    const next = {
+      weeklyBurn: n(goalDraft.weeklyBurn, DEFAULT_GOALS.weeklyBurn),
+      daysMin: Math.min(7, n(goalDraft.daysMin, 3)),
+      daysMax: Math.min(7, n(goalDraft.daysMax, 5)),
+      minMin: n(goalDraft.minMin, 45),
+      minMax: n(goalDraft.minMax, 60),
+      dailyKcal: n(goalDraft.dailyKcal, 1650),
+    };
+    if (next.daysMin > next.daysMax) [next.daysMin, next.daysMax] = [next.daysMax, next.daysMin];
+    if (next.minMin > next.minMax) [next.minMin, next.minMax] = [next.minMax, next.minMin];
+    setGoals(next);
+    try { localStorage.setItem(GOALS_KEY, JSON.stringify(next)); } catch { /* storage optional */ }
+    setGoalOpen(false);
+  };
+
+  const { total, week, prev, month } = stats;
+  const delta = (cur, before) => {
+    const p = pctChange(cur, before);
+    if (p === null) return { dir: 'flat', text: cur > 0 ? 'เริ่มต้นสัปดาห์นี้' : 'ยังไม่มีข้อมูลสัปดาห์นี้' };
+    if (p === 0) return { dir: 'flat', text: 'เท่ากับสัปดาห์ที่แล้ว' };
+    return { dir: p > 0 ? 'up' : 'down', text: `${p > 0 ? '↑' : '↓'} ${Math.abs(p)}% จากสัปดาห์ที่แล้ว` };
+  };
+  const weeklyPct = (week.kcal / goals.weeklyBurn) * 100;
+  const ricePlates = week.kcal / KCAL_PER_RICE_PLATE;
+  const weightLoss = month.kcal / KCAL_PER_KG;
+  const avgMinutes = month.n ? Math.round(month.sec / month.n / 60) : 0;
+  const avgKcal = month.n ? Math.round(month.kcal / month.n) : 0;
+  const praise =
+    workouts.length === 0
+      ? { title: 'เริ่มต้นกันเลย!', text: 'เลือกท่าออกกำลังกายแรกของคุณ แล้วประวัติจะแสดงที่นี่' }
+      : stats.activeDays >= goals.daysMin
+        ? { title: 'คุณเก่งมาก!', text: `สัปดาห์นี้ออกกำลังกายแล้ว ${stats.activeDays} วัน ถึงเป้าหมายแล้ว — รักษาความสม่ำเสมอไว้นะ` }
+        : { title: 'สู้ๆ นะ!', text: `สัปดาห์นี้ออกกำลังกายแล้ว ${stats.activeDays} วัน อีก ${goals.daysMin - stats.activeDays} วันถึงเป้าหมายขั้นต่ำ` };
 
   return (
     <div className="fittrack-app">
@@ -256,129 +451,221 @@ export default function History() {
         </header>
 
         <div className="history-content">
-          <section className="history-title">
-            <span className="title-icon green" aria-hidden="true">◷</span>
-            <div>
-              <h1>ประวัติการออกกำลังกาย</h1>
-              <p>ติดตามการออกกำลังกาย · สรุปจำนวนครั้ง · พลังงานที่ใช้</p>
+          <section className="dark-card hx-shell">
+            <header className="hx-head">
+              <span className="hx-head-icon"><Ico n="doc" size={34} /></span>
+              <div>
+                <h1>ประวัติการออกกำลังกาย</h1>
+                <p>ติดตามความก้าวหน้า และดูสถิติการออกกำลังกายของคุณ</p>
+              </div>
+            </header>
+
+            {error && <div className="hx-alert" role="alert">{error}</div>}
+
+            {/* ===== สถิติรวม ===== */}
+            <div className="hx-stats">
+              <StatCard
+                icon="flame" color="#8cff32" label="แคลอรี่ที่เผาผลาญรวม"
+                delta={delta(week.kcal, prev.kcal)}
+                ring={{ pct: weeklyPct, icon: 'flame', title: `สัปดาห์นี้ ${Math.round(weeklyPct)}% ของเป้าหมาย` }}
+              >{fmtInt(total.kcal)} <small>kcal</small></StatCard>
+              <StatCard
+                icon="clock" color="#8cff32" label="เวลาออกกำลังกายรวม"
+                delta={delta(week.sec, prev.sec)}
+                ring={{ pct: (week.sec / 60 / (goals.minMin * goals.daysMax)) * 100, icon: 'clock', title: 'เวลาสัปดาห์นี้เทียบกับเป้าหมาย' }}
+              >{durationParts(total.sec).map((p) => (<span key={p.u}>{p.v} <small>{p.u}</small> </span>))}</StatCard>
+              <StatCard
+                icon="dumbbell" color="#8cff32" label="จำนวนครั้งที่ออกกำลังกาย"
+                delta={delta(week.n, prev.n)}
+                ring={{ pct: (stats.activeDays / goals.daysMax) * 100, icon: 'chart', title: `สัปดาห์นี้ ${stats.activeDays}/${goals.daysMax} วัน` }}
+              >{total.n} <small>ครั้ง</small></StatCard>
             </div>
-          </section>
 
-          <section className="dark-card history-card">
-            <div className="card-title">
-              <span className="title-icon purple" aria-hidden="true">▣</span>
-              <h2>
-                สรุปการออกกำลังกาย
-                <span className="history-card-sub">ภาพรวมกิจกรรมที่บันทึกไว้</span>
-              </h2>
-            </div>
-
-            {loading ? (
-              <div className="history-state">
-                <span className="history-state-icon">⌛</span>
-                <p>กำลังโหลดข้อมูล...</p>
-              </div>
-            ) : error ? (
-              <div className="history-state history-error">
-                <span className="history-state-icon">!</span>
-                <p>{error}</p>
-              </div>
-            ) : workouts.length === 0 ? (
-              <div className="history-state">
-                <span className="history-state-icon">📭</span>
-                <p>ยังไม่มีประวัติการออกกำลังกาย</p>
-                <button
-                  className="lime-btn history-cta"
-                  type="button"
-                  onClick={() => navigate('/exercises')}
-                >
-                  เริ่มออกกำลังกายเลย <span>›</span>
-                </button>
-              </div>
-            ) : (
-              <div className="history-summary-grid">
-                <div className="history-stat green">
-                  <div className="history-stat-top">
-                    <span className="title-icon green" aria-hidden="true">▣</span>
-                    <span>จำนวนครั้งที่ออกกำลังกาย</span>
+            {/* ===== กราฟ + แคลอรี่ที่ลดได้ ===== */}
+            <div className="hx-row hx-row-chart">
+              <section className="hx-card">
+                <div className="hx-card-head">
+                  <span className="hx-mini-icon"><Ico n="chart" size={20} /></span>
+                  <h2>กราฟแคลอรี่ที่เผาผลาญ</h2>
+                  <div className="hx-tabs" role="tablist">
+                    {[7, 30, 90].map((r) => (
+                      <button key={r} type="button" role="tab" aria-selected={chartRange === r}
+                        className={chartRange === r ? 'active' : ''}
+                        onClick={() => { setChartRange(r); setHoverBar(null); }}>{r} วัน</button>
+                    ))}
                   </div>
-                  <strong>{workouts.length}</strong>
-                  <small>เซสชัน</small>
                 </div>
-                <div className="history-stat purple">
-                  <div className="history-stat-top">
-                    <span className="title-icon purple" aria-hidden="true">✦</span>
-                    <span>รวมจำนวนครั้ง</span>
-                  </div>
-                  <strong>{totalReps}</strong>
-                  <small>Reps ทั้งหมด</small>
-                </div>
-                <div className="history-stat yellow">
-                  <div className="history-stat-top">
-                    <span className="title-icon yellow" aria-hidden="true">♨</span>
-                    <span>พลังงานที่ใช้</span>
-                  </div>
-                  <strong>{totalCalories}</strong>
-                  <small>kcal</small>
-                </div>
-              </div>
-            )}
-          </section>
-
-          {!loading && !error && workouts.length > 0 && (
-            <section className="dark-card history-card">
-              <div className="card-title">
-                <span className="title-icon yellow" aria-hidden="true">▤</span>
-                <h2>
-                  รายการออกกำลังกาย
-                  <span className="history-card-sub">เรียงจากรายการล่าสุด</span>
-                </h2>
-                <span className="history-count-pill">{workouts.length} รายการ</span>
-              </div>
-
-              <div className="history-list">
-                {workouts.map((w) => {
-                  const info = EXERCISE_LABELS[w.exercise] || {
-                    name: w.exercise,
-                    icon: '💪',
-                    calPerRep: 0.32,
-                  };
-                  const sessionCalories = getSessionCalories(w);
-
-                  return (
-                    <article className="history-item" key={w.id}>
-                      <div className="history-item-icon">{info.icon}</div>
-                      <div className="history-item-info">
-                        <div className="history-item-name">{info.name}</div>
-                        <div className="history-item-date">
-                          <span>◷</span> {formatDate(w.completedAt)}
+                <div className="hx-plotwrap">
+                  {chart.ticks.map((tk) => (
+                    <div key={tk} className="hx-grid" style={{ bottom: `${(tk / chart.top) * 100}%` }}>
+                      <span>{fmtInt(tk)}</span>
+                    </div>
+                  ))}
+                  <div className="hx-bars">
+                    {chart.buckets.map((b, i) => (
+                      <div key={i} className="hx-barcol" onMouseEnter={() => setHoverBar(i)} onMouseLeave={() => setHoverBar(null)}>
+                        <div className="hx-bar" tabIndex={0} aria-label={`${b.tip}: ${fmtKcal(b.kcal)} kcal`}
+                          onFocus={() => setHoverBar(i)} onBlur={() => setHoverBar(null)}
+                          style={{ height: `${Math.max((b.kcal / chart.top) * 100, b.kcal > 0 ? 1.5 : 0)}%` }}>
+                          {hoverBar === i && <em className="hx-tip">{b.tip}<br /><b>{fmtKcal(b.kcal)} kcal</b></em>}
                         </div>
+                        {i % chart.every === 0 || i === chart.buckets.length - 1 ? <span className="hx-xlabel">{b.label}</span> : null}
                       </div>
-                      <div className="history-item-stats">
-                        <strong>{w.count || 0} ครั้ง</strong>
-                        <span>-{sessionCalories} kcal</span>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
-          )}
+                    ))}
+                  </div>
+                </div>
+              </section>
 
-          <section className="dark-card history-note">
-            <span className="title-icon purple" aria-hidden="true">✧</span>
-            <div className="history-note-copy">
-              <h2>บันทึกเพื่อพัฒนาสุขภาพ</h2>
-              <p>ตรวจสอบประวัติการออกกำลังกาย เพื่อดูความต่อเนื่องและติดตามกิจกรรมของคุณ</p>
+              <section className="hx-card hx-burn">
+                <div className="hx-card-head">
+                  <span className="hx-mini-icon"><Ico n="flame" size={20} /></span>
+                  <h2>แคลอรี่ที่ลดได้จากการออกกำลังกาย</h2>
+                </div>
+                <div className="hx-burn-main">
+                  <div>
+                    <div className="hx-burn-value">{fmtInt(week.kcal)} <small>kcal</small></div>
+                    <div className="hx-burn-eq">7 วันล่าสุด · เทียบเท่าข้าวมันไก่ {ricePlates.toFixed(1)} จาน</div>
+                  </div>
+                  <span className="hx-ring big" style={{ '--p': Math.min(100, weeklyPct), '--c': '#8cff32' }}><Ico n="flame" size={30} /></span>
+                </div>
+                <div className="hx-progress"><i style={{ width: `${Math.min(100, weeklyPct)}%` }} /></div>
+                <div className="hx-progress-label"><span>เป้าหมายรายสัปดาห์ ({Math.round(weeklyPct)}%)</span><span>{fmtInt(goals.weeklyBurn)} kcal</span></div>
+              </section>
             </div>
-            <button
-              className="lime-btn"
-              type="button"
-              onClick={() => navigate('/exercises')}
-            >
-              ออกกำลังกาย <span>›</span>
-            </button>
+
+            {/* ===== รายการ + คอลัมน์ขวา ===== */}
+            <div className="hx-row hx-row-list">
+              <section className="hx-card hx-list-card">
+                <div className="hx-card-head">
+                  <span className="hx-mini-icon"><Ico n="cal" size={20} /></span>
+                  <h2>ประวัติการออกกำลังกายล่าสุด</h2>
+                  <div className="hx-filters">
+                    <select value={typeFilter} onChange={pickFilter(setTypeFilter)} aria-label="กรองตามกลุ่มกล้ามเนื้อ">
+                      {typeOptions.map((o) => <option key={o} value={o}>{o === 'all' ? 'ทั้งหมด' : o}</option>)}
+                    </select>
+                    <select value={periodFilter} onChange={pickFilter(setPeriodFilter)} aria-label="กรองตามช่วงเวลา">
+                      <option value="week">สัปดาห์นี้</option>
+                      <option value="month">เดือนนี้</option>
+                      <option value="3m">3 เดือน</option>
+                      <option value="all">ทั้งหมด</option>
+                    </select>
+                  </div>
+                </div>
+
+                {loading ? (
+                  <div className="hx-empty"><p>กำลังโหลดข้อมูล...</p></div>
+                ) : filtered.length === 0 ? (
+                  <div className="hx-empty">
+                    <p>{sessions.length === 0 ? 'ยังไม่มีประวัติการออกกำลังกาย' : 'ไม่พบรายการในช่วงที่เลือก'}</p>
+                    <button className="lime-btn hx-cta" type="button" onClick={() => navigate('/exercises')}>เริ่มออกกำลังกายเลย ›</button>
+                  </div>
+                ) : (
+                  <div className="hx-list">
+                    {filtered.slice(0, visibleCount).map((s) => {
+                      const open = expandedId === s.id;
+                      return (
+                        <div key={s.id} className={`hx-item${open ? ' open' : ''}`}>
+                          <button type="button" className="hx-item-main" aria-expanded={open}
+                            onClick={() => setExpandedId(open ? null : s.id)}>
+                            <span className="hx-thumb">
+                              {s.info.video
+                                ? <video src={`${s.info.video}#t=0.6`} muted playsInline preload="metadata" />
+                                : <Ico n="dumbbell" size={26} />}
+                            </span>
+                            <span className="hx-item-info">
+                              <small>{s.date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                {'  '}{s.date.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false })} น.</small>
+                              <strong>{s.info.name}</strong>
+                              <em><span>{s.info.muscle}</span> • <span className="eq">{s.info.equipment}</span></em>
+                            </span>
+                            <span className="hx-metric"><Ico n="flame" size={22} /><span><b>{fmtKcal(s.kcal)} kcal</b><small>เผาผลาญ</small></span></span>
+                            <span className="hx-metric"><Ico n="clock" size={22} /><span><b>{fmtDuration(s.sec)}</b><small>ระยะเวลา</small></span></span>
+                            <span className="hx-done">เสร็จสิ้น</span>
+                            <span className="hx-chev"><Ico n="chev" size={20} /></span>
+                          </button>
+                          {open && (
+                            <div className="hx-detail">
+                              <div><small>จำนวนครั้ง</small><b>{s.count} ครั้ง</b></div>
+                              <div><small>พลังงานต่อครั้ง</small><b>{s.count ? (s.kcal / s.count).toFixed(2) : '-'} kcal</b></div>
+                              <div><small>ท่า</small><b>{s.info.thai || s.info.name}</b></div>
+                              <button type="button" className="lime-btn hx-again"
+                                onClick={() => navigate(`/settings?exercise=${s.exercise}`)}>ทำท่านี้อีกครั้ง ›</button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {filtered.length > visibleCount && (
+                      <button type="button" className="hx-more" onClick={() => setVisibleCount((c) => c + 6)}>
+                        ดูเพิ่มเติม ({filtered.length - visibleCount})
+                      </button>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              <aside className="hx-side">
+                <section className="hx-card">
+                  <div className="hx-card-head">
+                    <span className="hx-mini-icon"><Ico n="chart" size={20} /></span>
+                    <h2>สถิติรายเดือน</h2>
+                  </div>
+                  <ul className="hx-kv">
+                    <li><Ico n="cal" /><span>จำนวนครั้ง</span><b>{month.n} ครั้ง</b></li>
+                    <li><Ico n="clock" /><span>เวลาเฉลี่ยต่อครั้ง</span><b>{avgMinutes} นาที</b></li>
+                    <li><Ico n="flame" /><span>แคลอรี่เฉลี่ยต่อครั้ง</span><b>{fmtInt(avgKcal)} kcal</b></li>
+                    <li><Ico n="scale" /><span>ส่วนน้ำหนักที่ลดได้ (โดยประมาณ)</span><b>{weightLoss.toFixed(2)} กก.</b></li>
+                  </ul>
+                </section>
+
+                <section className="hx-card">
+                  <div className="hx-card-head">
+                    <span className="hx-mini-icon"><Ico n="target" size={20} /></span>
+                    <h2>เป้าหมายของคุณ</h2>
+                  </div>
+                  <ul className="hx-kv goals">
+                    <li><Ico n="cal" /><span>ออกกำลังกาย<small>สัปดาห์นี้ทำแล้ว {stats.activeDays} วัน</small></span><b>{goals.daysMin}-{goals.daysMax} วัน/สัปดาห์</b></li>
+                    <li><Ico n="clock" /><span>ระยะเวลา<small>เฉลี่ยครั้งล่าสุด {week.n ? Math.round(week.sec / week.n / 60) : 0} นาที</small></span><b>{goals.minMin}–{goals.minMax} นาที/ครั้ง</b></li>
+                    <li><Ico n="flame" /><span>แคลอรี่ที่ต้องการ<small>วันนี้บันทึกอาหาร {fmtInt(dailyFoodCalories)} kcal</small></span><b>{fmtInt(goals.dailyKcal)} kcal/วัน</b></li>
+                  </ul>
+                  <button type="button" className="hx-goal-btn" onClick={openGoals}><Ico n="settings" size={16} /> ปรับเป้าหมาย</button>
+                </section>
+
+                <section className="hx-card hx-praise">
+                  <span className="hx-trophy"><Ico n="trophy" size={34} /></span>
+                  <div>
+                    <h3>{praise.title}</h3>
+                    <p>{praise.text}</p>
+                  </div>
+                </section>
+              </aside>
+            </div>
           </section>
+
+          {goalOpen && (
+            <div className="hx-modal-bg" role="presentation" onClick={() => setGoalOpen(false)}>
+              <form className="hx-modal" role="dialog" aria-modal="true" aria-label="ปรับเป้าหมาย" onClick={(e) => e.stopPropagation()} onSubmit={saveGoals}>
+                <h3>ปรับเป้าหมาย</h3>
+                {[
+                  ['weeklyBurn', 'เป้าเผาผลาญรายสัปดาห์ (kcal)'],
+                  ['daysMin', 'ออกกำลังกายขั้นต่ำ (วัน/สัปดาห์)'],
+                  ['daysMax', 'ออกกำลังกายสูงสุด (วัน/สัปดาห์)'],
+                  ['minMin', 'ระยะเวลาขั้นต่ำ (นาที/ครั้ง)'],
+                  ['minMax', 'ระยะเวลาสูงสุด (นาที/ครั้ง)'],
+                  ['dailyKcal', 'แคลอรี่ที่ต้องการ (kcal/วัน)'],
+                ].map(([k, label]) => (
+                  <label key={k}>{label}
+                    <input type="number" min="1" inputMode="numeric" value={goalDraft[k]}
+                      onChange={(e) => setGoalDraft((d) => ({ ...d, [k]: e.target.value }))} />
+                  </label>
+                ))}
+                <div className="hx-modal-actions">
+                  <button type="button" className="hx-ghost" onClick={() => setGoalOpen(false)}>ยกเลิก</button>
+                  <button type="submit" className="lime-btn">บันทึก</button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
 
         <footer className="fittrack-footer">
@@ -730,87 +1017,201 @@ html[data-theme="light"] .footer-brand { color:#20382d }
 }
 
 /* ===================== HISTORY PAGE (เนื้อหาเฉพาะหน้า) ===================== */
-.history-content { width:100%; padding:26px 8px 0; display:grid; gap:18px; }
+.history-content { width:100%; padding:20px 8px 0; }
+.hx-shell { padding:22px 22px 24px; display:grid; gap:16px; border-color:#2f7a52; box-shadow:inset 0 0 0 1px rgba(110,255,50,.08), 0 0 28px rgba(80,255,120,.06); }
+.hx-head { display:flex; align-items:center; gap:16px; }
+.hx-head-icon { width:62px; height:62px; flex:none; display:grid; place-items:center; border:2px solid #7cff31; border-radius:14px; color:#8cff32; box-shadow:0 0 16px rgba(110,255,50,.25); }
+.hx-head h1 { margin:0; font:600 32px/1.2 'Kanit',sans-serif; }
+.hx-head p { margin:2px 0 0; color:var(--muted); font-size:14px; }
+.hx-alert { padding:10px 14px; border:1px solid var(--red); border-radius:10px; color:var(--red); font-size:13px; }
 
-.history-title { display:flex; align-items:center; gap:14px; padding:0 4px; }
-.history-title .title-icon { width:48px; height:48px; border-radius:13px; font-size:24px; flex:none; }
-.history-title h1 { margin:0; font:600 28px/1.2 'Kanit',sans-serif; }
-.history-title p { margin:4px 0 0; color:var(--muted); font-size:13px; }
+.hx-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+.hx-stat { display:flex; align-items:center; gap:14px; padding:16px 16px; border:1px solid #1f6d6a; border-radius:14px; background:linear-gradient(145deg,rgba(10,30,30,.7),rgba(4,14,16,.9)); }
+.hx-stat-icon { width:58px; height:58px; flex:none; display:grid; place-items:center; border-radius:50%; color:#061006; background:radial-gradient(circle at 35% 30%,#b9ff52,#4fcf22); box-shadow:0 0 18px rgba(110,255,50,.35); }
+.hx-stat-body { min-width:0; flex:1; display:flex; flex-direction:column; gap:2px; }
+.hx-stat-label { font-size:13px; color:#dfe8e6; }
+.hx-stat-value { font:600 30px/1.15 'Kanit',sans-serif; white-space:nowrap; }
+.hx-stat-value small { font:500 15px 'Kanit',sans-serif; color:var(--green2); }
+.hx-delta { font-size:12px; color:var(--muted); }
+.hx-delta.up { color:#8cff32; }
+.hx-delta.down { color:#ff8a5c; }
+.hx-ring { --c:#8cff32; --p:0; position:relative; width:64px; height:64px; flex:none; display:grid; place-items:center; border-radius:50%; color:var(--c);
+  background:conic-gradient(var(--c) calc(var(--p) * 1%), rgba(255,255,255,.1) 0); transition:background .5s ease; }
+.hx-ring:before { content:''; position:absolute; inset:6px; border-radius:50%; background:#07161a; }
+.hx-ring svg { position:relative; }
+.hx-ring.big { width:78px; height:78px; }
 
-.history-card { padding:20px 22px 22px; }
-.history-card .card-title { margin-bottom:16px; }
-.history-card-sub { display:block; margin-top:2px; color:var(--muted); font-size:12px; font-weight:400; }
-.history-card .card-title h2 { line-height:1.25; }
+.hx-row { display:grid; gap:14px; align-items:start; }
+.hx-row-chart { grid-template-columns:minmax(0,1.9fr) minmax(0,1fr); }
+.hx-row-list { grid-template-columns:minmax(0,1.9fr) minmax(0,1fr); }
+.hx-card { padding:16px 18px 18px; border:1px solid #1f6d6a; border-radius:14px; background:linear-gradient(145deg,rgba(6,18,22,.85),rgba(3,10,13,.95)); min-width:0; }
+.hx-card-head { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+.hx-card-head h2 { margin:0; font:500 18px 'Kanit',sans-serif; color:var(--text); }
+.hx-mini-icon { color:#8cff32; display:grid; place-items:center; }
 
-.history-summary-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
-.history-stat {
-  padding:16px 18px; display:flex; flex-direction:column; gap:6px;
-  border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.02);
+.hx-tabs { margin-left:auto; display:flex; gap:6px; }
+.hx-tabs button { height:30px; padding:0 14px; border:1px solid #2a5360; border-radius:8px; background:transparent; color:var(--text); font-size:12px; cursor:pointer; }
+.hx-tabs button:hover { border-color:#6bd3ff; }
+.hx-tabs button.active { background:linear-gradient(90deg,#72ed2e,#baff3e); border-color:transparent; color:#071005; font-weight:700; }
+
+.hx-plotwrap { position:relative; height:190px; margin:8px 0 34px 40px; border-left:0; }
+.hx-grid { position:absolute; left:0; right:0; border-top:1px solid rgba(120,170,190,.18); }
+.hx-grid span { position:absolute; left:-40px; width:34px; text-align:right; top:0; transform:translateY(-50%); font-size:11px; color:var(--muted); }
+.hx-bars { position:absolute; inset:0; display:flex; align-items:flex-end; justify-content:space-around; gap:4px; padding:0 4px; }
+.hx-barcol { position:relative; flex:1; max-width:46px; height:100%; display:flex; align-items:flex-end; justify-content:center; }
+.hx-bar { position:relative; width:62%; min-width:4px; border-radius:5px 5px 0 0; outline:none;
+  background:linear-gradient(180deg,#9cff4a 0%,#2fd6a0 55%,#4a5cff 100%); box-shadow:0 0 12px rgba(80,255,150,.25);
+  transform-origin:bottom; animation:hx-grow .6s ease both; transition:filter .15s ease; }
+.hx-barcol:hover .hx-bar, .hx-bar:focus-visible { filter:brightness(1.25); }
+@keyframes hx-grow { from { transform:scaleY(0); } to { transform:scaleY(1); } }
+.hx-xlabel { position:absolute; top:calc(100% + 8px); left:50%; transform:translateX(-50%); white-space:nowrap; font-size:11px; color:#dfe8e6; }
+.hx-tip { position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%); z-index:5; padding:6px 10px; border:1px solid #2a5360; border-radius:8px; background:#07161a; color:#fff; font-style:normal; font-size:11px; line-height:1.4; text-align:center; white-space:nowrap; pointer-events:none; }
+.hx-tip b { color:#b7ff21; }
+
+.hx-burn { background:linear-gradient(145deg,rgba(8,26,22,.9),rgba(3,10,13,.95)); border-color:#3a8f3a; }
+.hx-burn-main { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:6px 0 18px; }
+.hx-burn-value { font:600 46px/1.1 'Kanit',sans-serif; }
+.hx-burn-value small { font-size:22px; color:var(--green2); }
+.hx-burn-eq { margin-top:6px; color:var(--muted); font-size:12.5px; }
+.hx-progress { height:14px; border-radius:99px; background:rgba(255,255,255,.08); overflow:hidden; }
+.hx-progress i { display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,#4ee02a,#c6ff38); box-shadow:0 0 12px rgba(140,255,50,.5); transition:width .6s ease; }
+.hx-progress-label { display:flex; justify-content:space-between; gap:8px; margin-top:10px; font-size:12.5px; color:#dfe8e6; }
+
+.hx-filters { margin-left:auto; display:flex; gap:8px; }
+.hx-filters select { height:34px; min-width:96px; padding:0 10px; border:1px solid #2a5360; border-radius:8px; background:#050e11; color:var(--text); font-size:13px; cursor:pointer; }
+.hx-list { display:grid; gap:8px; }
+.hx-item { border:1px solid #1f4f55; border-radius:12px; background:rgba(255,255,255,.015); transition:border-color .2s ease; }
+.hx-item:hover, .hx-item.open { border-color:rgba(110,255,50,.5); }
+.hx-item-main { width:100%; display:grid; grid-template-columns:72px minmax(120px,1.4fr) minmax(110px,1fr) minmax(110px,1fr) 78px 18px; align-items:center; gap:14px; padding:8px 12px 8px 8px; border:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
+.hx-thumb { width:72px; height:56px; border-radius:8px; overflow:hidden; display:grid; place-items:center; background:linear-gradient(135deg,#1c3a4a,#0b1a22); color:#7fa8b8; }
+.hx-thumb video { width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; }
+.hx-item-info { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.hx-item-info small { font-size:11px; color:var(--muted); }
+.hx-item-info strong { font:600 15px 'Kanit',sans-serif; }
+.hx-item-info em { font-style:normal; font-size:11.5px; color:#78d6ff; }
+.hx-item-info em .eq { color:#9fb4b8; }
+.hx-metric { display:flex; align-items:center; gap:8px; color:#c6ff38; }
+.hx-metric span { display:flex; flex-direction:column; }
+.hx-metric b { font:600 14px 'Kanit',sans-serif; color:var(--text); white-space:nowrap; }
+.hx-metric small { font-size:10.5px; color:var(--muted); }
+.hx-metric svg:first-child { flex:none; }
+.hx-done { justify-self:center; padding:4px 12px; border-radius:7px; background:linear-gradient(90deg,#72ed2e,#baff3e); color:#071005; font-size:11px; font-weight:700; }
+.hx-chev { color:#dfe8e6; transition:transform .2s ease; }
+.hx-item.open .hx-chev { transform:rotate(90deg); }
+.hx-detail { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)) auto; gap:12px; align-items:center; padding:10px 16px 14px; border-top:1px dashed #1f4f55; }
+.hx-detail div { display:flex; flex-direction:column; }
+.hx-detail small { font-size:11px; color:var(--muted); }
+.hx-detail b { font:500 14px 'Kanit',sans-serif; }
+.hx-again { padding:0 16px; height:34px; font-size:12px; }
+.hx-more { height:38px; border:1px dashed #2a5360; border-radius:10px; background:transparent; color:var(--text); cursor:pointer; font-size:13px; }
+.hx-more:hover { border-color:#8cff32; color:#8cff32; }
+.hx-empty { display:grid; justify-items:center; gap:10px; padding:34px 10px; color:var(--muted); text-align:center; }
+.hx-empty p { margin:0; }
+.hx-cta { padding:0 22px; }
+
+.hx-side { display:grid; gap:14px; min-width:0; }
+.hx-kv { list-style:none; margin:0; padding:0; display:grid; gap:2px; }
+.hx-kv li { display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid rgba(120,170,190,.14); font-size:13px; }
+.hx-kv li:last-child { border-bottom:0; }
+.hx-kv li > svg { flex:none; color:#c6ff38; }
+.hx-kv li > span { flex:1; min-width:0; }
+.hx-kv li > span small { display:block; font-size:10.5px; color:var(--muted); }
+.hx-kv li > b { font:600 13.5px 'Kanit',sans-serif; color:var(--green2); white-space:nowrap; }
+.hx-goal-btn { width:100%; margin-top:10px; height:36px; display:flex; align-items:center; justify-content:center; gap:8px; border:1px solid #2a5360; border-radius:9px; background:transparent; color:var(--text); font-size:13px; cursor:pointer; }
+.hx-goal-btn:hover { border-color:#8cff32; color:#8cff32; }
+.hx-praise { display:flex; align-items:center; gap:14px; border-color:#4fa83a; background:linear-gradient(135deg,rgba(14,40,22,.9),rgba(4,12,12,.95)); }
+.hx-trophy { color:#c6ff38; flex:none; filter:drop-shadow(0 0 8px rgba(160,255,50,.5)); }
+.hx-praise h3 { margin:0 0 4px; font:600 18px 'Kanit',sans-serif; color:#c6ff38 !important; }
+.hx-praise p { margin:0; font-size:12.5px; line-height:1.55; color:#dfe8e6; }
+
+.hx-modal-bg { position:fixed; inset:0; z-index:200; display:grid; place-items:center; padding:16px; background:rgba(0,0,0,.6); }
+.hx-modal { width:min(400px,100%); max-height:92vh; overflow:auto; display:grid; gap:12px; padding:20px; border:1px solid #2a5360; border-radius:16px; background:#07131a; }
+.hx-modal h3 { margin:0 0 2px; font:600 19px 'Kanit',sans-serif; }
+.hx-modal label { display:grid; gap:5px; font-size:12.5px; color:var(--muted); }
+.hx-modal input { height:38px; padding:0 12px; border:1px solid #2a5360; border-radius:8px; background:#050e11; color:var(--text); font-size:14px; }
+.hx-modal input:focus { outline:2px solid #8cff32; outline-offset:1px; }
+.hx-modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:4px; }
+.hx-modal-actions .lime-btn { padding:0 24px; }
+.hx-ghost { height:37px; padding:0 18px; border:1px solid #2a5360; border-radius:8px; background:transparent; color:var(--text); cursor:pointer; }
+
+@media (max-width:1200px) {
+  .hx-row-chart, .hx-row-list { grid-template-columns:1fr; }
+  .hx-item-main { grid-template-columns:72px minmax(110px,1.3fr) minmax(100px,1fr) minmax(100px,1fr) 18px; }
+  .hx-done { display:none; }
 }
-.history-stat-top { display:flex; align-items:center; gap:10px; color:var(--muted); font-size:12.5px; }
-.history-stat-top .title-icon { width:30px; height:30px; font-size:16px; flex:none; }
-.history-stat strong { font:600 36px/1.1 'Kanit',sans-serif; }
-.history-stat.green strong { color:var(--green2); }
-.history-stat.purple strong { color:#d28bff; }
-.history-stat.yellow strong { color:var(--yellow); }
-.history-stat small { color:var(--muted); font-size:12px; }
-
-.history-count-pill {
-  margin-left:auto; padding:4px 13px; border:1px solid var(--line); border-radius:999px;
-  color:var(--muted); font-size:12px; white-space:nowrap;
-}
-
-.history-list { display:grid; gap:10px; }
-.history-item {
-  display:flex; align-items:center; gap:14px; padding:12px 14px;
-  border:1px solid var(--line); border-radius:13px; background:rgba(255,255,255,.02);
-  transition:transform .2s ease, border-color .2s ease, background .2s ease;
-}
-.history-item:hover { transform:translateX(3px); border-color:rgba(110,255,50,.45); }
-.history-item-icon {
-  width:46px; height:46px; flex:none; display:grid; place-items:center; font-size:22px;
-  border-radius:12px; background:rgba(110,255,50,.09); border:1px solid rgba(110,255,50,.25);
-}
-.history-item-info { min-width:0; flex:1; }
-.history-item-name { font:500 15px 'Kanit',sans-serif; }
-.history-item-date { margin-top:3px; color:var(--muted); font-size:12px; }
-.history-item-stats { display:flex; flex-direction:column; align-items:flex-end; gap:2px; text-align:right; }
-.history-item-stats strong { font:600 16px 'Kanit',sans-serif; }
-.history-item-stats span { color:#ff9a3d; font-size:12px; }
-
-.history-state { display:grid; justify-items:center; gap:10px; padding:34px 10px; color:var(--muted); text-align:center; }
-.history-state-icon { font-size:34px; line-height:1; }
-.history-state p { margin:0; }
-.history-error { color:var(--red); }
-.history-cta { margin-top:6px; padding:0 22px; display:inline-flex; align-items:center; gap:8px; }
-
-.history-note { display:flex; align-items:center; gap:16px; padding:18px 22px; }
-.history-note .title-icon { width:42px; height:42px; font-size:20px; flex:none; }
-.history-note-copy { min-width:0; flex:1; }
-.history-note-copy h2 { margin:0; font:500 17px 'Kanit',sans-serif; }
-.history-note-copy p { margin:4px 0 0; color:var(--muted); font-size:13px; }
-.history-note .lime-btn { padding:0 20px; white-space:nowrap; display:inline-flex; align-items:center; gap:8px; }
-
 @media (max-width:900px) {
-  .history-summary-grid { grid-template-columns:1fr; }
-  .history-note { flex-wrap:wrap; }
-  .history-title h1 { font-size:23px; }
+  .hx-stats { grid-template-columns:1fr; }
 }
-@media (max-width:600px) {
-  .history-card { padding:16px; }
-  .history-item { gap:10px; padding:10px; }
-  .history-item-icon { width:40px; height:40px; font-size:19px; }
+@media (max-width:640px) {
+  .hx-shell { padding:14px; }
+  .hx-head h1 { font-size:23px; }
+  .hx-head-icon { width:48px; height:48px; }
+  .hx-item-main { grid-template-columns:60px 1fr 18px; row-gap:8px; }
+  .hx-thumb { width:60px; height:48px; }
+  .hx-metric { grid-column:2; }
+  .hx-chev { grid-row:1; grid-column:3; }
+  .hx-detail { grid-template-columns:1fr 1fr; }
+  .hx-filters { margin-left:0; width:100%; }
+  .hx-filters select { flex:1; }
+  .hx-tabs { margin-left:0; }
+  .hx-burn-value { font-size:36px; }
 }
+@media (prefers-reduced-motion:reduce) { .hx-bar { animation:none; } }
 
 /* โหมดสว่างของเนื้อหา */
-html[data-theme="light"] .history-stat,
-html[data-theme="light"] .history-item { background:#f8fbfa; border-color:#d0ddd9; }
-html[data-theme="light"] .history-item:hover { border-color:#6cc943; background:#f1faec; }
-html[data-theme="light"] .history-item-icon { background:#eaf7e1; border-color:#a6d58a; }
-html[data-theme="light"] .history-stat.green strong { color:#2f8a10; }
-html[data-theme="light"] .history-stat.purple strong { color:#9a2fd0; }
-html[data-theme="light"] .history-stat.yellow strong { color:#a07400; }
-html[data-theme="light"] .history-item-stats span { color:#c4620a; }
-html[data-theme="light"] .history-count-pill { border-color:#c3d2ce; }
-html[data-theme="light"] .history-error { color:#b52e4b; }
+html[data-theme="light"] .hx-shell { border-color:#9fd3a8; box-shadow:0 8px 24px rgba(29,76,56,.07); }
+html[data-theme="light"] .hx-head h1 { color:#12201c; }
+html[data-theme="light"] .hx-head-icon { color:#2a9d16; border-color:#4fb82b; box-shadow:none; }
+html[data-theme="light"] .hx-stat,
+html[data-theme="light"] .hx-card { background:#fff; border-color:#bfd8d0; }
+html[data-theme="light"] .hx-burn,
+html[data-theme="light"] .hx-praise { background:linear-gradient(135deg,#f1faec,#fff); border-color:#9ccb6b; }
+html[data-theme="light"] .hx-stat-label,
+html[data-theme="light"] .hx-xlabel,
+html[data-theme="light"] .hx-progress-label,
+html[data-theme="light"] .hx-praise p { color:#33433f; }
+html[data-theme="light"] .hx-stat-value small,
+html[data-theme="light"] .hx-burn-value small,
+html[data-theme="light"] .hx-kv li > b { color:#2f8a10; }
+html[data-theme="light"] .hx-delta.up { color:#2f8a10; }
+html[data-theme="light"] .hx-delta.down { color:#c4620a; }
+html[data-theme="light"] .hx-ring:before { background:#fff; }
+html[data-theme="light"] .hx-ring { background:conic-gradient(var(--c) calc(var(--p) * 1%), rgba(0,0,0,.09) 0); color:#2a9d16; }
+html[data-theme="light"] .hx-stat-icon { color:#fff; background:radial-gradient(circle at 35% 30%,#7ee04a,#2a9d16); box-shadow:none; }
+html[data-theme="light"] .hx-mini-icon,
+html[data-theme="light"] .hx-metric,
+html[data-theme="light"] .hx-kv li > svg { color:#2a9d16; }
+html[data-theme="light"] .hx-grid { border-top-color:rgba(60,100,90,.18); }
+html[data-theme="light"] .hx-tabs button,
+html[data-theme="light"] .hx-goal-btn,
+html[data-theme="light"] .hx-ghost,
+html[data-theme="light"] .hx-more { border-color:#b8cfc8; color:#2a3a36; background:#fff; }
+html[data-theme="light"] .hx-filters select,
+html[data-theme="light"] .hx-modal input { background:#fff; border-color:#afcbbd; color:#1a3026; }
+html[data-theme="light"] .hx-item { background:#f8fbfa; border-color:#d0ddd9; }
+html[data-theme="light"] .hx-item:hover,
+html[data-theme="light"] .hx-item.open { border-color:#6cc943; background:#f1faec; }
+html[data-theme="light"] .hx-detail { border-top-color:#cfe0d8; }
+html[data-theme="light"] .hx-item-info em { color:#1f7aa6; }
+html[data-theme="light"] .hx-metric b { color:#172923; }
+html[data-theme="light"] .hx-chev { color:#40584e; }
+html[data-theme="light"] .hx-kv li { border-bottom-color:#dde8e3; }
+html[data-theme="light"] .hx-praise h3,
+html[data-theme="light"] .hx-trophy { color:#2f8a10 !important; filter:none; }
+html[data-theme="light"] .hx-tip { background:#fff; color:#172923; border-color:#bfd8d0; box-shadow:0 4px 14px rgba(0,0,0,.12); }
+html[data-theme="light"] .hx-tip b { color:#2f8a10; }
+html[data-theme="light"] .hx-modal { background:#fff; border-color:#bfd8d0; }
+html[data-theme="light"] .hx-alert { color:#b52e4b; border-color:#b52e4b; }
+/* โหมดสว่าง: แอนิเมชันเรืองแสงของโลโก้ต้องคงการกลับสี (invert) ไว้ ไม่งั้น filter ของ animation จะทับ
+   จนตัวอักษรสีขาวของโลโก้หายไปบนพื้นขาว */
+@keyframes fittrack-logo-glow-light {
+  0%, 100% { filter: invert(1) hue-rotate(180deg) drop-shadow(0 0 2px rgba(60,170,40,.10)); }
+  50% { filter: invert(1) hue-rotate(180deg) drop-shadow(0 0 5px rgba(60,170,40,.28)); }
+}
+html[data-theme="light"] .sidebar-logo {
+  filter: invert(1) hue-rotate(180deg);
+  mix-blend-mode: multiply;
+  animation-name: fittrack-logo-glow-light !important;
+}
+
 `;
