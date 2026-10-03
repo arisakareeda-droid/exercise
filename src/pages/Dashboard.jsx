@@ -1241,6 +1241,94 @@ html[data-theme="light"] .notification-wrap .notification-panel .notification-it
   }
 }
 
+
+/* Mobile-first refinements: keep the dashboard readable and prevent overflow on phones. */
+@media (max-width: 760px) {
+  html, body, #root, .fittrack-app { width:100%; min-width:0; max-width:100%; }
+  body { overflow-x:hidden; }
+  .sidebar { width:100%; min-width:0; padding:8px 7px 9px; }
+  .sidebar-logo-wrap { padding:0 2px 8px; }
+  .sidebar-logo { width:132px; height:68px; max-width:42vw; }
+  .logo-caption { margin-top:-5px; font-size:6px; letter-spacing:1.5px; }
+  .side-menu { width:100%; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; }
+  .side-link { width:100%; min-width:0; height:54px; padding:5px 2px; gap:3px; font-size:clamp(8px,2.25vw,10px); line-height:1.15; white-space:normal; overflow-wrap:anywhere; }
+  .side-icon { width:auto; min-height:19px; font-size:19px; line-height:1; }
+  .main-area { margin:0!important; width:100%!important; min-width:0; padding:0 10px 22px!important; }
+  .topbar { width:100%; min-width:0; min-height:70px; height:auto; padding:10px 2px; gap:8px; }
+  .user-block { min-width:0; gap:8px; }
+  .avatar-wrap,.avatar-fallback { width:42px; height:42px; }
+  .avatar-fallback { font-size:16px; }
+  .online-dot { width:12px; height:12px; }
+  .hello { font-size:11px; }
+  .user-block strong { display:block; max-width:32vw; font-size:18px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .topbar-right { min-width:0; gap:4px; }
+  .icon-button { width:36px; height:38px; flex:0 0 36px; font-size:22px; }
+  .icon-button.sun { font-size:24px; }
+  .notification-wrap { position:relative; }
+  .notification-wrap .notification-panel { position:absolute; top:calc(100% + 8px); right:-4px; left:auto; width:min(340px,calc(100vw - 24px)); max-height:min(65vh,440px); overflow-y:auto; z-index:1000; }
+  .content-grid { width:100%!important; min-width:0; padding-top:12px; gap:12px; grid-template-columns:minmax(0,1fr)!important; }
+  .hero-card { width:100%; min-width:0; height:clamp(225px,64vw,275px); }
+  .hero-content { width:100%; min-width:0; padding:12px 15px; }
+  /* Keep the logo's reserved height so the headline and banner details do not jump. */
+  .hero-logo { width:min(230px,65vw)!important; height:92px!important; max-width:100%; object-fit:cover!important; object-position:center!important; transform:none!important; }
+  .hero-content h1 { max-width:100%; font-size:clamp(19px,5.6vw,23px); line-height:1.2; overflow-wrap:break-word; margin-top:0; }
+  .hero-features { max-width:100%; display:flex; flex-wrap:wrap; align-items:center; gap:5px 7px; font-size:clamp(7px,2.15vw,9px); line-height:1.3; }
+  .hero-features i { flex:0 0 2px; }
+  .bmi-card,.food-card,.recommend-card,.dark-card { width:100%; min-width:0; }
+  .bmi-inputs { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .bmi-inputs label,.bmi-extra-row label { min-width:0; }
+  .bmi-inputs input,.bmi-extra-row input { width:100%; min-width:0; }
+  .bmi-scale-labels { gap:2px; }
+  .bmi-scale-labels span { min-width:0; font-size:clamp(6px,1.8vw,8px); overflow-wrap:anywhere; }
+  .quick-grid { width:100%; min-width:0; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+  .feature-card { min-width:0; min-height:150px; padding:13px 11px; }
+  .feature-card h3 { max-width:100%; font-size:clamp(14px,4vw,19px); line-height:1.25; overflow-wrap:anywhere; }
+  .feature-card p { max-width:100%; font-size:9px; }
+  .feature-art { top:12px; left:12px; width:54px; height:54px; font-size:28px; }
+  .round-arrow { right:10px; bottom:10px; width:26px; height:26px; }
+  .food-layout { width:100%; min-width:0; grid-template-columns:minmax(0,1fr)!important; gap:10px; }
+  .upload-box,.food-result-box { width:100%; min-width:0; }
+  .food-result-top { min-width:0; }
+  .food-result-top img { width:88px; height:82px; flex:0 0 88px; }
+  .food-result-top>div { min-width:0; }
+  .calorie-bottom { grid-template-columns:minmax(0,1fr)!important; }
+  .meal-row { min-width:0; grid-template-columns:48px minmax(0,1fr) 48px; gap:7px; }
+  .meal-row img { width:44px; height:44px; }
+  .meal-row strong { white-space:normal; overflow-wrap:anywhere; line-height:1.3; }
+  .meal-row button { min-width:0; padding:0 6px; }
+}
+@media (max-width: 390px) {
+  .main-area { padding-left:8px!important; padding-right:8px!important; }
+  .topbar { gap:4px; }
+  .user-block { gap:6px; }
+  .avatar-wrap,.avatar-fallback { width:38px; height:38px; }
+  .user-block strong { font-size:16px; max-width:29vw; }
+  .topbar-right { gap:1px; }
+  .icon-button { width:32px; flex-basis:32px; }
+  .hero-content { padding-left:12px; padding-right:12px; }
+  .hero-logo { width:min(205px,64vw)!important; height:92px!important; }
+  .hero-content h1 { font-size:19px; }
+  .hero-features { column-gap:5px; font-size:7px; }
+  .quick-grid { gap:7px; }
+  .feature-card { min-height:142px; padding:11px 9px; }
+  .feature-card h3 { font-size:14px; }
+  .bmi-card,.food-card,.recommend-card { padding:12px!important; }
+}
+@media (max-width: 340px) {
+  .side-link { font-size:7.5px; }
+  .hero-card { height:220px; }
+  .hero-logo { width:185px!important; height:92px!important; }
+  .hero-content h1 { font-size:18px; }
+  .quick-grid { grid-template-columns:minmax(0,1fr)!important; }
+  .feature-card { min-height:130px; }
+}
+@media (max-width: 760px) and (orientation: landscape) {
+  .sidebar-logo-wrap { display:none; }
+  .sidebar { padding:5px 7px; }
+  .side-link { height:44px; flex-direction:row; font-size:9px; }
+  .hero-card { height:235px; }
+}
+
 `;
 
 if (typeof document !== "undefined" && !document.getElementById("fittrack-final-styles")) {
