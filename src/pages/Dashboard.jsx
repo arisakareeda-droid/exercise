@@ -4,6 +4,19 @@ import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
+// แคชชื่อผู้ใช้ไว้ เพื่อให้เปลี่ยนหน้าแล้วชื่อขึ้นทันที ไม่กระพริบเป็นชื่ออื่น
+const NAME_CACHE_KEY = "fittrack-user-name";
+const getCachedName = () => {
+  try { return localStorage.getItem(NAME_CACHE_KEY) || ""; } catch { return ""; }
+};
+const setCachedName = (name) => {
+  try { localStorage.setItem(NAME_CACHE_KEY, name); } catch { /* storage optional */ }
+};
+const clearCachedName = () => {
+  try { localStorage.removeItem(NAME_CACHE_KEY); } catch { /* storage optional */ }
+};
+const getInitialName = () => getCachedName() || auth.currentUser?.displayName || "";
+
 const getLocalDateKey = (date = new Date()) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -22,8 +35,8 @@ const getSavedDailyCalories = () => {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [displayName, setDisplayName] = useState("Filmmy");
-  const [userInitial, setUserInitial] = useState("F");
+  const [displayName, setDisplayName] = useState(getInitialName);
+  const [userInitial, setUserInitial] = useState(() => getInitialName().charAt(0).toUpperCase());
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
   const [age, setAge] = useState("");
@@ -100,11 +113,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (!currentUser) return;
+      if (!currentUser) { clearCachedName(); return; }
       try {
         const snap = await getDoc(doc(db, "users", currentUser.uid));
         const data = snap.exists() ? snap.data() : {};
-        const name = data.name || currentUser.displayName || currentUser.email?.split("@")[0] || "Filmmy";
+        const name = data.name || currentUser.displayName || currentUser.email?.split("@")[0] || "";
+        setCachedName(name);
         setDisplayName(name);
         setUserInitial(name.charAt(0).toUpperCase());
         if (data.weight) setWeight(data.weight);
@@ -297,6 +311,7 @@ export default function Dashboard() {
   const logout = async () => {
     try {
       await signOut(auth);
+      clearCachedName();
       navigate("/login", { replace: true });
     } catch (error) {
       console.error("Logout error:", error);
@@ -335,7 +350,7 @@ export default function Dashboard() {
             </div>
             <div>
               <div className="hello">สวัสดีครับ/ค่ะ</div>
-              <strong>{displayName}</strong>
+              <strong>{displayName || "\u00A0"}</strong>
             </div>
           </div>
 
