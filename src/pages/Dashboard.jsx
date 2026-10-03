@@ -289,9 +289,9 @@ export default function Dashboard() {
 
         <nav className="side-menu">
           <button className="side-link active" onClick={() => navigate("/")}><span className="side-icon">⌂</span>หน้าหลัก</button>
-          <button className="side-link" onClick={() => navigate("/exercises")}><span className="side-icon">♧</span>ออกกำลังกาย</button>
-          <button className="side-link" onClick={() => navigate("/history")}><span className="side-icon">◷</span>ประวัติการออกกำลังกาย</button>
-          <button className="side-link" onClick={() => navigate("/settings")}><span className="side-icon">⚙</span>ตั้งค่า</button>
+          <button className="side-link" onClick={() => navigate("/exercises")}><span className="side-icon side-icon-dumbbell" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 18v12M14 14v20M34 14v20M40 18v12M14 24h20M8 24h6M34 24h6" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 18v12M11 14v20M37 14v20M43 18v12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg></span>ออกกำลังกาย</button>
+          <button className="side-link" onClick={() => navigate("/history")}><span className="side-icon">◷</span>ประวัติ</button>
+          <button className="side-link" onClick={() => navigate("/profile")}><span className="side-icon">⚙</span>ตั้งค่า</button>
         </nav>
 
         <div className="sidebar-quote">
@@ -347,8 +347,8 @@ export default function Dashboard() {
               <img src="/fittrack-hero-logo.png" alt="FitTrack" className="hero-logo" />
               <h1>รู้ตัวเลข&nbsp;&nbsp;วางแผนได้<br />สุขภาพดีขึ้นในทุกวัน</h1>
               <div className="hero-features">
-                <span>♜ วิเคราะห์อาหาร</span><i></i>
-                <span>♧ ออกกำลังกายด้วย AI</span><i></i>
+                <span className="hero-feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.8"/><path d="M4 12h2M18 12h2M12 4v2M12 18v2M8 8c1.2-1.2 2.5-1.8 4-1.8S14.8 7 16 8M8 16c1.2 1.2 2.5 1.8 4 1.8s2.8-.6 4-1.8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M12 8.5v7M9 12h6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg> วิเคราะห์อาหาร</span><i></i>
+                <span className="hero-feature-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6M6 6v12M9 10v4M9 12h6M15 10v4M18 6v12M21 9v6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg> ออกกำลังกายด้วย AI</span><i></i>
                 <span>♡ ดูแลสุขภาพแบบครบวงจร</span>
               </div>
             </div>
@@ -379,35 +379,42 @@ export default function Dashboard() {
 
             <div className="daily-energy">
               <span className="energy-flame" aria-hidden="true">
-                <svg viewBox="0 0 48 60" role="img" aria-label="">
+                <svg className="fire-mascot" viewBox="0 0 64 76" role="img" aria-label="ตัวละครไฟสไตล์เกม">
                   <defs>
-                    <radialGradient id="energy-fire-glow" cx="50%" cy="78%" r="58%">
-                      <stop offset="0%" stopColor="#fff3a0" stopOpacity=".95" />
-                      <stop offset="42%" stopColor="#ff8b18" stopOpacity=".48" />
-                      <stop offset="100%" stopColor="#ff4a12" stopOpacity="0" />
-                    </radialGradient>
-                    <linearGradient id="energy-flame-outer" x1="0" y1="1" x2="1" y2="0">
-                      <stop offset="0%" stopColor="#e92b12" />
-                      <stop offset="48%" stopColor="#ff5a0b" />
-                      <stop offset="100%" stopColor="#ffd34a" />
+                    <linearGradient id="mascot-fire-shell" x1="0" y1="1" x2=".8" y2="0">
+                      <stop offset="0%" stopColor="#ed3213" />
+                      <stop offset="48%" stopColor="#ff6712" />
+                      <stop offset="100%" stopColor="#ffc52f" />
                     </linearGradient>
-                    <linearGradient id="energy-flame-inner" x1="0" y1="1" x2="0.8" y2="0">
-                      <stop offset="0%" stopColor="#ff4b08" />
-                      <stop offset="52%" stopColor="#ff9d16" />
-                      <stop offset="82%" stopColor="#ffe35a" />
+                    <linearGradient id="mascot-fire-core" x1="0" y1="1" x2=".7" y2="0">
+                      <stop offset="0%" stopColor="#ff8a10" />
+                      <stop offset="62%" stopColor="#ffe34b" />
                       <stop offset="100%" stopColor="#fffbd0" />
                     </linearGradient>
-                    <filter id="flame-turbulence" x="-35%" y="-25%" width="170%" height="160%">
-                      <feTurbulence type="fractalNoise" baseFrequency="0.035 0.055" numOctaves="2" seed="8" result="noise" />
-                      <feDisplacementMap in="SourceGraphic" in2="noise" scale="2.8" xChannelSelector="R" yChannelSelector="G" />
-                    </filter>
+                    <radialGradient id="mascot-fire-aura" cx="50%" cy="70%" r="60%">
+                      <stop offset="0%" stopColor="#ff8a18" stopOpacity=".55" />
+                      <stop offset="100%" stopColor="#ff4a12" stopOpacity="0" />
+                    </radialGradient>
                   </defs>
-                  <ellipse className="fire-glow" cx="24" cy="43" rx="20" ry="17" fill="url(#energy-fire-glow)" />
-                  <ellipse className="fire-ember" cx="24" cy="55" rx="12" ry="3.2" fill="#ff4a08" opacity=".85" />
-                  <path className="fire-tongue fire-tongue-left" filter="url(#flame-turbulence)" d="M22 57C10 56 5 48 7 39C8 33 13 29 12 21C18 27 19 33 17 38C22 33 23 27 21 20C29 28 29 37 25 43C23 48 22 52 22 57Z" fill="url(#energy-flame-outer)" />
-                  <path className="fire-tongue fire-tongue-right" filter="url(#flame-turbulence)" d="M25 57C35 55 42 49 41 39C40 33 36 29 37 22C31 27 29 33 32 39C27 35 27 29 29 23C22 30 21 38 25 44C27 49 27 53 25 57Z" fill="url(#energy-flame-outer)" />
-                  <path className="fire-core" filter="url(#flame-turbulence)" d="M24 54C17 52 15 46 18 40C20 36 23 33 22 28C28 33 28 39 26 43C30 40 31 36 30 33C36 40 34 48 29 52C28 53 26 54 24 54Z" fill="url(#energy-flame-inner)" />
-                  <path className="fire-heart" d="M24 51C21 48 22 44 24 41C26 45 28 47 26 51Z" fill="#fffbd1" opacity=".9" />
+                  <ellipse className="mascot-aura" cx="32" cy="61" rx="27" ry="14" fill="url(#mascot-fire-aura)" />
+                  <g className="mascot-body">
+                    <path className="mascot-shell" d="M17 65C11 61 9 54 12 47C6 43 5 35 10 29C14 24 17 21 16 13C23 16 25 21 24 27C29 22 31 14 29 7C39 15 40 24 36 31C42 27 44 21 43 17C52 27 55 37 50 45C55 53 50 62 44 65C36 70 25 70 17 65Z" fill="url(#mascot-fire-shell)" />
+                    <path className="mascot-core" d="M23 62C18 57 19 51 23 46C26 42 27 37 26 32C32 37 33 43 31 47C36 44 38 39 37 35C44 44 44 52 40 58C36 64 29 65 23 62Z" fill="url(#mascot-fire-core)" />
+                    <path className="mascot-arm mascot-arm-left" d="M14 43C8 41 5 44 6 49C8 53 13 52 17 49Z" fill="#ff6413" />
+                    <path className="mascot-arm mascot-arm-right" d="M48 41C55 39 59 43 57 48C55 52 50 51 46 47Z" fill="#ff6413" />
+                    <path className="mascot-leg mascot-leg-left" d="M23 63L21 70Q22 73 28 71L31 66Z" fill="#d93417" />
+                    <path className="mascot-leg mascot-leg-right" d="M36 65L39 71Q43 73 46 69L42 62Z" fill="#d93417" />
+                    <path d="M20 39Q25 35 29 39" fill="none" stroke="#9b2a12" strokeWidth="2.2" strokeLinecap="round" />
+                    <path d="M36 39Q40 35 44 38" fill="none" stroke="#9b2a12" strokeWidth="2.2" strokeLinecap="round" />
+                    <ellipse cx="25" cy="43" rx="3.5" ry="4.6" fill="#fff9df" />
+                    <ellipse cx="39" cy="42.5" rx="3.5" ry="4.6" fill="#fff9df" />
+                    <ellipse cx="26" cy="44" rx="1.55" ry="2.4" fill="#442015" />
+                    <ellipse cx="40" cy="43.5" rx="1.55" ry="2.4" fill="#442015" />
+                    <path d="M29 51Q33 55 38 50" fill="none" stroke="#8e2614" strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M17 29Q14 35 16 39M47 28Q51 34 49 38" fill="none" stroke="#ffd65a" strokeWidth="2" strokeLinecap="round" opacity=".75" />
+                  </g>
+                  <path className="mascot-spark mascot-spark-left" d="M6 24L8 20L10 24L14 26L10 28L8 32L6 28L2 26Z" fill="#ffe15a" />
+                  <path className="mascot-spark mascot-spark-right" d="M54 18L56 15L58 18L61 20L58 22L56 25L54 22L51 20Z" fill="#ff9b27" />
                 </svg>
               </span>
               <small className="energy-heading">พลังงานที่ควรได้รับต่อวัน (โดยประมาณ)</small>
@@ -428,20 +435,20 @@ export default function Dashboard() {
 
           {/* FOOD */}
           <section className="food-card dark-card">
-            <div className="section-title"><span className="title-icon green">♜</span><h2>วิเคราะห์อาหาร</h2></div>
+            <div className="section-title"><span className="title-icon green food-analysis-scan-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><circle cx="11" cy="11" r="4.2"/><path d="M14.2 14.2 19 19M9.6 11h2.8M11 9.6v2.8"/></svg></span><h2>วิเคราะห์อาหาร</h2></div>
             <div className="food-layout">
               <label className="upload-box">
                 <input type="file" accept="image/*" onChange={handleImageSelect} />
-                {itemImage ? <img src={itemImage} alt="อาหารที่เลือก" /> : <><span className="upload-icon">▧</span><strong>อัปโหลดรูปอาหาร</strong><small>หรือเลือกจากแกลเลอรี่</small><b>เลือกไฟล์</b></>}
+                {itemImage ? <img src={itemImage} alt="ภาพอาหารที่เลือก" /> : <><span className="upload-icon" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M7 16.5h8l3.2-4.5h11.6l3.2 4.5h8v23H7z"/><circle cx="24" cy="27.5" r="8.2"/><circle cx="24" cy="27.5" r="3.3"/><path d="M36 21h.1" strokeWidth="3.5"/></svg></span><strong>เพิ่มภาพอาหาร</strong><small>ถ่ายภาพหรือเลือกจากแกลเลอรี</small><b>เลือกรูปภาพ</b></>}
               </label>
 
               <div className="food-result-box">
-                {isAnalyzing ? <div className="food-loading">AI กำลังวิเคราะห์ภาพอาหาร...</div> : itemName && itemCalories > 0 ? <>
-                  <div className="food-result-top"><img src={itemImage} alt="อาหาร" /><div><h3>{itemName}</h3><span className="food-chip">{itemCategory || "อาหารหลัก"}</span><span className="food-chip muted">{itemConfidence ? `${Math.round(itemConfidence * 100)}% มั่นใจ` : "โปรตีนสูง"}</span></div></div>
+                {isAnalyzing ? <div className="food-loading">กำลังวิเคราะห์ภาพอาหารด้วย AI...</div> : itemName && itemCalories > 0 ? <>
+                  <div className="food-result-top"><img src={itemImage} alt="ภาพอาหาร" /><div><h3>{itemName}</h3><span className="food-chip">{itemCategory || "อาหารหลัก"}</span><span className="food-chip muted">{itemConfidence ? `${Math.round(itemConfidence * 100)}% มั่นใจ` : "โปรตีนสูง"}</span></div></div>
                   <div className="food-kcal"><small>พลังงานทั้งหมด</small><strong>{itemCalories}</strong><em> kcal</em></div>
                   {itemNote && <p className="food-note">{itemNote}</p>}
                   <div className="macro-row"><span>โปรตีน<br /><b>35 g</b></span><span>คาร์โบไฮเดรต<br /><b>45 g</b></span><span>ไขมัน<br /><b>8 g</b></span></div>
-                </> : <div className="food-placeholder"><strong>อัปโหลดรูปอาหารเพื่อเริ่มวิเคราะห์</strong><span>AI จะประเมินชนิดอาหาร แคลอรี่ และข้อมูลโภชนาการ</span></div>}
+                </> : <div className="food-placeholder"><strong>เพิ่มภาพอาหารเพื่อเริ่มการวิเคราะห์</strong><span>AI จะช่วยประเมินประเภทอาหาร พลังงาน และข้อมูลโภชนาการ</span></div>}
               </div>
             </div>
             {analysisError && <div className="error-box">⚠️ {analysisError}</div>}
@@ -462,12 +469,18 @@ export default function Dashboard() {
 
           {/* RECOMMENDED MENU */}
           <section className="recommend-card dark-card">
-            <div className="section-title"><span className="title-icon yellow">♜</span><h2>เมนูแนะนำ <small>(ตามผล BMI ของคุณ)</small></h2></div>
+            <div className="section-title"><span className="title-icon yellow recommend-food-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="4.5"/><path d="M3 4v6M1.8 6.5h2.4M5 4v6M20.5 4v7M20.5 11v9M18.8 4v4"/></svg></span><h2>เมนูแนะนำ <small>(ตัวเลือกอาหารสมดุล)</small></h2></div>
             <div className="meal-tabs">{Object.keys(meals).map((tab) => <button key={tab} className={mealTab === tab ? "active" : ""} onClick={() => setMealTab(tab)}>{tab}</button>)}</div>
-            <div className="meal-list">{meals[mealTab].map((meal) => <div className="meal-row" key={meal.name}><img src={meal.img} alt={meal.name} onError={(e) => { e.currentTarget.style.display = "none"; }} /><div><strong>{meal.name}</strong><span>ประมาณ {meal.kcal} kcal</span></div><button>เลือก</button></div>)}</div>
-            <div className="tips-box"><h3>💡 เคล็ดลับเพิ่มเติม</h3><ul><li>ดื่มน้ำให้เพียงพอ อย่างน้อย 2-3 ลิตร/วัน</li><li>ลดอาหารหวาน มัน เค็ม</li><li>ออกกำลังกายสม่ำเสมออย่างน้อย 3-5 วัน/สัปดาห์</li></ul></div>
+            <div className="meal-list">{meals[mealTab].map((meal, index) => <div className="meal-row" key={meal.name}><span className="meal-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span><div className="meal-info"><strong>{meal.name}</strong><span className="meal-kcal">พลังงานโดยประมาณ <b>{meal.kcal} kcal</b></span></div><button type="button" aria-label={`เลือกเมนู ${meal.name}`}>เลือก</button></div>)}</div>
+            <div className="tips-box"><h3><span aria-hidden="true">💡</span> เคล็ดลับเพิ่มเติม</h3><div className="tips-copy"><p>ลดอาหารหวาน มัน เค็ม</p><p>ดื่มน้ำให้เพียงพอ อย่างน้อย 2–3 ลิตร/วัน</p><p>ออกกำลังกายสม่ำเสมออย่างน้อย 3–5 วัน/สัปดาห์</p></div></div>
           </section>
         </div>
+
+        <footer className="fittrack-footer">
+          <div className="footer-brand"><span className="footer-mark" aria-hidden="true">FT</span><strong>FitTrack</strong></div>
+          <span className="footer-description">ระบบดูแลสุขภาพและติดตามโภชนาการด้วย AI</span>
+          <span className="footer-copyright">ดูแลสุขภาพของคุณในทุกวัน</span>
+        </footer>
       </main>
     </div>
   );
@@ -1327,6 +1340,252 @@ html[data-theme="light"] .notification-wrap .notification-panel .notification-it
   .sidebar { padding:5px 7px; }
   .side-link { height:44px; flex-direction:row; font-size:9px; }
   .hero-card { height:235px; }
+}
+
+
+/* Game-inspired animated fire mascot and matching sidebar exercise icon */
+.bmi-card .daily-energy .energy-flame {
+  left: 16px !important;
+  width: 39px !important;
+  height: 47px !important;
+  filter: drop-shadow(0 0 5px rgba(255,112,16,.52)) drop-shadow(0 0 12px rgba(255,83,12,.25));
+}
+.bmi-card .daily-energy .energy-flame .fire-mascot { overflow: visible; }
+.bmi-card .daily-energy .mascot-body {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: mascot-fire-bounce .72s ease-in-out infinite alternate;
+}
+.bmi-card .daily-energy .mascot-shell {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: mascot-shell-flicker .48s ease-in-out infinite alternate;
+}
+.bmi-card .daily-energy .mascot-core {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: mascot-core-flicker .38s ease-in-out infinite alternate;
+}
+.bmi-card .daily-energy .mascot-arm-left { transform-origin: 14px 45px; animation: mascot-arm-left .65s ease-in-out infinite alternate; }
+.bmi-card .daily-energy .mascot-arm-right { transform-origin: 49px 44px; animation: mascot-arm-right .58s ease-in-out infinite alternate; }
+.bmi-card .daily-energy .mascot-leg-left,.bmi-card .daily-energy .mascot-leg-right { transform-box: fill-box; transform-origin: 50% 0; animation: mascot-legs .5s ease-in-out infinite alternate; }
+.bmi-card .daily-energy .mascot-leg-right { animation-delay: -.25s; }
+.bmi-card .daily-energy .mascot-aura { transform-box: fill-box; transform-origin: 50% 50%; animation: mascot-aura 1s ease-in-out infinite alternate; }
+.bmi-card .daily-energy .mascot-spark { transform-box: fill-box; transform-origin: center; animation: mascot-spark 1s ease-in-out infinite alternate; }
+.bmi-card .daily-energy .mascot-spark-right { animation-delay: -.45s; }
+@keyframes mascot-fire-bounce { from { transform: translateY(1px) scale(.98,1); } to { transform: translateY(-1.5px) scale(1.02,1.025); } }
+@keyframes mascot-shell-flicker { from { transform: skewX(-2deg) scaleY(.97); } to { transform: skewX(2deg) scaleY(1.04); } }
+@keyframes mascot-core-flicker { from { opacity:.82; transform: scale(.94,.96); } to { opacity:1; transform: scale(1.05,1.04); } }
+@keyframes mascot-arm-left { from { transform: rotate(-8deg); } to { transform: rotate(8deg); } }
+@keyframes mascot-arm-right { from { transform: rotate(8deg); } to { transform: rotate(-9deg); } }
+@keyframes mascot-legs { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+@keyframes mascot-aura { from { opacity:.42; transform: scale(.85); } to { opacity:.9; transform: scale(1.12); } }
+@keyframes mascot-spark { from { opacity:.35; transform: scale(.72) rotate(-12deg); } to { opacity:1; transform: scale(1.12) rotate(12deg); } }
+.side-icon-dumbbell { display:inline-flex; align-items:center; justify-content:center; flex:0 0 27px; }
+.side-icon-dumbbell svg { display:block; width:25px; height:25px; }
+@media (max-width:760px) {
+  .bmi-card .daily-energy .energy-flame { left:10px !important; width:32px !important; height:40px !important; }
+  .side-icon-dumbbell { flex:0 0 auto; min-height:19px; }
+  .side-icon-dumbbell svg { width:19px; height:19px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bmi-card .daily-energy .mascot-body,.bmi-card .daily-energy .mascot-shell,.bmi-card .daily-energy .mascot-core,
+  .bmi-card .daily-energy .mascot-arm-left,.bmi-card .daily-energy .mascot-arm-right,
+  .bmi-card .daily-energy .mascot-leg-left,.bmi-card .daily-energy .mascot-leg-right,
+  .bmi-card .daily-energy .mascot-aura,.bmi-card .daily-energy .mascot-spark { animation:none !important; }
+}
+
+
+/* Clear, consistent line icons for hero features and food analysis */
+.hero-feature-icon{display:inline-flex;align-items:center;gap:6px;color:inherit;white-space:nowrap}
+.hero-feature-icon svg{width:17px;height:17px;flex:0 0 17px;color:var(--green);display:block}
+.food-plate-icon svg{width:22px;height:22px;display:block}
+@media(max-width:760px){.hero-feature-icon{gap:4px}.hero-feature-icon svg{width:14px;height:14px;flex-basis:14px}.food-plate-icon svg{width:20px;height:20px}}
+
+
+/* Keep recommended-meals panel a consistent height regardless of menu count. */
+.recommend-card {
+  height: 510px;
+  min-height: 510px;
+  max-height: 510px;
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  overflow: hidden;
+}
+.recommend-card .section-title,
+.recommend-card .meal-tabs,
+.recommend-card .tips-box { flex: 0 0 auto; }
+.recommend-card .meal-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 3px;
+  scrollbar-width: thin;
+  scrollbar-color: #54735d transparent;
+}
+.recommend-card .meal-list::-webkit-scrollbar { width: 5px; }
+.recommend-card .meal-list::-webkit-scrollbar-thumb { background: #54735d; border-radius: 8px; }
+@media (max-width: 1100px) {
+  .recommend-card { height: 510px !important; min-height: 510px !important; max-height: 510px !important; }
+}
+@media (max-width: 760px) {
+  .recommend-card { height: 480px !important; min-height: 480px !important; max-height: 480px !important; }
+  .recommend-card .meal-list { gap: 6px; }
+}
+
+/* Recommended meal list: text-first, consistent and easy to scan */
+.recommend-card .section-title { align-items: center; gap: 10px; }
+.recommend-card .section-title h2 { line-height: 1.3; }
+.recommend-card .section-title h2 small { display:block; margin-top:2px; font-size:10px; }
+.recommend-card .meal-tabs { gap:6px; margin:12px 0; }
+.recommend-card .meal-tabs button { min-width:0; height:36px; font-size:11px; transition:background .18s ease,border-color .18s ease,transform .18s ease; }
+.recommend-card .meal-tabs button:hover { transform:translateY(-1px); }
+.recommend-card .meal-row { grid-template-columns:38px minmax(0,1fr) 48px; min-height:72px; gap:10px; padding:10px; border-radius:12px; background:rgba(10,22,25,.72); }
+.recommend-card .meal-index { display:grid; place-items:center; width:34px; height:34px; border-radius:10px; background:rgba(140,255,50,.09); border:1px solid rgba(140,255,50,.28); color:var(--green); font:600 12px 'Kanit',sans-serif; }
+.recommend-card .meal-info { min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:5px; }
+.recommend-card .meal-row strong { white-space:normal; overflow-wrap:anywhere; font-size:12px; line-height:1.45; font-weight:600; }
+.recommend-card .meal-row .meal-kcal { display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--muted); font-size:10px; }
+.recommend-card .meal-row .meal-kcal b { color:var(--green2); font-weight:600; }
+.recommend-card .meal-row button { width:48px; height:30px; padding:0 6px; border-radius:8px; font-size:10px; }
+html[data-theme="light"] .recommend-card .meal-row { background:#fff; border-color:#d9e4dc; }
+html[data-theme="light"] .recommend-card .meal-index { background:#eff9e9; border-color:#c6e6b6; color:#39831f; }
+html[data-theme="light"] .recommend-card .meal-row .meal-kcal { color:#687970; }
+html[data-theme="light"] .recommend-card .meal-row .meal-kcal b { color:#347f20; }
+@media(max-width:760px) {
+  .recommend-card .meal-row { grid-template-columns:34px minmax(0,1fr) 46px; gap:8px; padding:8px; }
+  .recommend-card .meal-index { width:30px; height:30px; }
+  .recommend-card .meal-row strong { font-size:11px; }
+  .recommend-card .meal-row .meal-kcal { font-size:9px; }
+  .recommend-card .meal-row button { width:46px; font-size:9px; }
+}
+
+/* Recommended food icon and balanced tips layout */
+.recommend-food-icon svg { width:22px; height:22px; display:block; }
+.tips-box { padding:12px; }
+.tips-box h3 { display:flex; align-items:center; gap:7px; margin:0 0 10px; }
+.tips-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.tip-item { min-width:0; min-height:82px; display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:4px; padding:9px 10px; border:1px solid rgba(145,170,160,.2); border-radius:9px; background:rgba(255,255,255,.035); color:var(--muted); font-size:10px; line-height:1.4; }
+.tip-item strong { color:var(--text); font-size:10px; line-height:1.45; font-weight:600; }
+.tip-number { color:var(--green); font:600 10px 'Kanit',sans-serif; letter-spacing:.5px; }
+html[data-theme="light"] .tip-item { background:#fff; border-color:#dce7df; color:#61736a; }
+html[data-theme="light"] .tip-item strong { color:#263c30; }
+@media(max-width:760px) { .tips-grid { grid-template-columns:1fr; gap:7px; } .tip-item { min-height:0; display:grid; grid-template-columns:27px minmax(0,1fr); align-items:center; column-gap:8px; padding:9px 10px; } .tip-number { grid-row:span 2; } .tip-item strong { grid-column:2; } }
+
+
+/* Tips: restore the original centered text layout without numbered tiles or bullets */
+.tips-box h3 { justify-content:center; text-align:center; margin-bottom:8px; }
+.tips-copy { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; text-align:center; padding:2px 6px 4px; }
+.tips-copy p { margin:0; color:var(--muted); font-size:10px; line-height:1.65; text-align:center; }
+html[data-theme="light"] .tips-copy p { color:#4c6157; }
+@media(max-width:760px) { .tips-copy { gap:5px; } .tips-copy p { font-size:10px; } }
+
+/* Premium centered tips panel: subtle depth, raised typography and soft ambient glow */
+.tips-box {
+  position:relative;
+  isolation:isolate;
+  overflow:hidden;
+  border:1px solid rgba(111,211,156,.34);
+  border-radius:14px;
+  padding:14px 13px 15px;
+  background:linear-gradient(145deg,rgba(9,25,27,.98),rgba(4,13,17,.96) 62%,rgba(9,24,22,.98));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.055),inset 0 -10px 22px rgba(0,0,0,.18),0 8px 22px rgba(0,0,0,.2),0 0 18px rgba(91,255,139,.045);
+  transition:border-color .25s ease,box-shadow .25s ease,transform .25s ease;
+}
+.tips-box:before {
+  content:"";position:absolute;z-index:-1;left:18%;right:18%;top:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(174,255,84,.8),rgba(64,224,174,.7),transparent);
+  filter:drop-shadow(0 0 5px rgba(153,255,76,.55));
+}
+.tips-box:after {
+  content:"";position:absolute;z-index:-1;right:-42px;top:-55px;width:130px;height:110px;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(123,255,67,.095),transparent 70%);pointer-events:none;
+}
+.tips-box:hover {border-color:rgba(143,255,94,.52);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 10px 25px rgba(0,0,0,.24),0 0 23px rgba(113,255,76,.09);transform:translateY(-1px)}
+.tips-box h3 {
+  position:relative;z-index:1;justify-content:center;text-align:center;gap:7px;margin:0 0 10px;
+  color:#caff49;font-family:'Kanit',sans-serif;font-size:14px;font-weight:700;letter-spacing:.25px;
+  text-shadow:0 1px 0 #536d1d,0 2px 0 rgba(34,61,14,.72),0 4px 10px rgba(151,255,43,.2);
+}
+.tips-box h3 span {display:inline-grid;place-items:center;filter:drop-shadow(0 0 5px rgba(255,224,64,.3));transform:translateY(-1px)}
+.tips-copy {position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;text-align:center;padding:2px 6px 1px}
+.tips-copy p {
+  position:relative;margin:0;color:#b8cbd0;font-size:11px;font-weight:500;line-height:1.7;text-align:center;
+  letter-spacing:.08px;text-shadow:0 1px 0 rgba(0,0,0,.7),0 0 8px rgba(104,213,217,.08);
+  transition:color .2s ease,text-shadow .2s ease,transform .2s ease;
+}
+.tips-copy p:hover {color:#e5f5ec;text-shadow:0 1px 0 rgba(0,0,0,.6),0 0 10px rgba(137,255,114,.2);transform:translateY(-1px)}
+html[data-theme="light"] .tips-box {
+  border-color:rgba(71,151,104,.3);
+  background:linear-gradient(145deg,#fbfffc,#f0f8f2 62%,#f8fcf8);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -8px 18px rgba(64,128,86,.035),0 8px 22px rgba(33,83,54,.08),0 0 16px rgba(84,183,107,.045);
+}
+html[data-theme="light"] .tips-box:before {background:linear-gradient(90deg,transparent,rgba(123,193,54,.72),rgba(66,174,135,.58),transparent)}
+html[data-theme="light"] .tips-box h3 {color:#548d16;text-shadow:0 1px 0 #fff,0 2px 0 rgba(96,145,49,.16),0 4px 10px rgba(91,157,43,.16)}
+html[data-theme="light"] .tips-copy p {color:#536b61;text-shadow:0 1px 0 rgba(255,255,255,.9),0 0 7px rgba(53,139,99,.06)}
+html[data-theme="light"] .tips-copy p:hover {color:#2e573f;text-shadow:0 1px 0 #fff,0 0 9px rgba(69,158,90,.13)}
+@media(max-width:760px) {
+  .tips-box {padding:12px 10px 13px;border-radius:12px}
+  .tips-box h3 {font-size:13px;margin-bottom:8px}
+  .tips-copy {gap:4px;padding-inline:3px}
+  .tips-copy p {font-size:10px;line-height:1.65}
+}
+/* Pyramid composition: short, medium, then long line, all centered. */
+.tips-copy {width:100%;align-items:center;gap:5px}
+.tips-copy p {width:max-content;max-width:100%;text-align:center}
+.tips-copy p:nth-child(1) {max-width:62%}
+.tips-copy p:nth-child(2) {max-width:82%}
+.tips-copy p:nth-child(3) {max-width:100%}
+@media(max-width:760px) {
+  .tips-copy {gap:4px}
+  .tips-copy p:nth-child(1) {max-width:72%}
+  .tips-copy p:nth-child(2) {max-width:88%}
+  .tips-copy p:nth-child(3) {max-width:100%}
+}
+@media(prefers-reduced-motion:reduce) {.tips-box,.tips-copy p {transition:none}.tips-box:hover,.tips-copy p:hover {transform:none}}
+
+/* Refined food-analysis icons and upload affordance */
+.food-plate-icon svg { width:22px; height:22px; display:block; }
+.upload-icon { width:48px; height:48px; display:grid; place-items:center; margin-bottom:9px; color:#9aff45; filter:drop-shadow(0 3px 8px rgba(112,255,55,.2)); transition:transform .22s ease,filter .22s ease; }
+.upload-icon svg { width:42px; height:42px; display:block; }
+.upload-box:hover .upload-icon { transform:translateY(-3px) scale(1.06); filter:drop-shadow(0 5px 12px rgba(112,255,55,.32)); }
+.upload-box strong { font-family:'Kanit',sans-serif; font-size:14px; letter-spacing:.1px; }
+.upload-box small { font-size:10px; line-height:1.5; }
+.upload-box>b { font-size:10px; letter-spacing:.15px; box-shadow:0 5px 14px rgba(118,242,46,.12); transition:transform .2s ease,box-shadow .2s ease; }
+.upload-box:hover>b { transform:translateY(-1px); box-shadow:0 7px 17px rgba(118,242,46,.22); }
+.food-placeholder strong { font-size:17px; line-height:1.45; }
+.food-placeholder span { max-width:340px; font-size:10px; line-height:1.65; }
+html[data-theme="light"] .upload-icon { color:#399c24; filter:drop-shadow(0 3px 8px rgba(57,156,36,.12)); }
+@media(max-width:760px) { .food-plate-icon svg { width:20px;height:20px; } .upload-icon { width:43px;height:43px; } .upload-icon svg { width:38px;height:38px; } .upload-box strong { font-size:13px; } .food-placeholder strong { font-size:15px; } }
+
+/* Distinct icon for food analysis: scan/inspect motif, separate from the recommendation plate icon. */
+.food-analysis-scan-icon svg{width:22px;height:22px;display:block}
+@media(max-width:760px){.food-analysis-scan-icon svg{width:20px;height:20px}}
+
+/* FitTrack branded footer */
+.fittrack-footer{
+  width:100%; min-width:0; margin:28px 0 0; padding:16px 8px 10px;
+  border-top:1px solid rgba(91,145,139,.24);
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  color:var(--muted); font-family:'Anuphan',sans-serif;
+}
+.footer-brand{display:flex; align-items:center; gap:9px; color:var(--text); white-space:nowrap}
+.footer-mark{width:27px;height:27px;display:grid;place-items:center;border-radius:8px;
+  color:#071006;background:linear-gradient(135deg,#9cff37,#36d98a);
+  font:700 10px 'Kanit',sans-serif;letter-spacing:-.5px;
+  box-shadow:0 3px 12px rgba(125,255,54,.16)}
+.footer-brand strong{font:600 15px 'Kanit',sans-serif;letter-spacing:.25px;
+  background:linear-gradient(90deg,#baff52,#42dca0);-webkit-background-clip:text;background-clip:text;color:transparent}
+.footer-description{font-size:11px;text-align:center;line-height:1.5}
+.footer-copyright{font-size:10px;white-space:nowrap;opacity:.78}
+html[data-theme="light"] .fittrack-footer{border-top-color:rgba(57,120,99,.2);color:#64766d}
+html[data-theme="light"] .footer-brand{color:#20382d}
+@media(max-width:760px){
+  .fittrack-footer{margin-top:18px;padding:13px 4px 8px;flex-wrap:wrap;justify-content:center;gap:6px 12px}
+  .footer-brand{width:100%;justify-content:center}
+  .footer-description{font-size:10px;width:100%}
+  .footer-copyright{font-size:9px;width:100%;text-align:center}
 }
 
 `;
