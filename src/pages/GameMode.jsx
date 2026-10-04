@@ -50,7 +50,8 @@ const PUNCH_EXT = 110;      // มุมข้อศอก (องศา) ที
 const PUNCH_RISE = 12;      // แขนต้องเหยียดเพิ่มอย่างน้อยกี่องศาภายใน 0.6 วินาที (เดิม 25)
 const PUNCH_WINDOW = 800;   // ms หลังชก ที่หมัดนั้นทำให้ผลไม้แตกได้ (เดิม 500)
 const PUNCH_COOLDOWN = 200; // ms ระยะห่างขั้นต่ำระหว่างหมัดแต่ละครั้งของแขนเดียวกัน
-const FAST_V = 1.5;         // มือที่เคลื่อนเร็วกว่านี้ (เท่าของความกว้างไหล่/วินาที) ก็ทำให้ผลไม้แตกได้ แม้ระบบยังไม่ยืนยันว่าเป็นหมัด ตั้งเป็น 99 ถ้าอยากปิด
+const HIT_EXT = 100;        // ตอนมือแตะผลไม้/ระเบิด แขนต้องยังเหยียดอย่างน้อยกี่องศา (กันมือที่ดึงกลับมาแล้วไปโดนของใกล้ตัว) ลดค่าถ้าชกแล้วไม่แตก
+const DEBUG_LIVE = false;   // true = โชว์บรรทัดดีบักที่จอเพื่อน (ช่องทางที่ได้ข้อมูล จำนวนผลไม้ อายุข้อมูล)
 const HIT_DIST = FRUIT_R * 0.8 + FIST_R; // ระยะที่ถือว่า 'มือแตะผลไม้' (ประมาณขอบวงกำปั้นแตะขอบผลไม้ที่เห็นบนจอ) เพิ่มตัวเลขถ้าอยากให้โดนง่ายขึ้น
 const LOST_MS = 1200;       // มองไม่เห็นตัวนานเท่านี้ เกมจะหยุดชั่วคราว
 const READY_MS = 1000;      // ต้องยืนอยู่ในตำแหน่งที่ถูกต้องนิ่ง ๆ นานเท่านี้ก่อนเริ่มนับถอยหลัง
@@ -83,7 +84,7 @@ const waitIce = (pc) => new Promise((resolve) => { // รอเก็บเส�
   });
 });
 let liveErr = ''; // ข้อผิดพลาดล่าสุดตอนส่ง/รับภาพการเล่น (ไว้บอกผู้เล่น)
-const newView = () => ({ tgt: null, curJ: null, curF: null, recvAt: 0, last: 0, since: performance.now(), parts: [], floats: [], rings: [], flash: 0, seen: 0, init: false });
+const newView = () => ({ q: 0, src: '', tgt: null, curJ: null, curF: null, recvAt: 0, last: 0, since: performance.now(), parts: [], floats: [], rings: [], flash: 0, seen: 0, init: false });
 const liveDoc = (code, uid) => doc(getFirestore(auth.app), ROOMS, `${code}-live-${uid}`);
 
 // แพ็กภาพการเล่น (โครงร่าง กำปั้น ผลไม้ เหตุการณ์ และค่าสถานะ) เป็นอาร์เรย์ตัวเลขแบน ๆ — Firestore ไม่รองรับอาร์เรย์ซ้อนอาร์เรย์
@@ -98,9 +99,19 @@ function packLive(s) {
   s.evq.forEach((ev) => e.push(ev.id, ev.k, r3(ev.x / W), r3(ev.y / H), ev.v, ev.f));
   return {
     j, f, o, e, ar: r3(W / H), sc: s.score, lv: s.lives, cb: s.combo, kc: Math.round(s.kcal * 10) / 10,
-    sp: s.speed, l: s.punches[0], r: s.punches[1], tm: s.cfg.time ? 1 : 0,
+    sp: s.speed, l: s.punches[0], r: s.punches[1], tm: s.cfg.time ? 1 : 0, q: Date.now(),
     t: s.cfg.time ? Math.max(0, Math.ceil(s.cfg.time - s.activeMs / 1000)) : 0,
   };
+}
+
+// รับภาพการเล่นของเพื่อนจากช่องทางไหนก็ได้ (ช่องตรง/Firestore) แต่ทิ้งชุดที่เก่ากว่าที่เคยรับแล้ว ไม่ให้ข้อมูลเก่ามาทับข้อมูลใหม่
+function acceptLive(v, m, src) {
+  if (!m) return;
+  if (m.q && v.q && m.q <= v.q) return;
+  v.q = m.q || v.q;
+  v.src = src;
+  v.tgt = m;
+  v.recvAt = performance.now();
 }
 
 function easeArr(cur, tgt, a, stride) {
@@ -295,6 +306,13 @@ function renderOpp(canvas, v, now, done, rv, conn) {
     ctx.fillRect(ox, oy, rw, rh);
   }
   ctx.restore();
+  if (DEBUG_LIVE) {
+    ctx.font = '12px Anuphan, sans-serif';
+    ctx.fillStyle = '#ffd24a';
+    ctx.textAlign = 'left';
+    ctx.fillText(`รับจาก ${v.src || '-'} · ผลไม้ ${Math.floor((d.o || []).length / 5)} ลูก · อายุข้อมูล ${Math.round(now - v.recvAt)}ms`, ox + 8, oy + rh - 10);
+    ctx.textAlign = 'center';
+  }
 }
 
 const readBest = (game) => {
@@ -378,7 +396,7 @@ function trackFists(s, video, landmarker, now) {
       };
     }
     pts = [[15, 19], [16, 20]].map(([wrist, index]) => {
-      if (!seen(wrist)) return null;
+      if (!seen(wrist, 0.5)) return null; // จุดมือที่ไม่ชัด (ระบบเดาตำแหน่งมาตกที่ตัว) ไม่นับเป็นมือ
       const w = mapPoint(lm[wrist], video);
       if (!seen(index)) return w;
       const f = mapPoint(lm[index], video);
@@ -503,9 +521,9 @@ function step(s, dt, now) {
       if (d < bestD) { bestD = d; i = k; }
     });
     if (i < 0) return;
-    if (!f.active && f.v <= FAST_V) {
-      // มือไปแตะผลไม้ แต่ไม่ใช่หมัดจริง (ไม่ได้งอแล้วชกออก) → ไม่แตก และบอกให้ชกออกไป
-      if (f.v > 0.5 && now - s.lastHint > 1600) {
+    if (!(f.active && f.ext != null && f.ext >= HIT_EXT)) {
+      // มือ/ตัวไปแตะผลไม้หรือระเบิด แต่ไม่ใช่หมัดจริงที่เหยียดแขนอยู่ → ไม่แตก ไม่นับ
+      if (!s.objs[i].bomb && f.v > 0.5 && now - s.lastHint > 1600) {
         s.lastHint = now;
         s.floats.push({ x: Math.max(150, Math.min(W - 150, f.x)), y: f.y, text: 'ต้องชกหมัดออกไป!', color: '#ffd24a', life: 1, size: 30 });
       }
@@ -786,7 +804,7 @@ export default function GameMode() {
   const wireDc = (dc) => {
     dcRef.current = dc;
     dc.onmessage = (e) => {
-      try { oppView.current.tgt = JSON.parse(e.data); oppView.current.recvAt = performance.now(); } catch { /* ข้อมูลเสียก็ข้าม */ }
+      try { acceptLive(oppView.current, JSON.parse(e.data), 'dc'); } catch { /* ข้อมูลเสียก็ข้าม */ }
     };
   };
 
@@ -919,8 +937,7 @@ export default function GameMode() {
         liveFor.current = oppUid;
         liveUnsub.current = onSnapshot(liveDoc(code, oppUid), (sn) => {
           if (!sn.exists()) return;
-          oppView.current.tgt = sn.data();
-          oppView.current.recvAt = performance.now();
+          acceptLive(oppView.current, sn.data(), 'db');
         }, (e) => { liveErr = e?.code || 'error'; console.warn('live recv', e); });
       }
       if (!isHost && d.game !== setupRef.current.game) setSetup((s) => ({ ...s, game: d.game }));
