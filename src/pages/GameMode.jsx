@@ -16,10 +16,12 @@ const FRUIT_R = 44;
 const FIST_R = 38;
 
 // ---- ค่าตรวจจับหมัด (ปรับได้ถ้าต่อยโดนยากหรือง่ายเกินไป) ----
-const PUNCH_EXT = 145;      // มุมข้อศอก (องศา) ที่ถือว่าเหยียดแขนสุด ลดเลขถ้าต่อยไม่ติด
-const PUNCH_RISE = 30;      // แขนต้องเหยียดเพิ่มอย่างน้อยกี่องศาภายใน 0.45 วินาที (กันการยืนเหยียดแขนค้างแล้วนับ)
-const PUNCH_WINDOW = 300;   // ms หลังต่อย ที่หมัดนั้นทำให้ผลไม้แตกได้
-const PUNCH_COOLDOWN = 350; // ms ระยะห่างขั้นต่ำระหว่างหมัดแต่ละครั้งของแขนเดียวกัน
+const PUNCH_EXT = 120;      // มุมข้อศอก (องศา) ที่ถือว่าเหยียดแขนพอ ลดเลขถ้าต่อยไม่ติด (เพิ่มถ้าอยากให้เข้มขึ้น)
+const PUNCH_RISE = 15;      // แขนต้องเหยียดเพิ่มอย่างน้อยกี่องศาภายใน 0.6 วินาที (กันการยืนเหยียดแขนค้างแล้วนับ)
+const PUNCH_WINDOW = 650;   // ms หลังต่อย ที่หมัดนั้นทำให้ผลไม้แตกได้
+const PUNCH_COOLDOWN = 250; // ms ระยะห่างขั้นต่ำระหว่างหมัดแต่ละครั้งของแขนเดียวกัน
+const SWING_SPEED = 1.0;    // ความเร็วมือ (เท่าของความกว้างไหล่ต่อวินาที) ที่ถือว่าเป็นการสะบัดหมัดเร็ว นับเป็นหมัดด้วย แม้ระบบวัดมุมศอกไม่ชัด
+const HIT_REACH = 1.7;      // ขยายโซนชนรอบกำปั้น (เท่าของ FIST_R) ยิ่งมากยิ่งโดนง่าย
 const LOST_MS = 1200;       // มองไม่เห็นตัวนานเท่านี้ เกมจะหยุดชั่วคราว
 const READY_MS = 1000;      // ต้องยืนอยู่ในตำแหน่งที่ถูกต้องนิ่ง ๆ นานเท่านี้ก่อนเริ่มนับถอยหลัง
 
@@ -139,7 +141,7 @@ function trackFists(s, video, landmarker, now) {
     } else {
       f.ext = f.ext == null ? a : f.ext * 0.4 + a * 0.6;
       f.hist.push({ t: now, a: f.ext });
-      while (f.hist.length && now - f.hist[0].t > 450) f.hist.shift();
+      while (f.hist.length && now - f.hist[0].t > 600) f.hist.shift();
       const lowest = Math.min(...f.hist.map((h) => h.a));
       if (f.ext >= PUNCH_EXT && f.ext - lowest >= PUNCH_RISE && now - f.punchAt > PUNCH_COOLDOWN) {
         f.punchAt = now;
@@ -176,20 +178,22 @@ function step(s, dt, now) {
   s.objs.forEach((o) => { o.y += o.vy * dt; o.rot += o.vr * dt; });
   s.objs = s.objs.filter((o) => o.y < H + 80);
 
-  s.fists.forEach((f) => {
+  s.fists.forEach((f, side) => {
     if (!f.ok) return;
-    const i = s.objs.findIndex((o) => Math.hypot(o.x - f.x, o.y - f.y) < FRUIT_R + FIST_R * 1.2);
+    const i = s.objs.findIndex((o) => Math.hypot(o.x - f.x, o.y - f.y) < FRUIT_R + FIST_R * HIT_REACH);
     if (i < 0) return;
-    if (!f.active) {
+    const swing = !f.active && f.v >= SWING_SPEED;
+    if (!f.active && !swing) {
       // มือไปโดนผลไม้ แต่ไม่ใช่หมัดที่ถูกท่า → บอกให้เหยียดแขนให้สุด
-      if (f.v > 0.6 && f.ext != null && f.ext < PUNCH_EXT && now - s.lastHint > 1600) {
+      if (f.v > 0.5 && now - s.lastHint > 1600) {
         s.lastHint = now;
-        s.floats.push({ x: Math.max(150, Math.min(W - 150, f.x)), y: f.y, text: 'เหยียดแขนให้สุด!', color: '#ffd24a', life: 1, size: 30 });
+        s.floats.push({ x: Math.max(150, Math.min(W - 150, f.x)), y: f.y, text: 'ต่อยให้แรงขึ้น!', color: '#ffd24a', life: 1, size: 30 });
       }
       return;
     }
     const o = s.objs.splice(i, 1)[0];
-    f.active = false; f.punchAt = -1e9; // หนึ่งหมัดทำให้แตกได้หนึ่งลูก
+    if (swing) s.punches[side] += 1; // สะบัดเร็วที่ไม่ได้ถูกนับจากมุมศอก ให้นับเป็นหมัดด้วย
+    f.active = false; f.punchAt = -1e9; f.v = 0; // หนึ่งหมัดทำให้แตกได้หนึ่งลูก
     if (o.bomb) {
       s.lives -= 1; s.combo = 0; s.bombs += 1; s.flash = 1; s.shake = 0.4;
       splash(s, o, '#ffb02e', 26); splash(s, o, '#ff4a2e', 14);
@@ -552,7 +556,7 @@ export default function GameMode() {
             <h2>พร้อมออกกำลังกายหรือยัง?</h2>
             <ul className="gm-rules">
               <li>ยืนห่างกล้องประมาณ 1.5–2 เมตร ให้เห็นตั้งแต่ศีรษะถึงเอว และเห็นแขนทั้งสองข้าง</li>
-              <li>ต่อยหมัดตรงให้สุดแขนใส่ผลไม้ถึงจะนับ (ปัดมือเฉย ๆ ไม่นับ) ได้ 10 คะแนน ต่อเนื่องจะได้คะแนนคูณ</li>
+              <li>ต่อยหมัดใส่ผลไม้ให้แตก ต้องเหยียดแขนออกหรือสะบัดหมัดให้เร็วถึงจะนับ (แตะเฉย ๆ ไม่นับ) ได้ 10 คะแนน ต่อเนื่องจะได้คะแนนคูณ</li>
               <li>ห้ามต่อยโดนระเบิด 💣 โดนแล้วเสียหัวใจ 1 ดวง (มี {MAX_LIVES} ดวง) หมดเมื่อไหร่เกมจบทันที</li>
               <li>ก้าวเท้าซ้าย-ขวาตามตำแหน่งผลไม้ และสลับแขนให้สมดุลกัน</li>
               <li>วอร์มไหล่และแขนก่อนเล่น หากรู้สึกเจ็บหรือเวียนศีรษะให้หยุดพักทันที</li>
