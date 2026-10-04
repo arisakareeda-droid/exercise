@@ -123,7 +123,7 @@ function renderOpp(canvas, v, now, done, rv, conn) {
   const hasVideo = !!rv && rv.readyState >= 2 && rv.videoWidth > 0;
   const d = v.tgt;
   if (!d && !hasVideo) {
-    ctx.fillStyle = '#9fb4b8';
+    ctx.fillStyle = '#c4d6da';
     ctx.font = `${Math.max(12, Math.round(cw * 0.035))}px Anuphan, sans-serif`;
     const msg = liveErr ? `รับ/ส่งข้อมูลกับเพื่อนไม่ได้ (${liveErr}) ตรวจกฎ Firestore`
       : conn === 'failed' ? 'เชื่อมต่อกล้องเพื่อนไม่สำเร็จ เครือข่ายอาจบล็อกการเชื่อมต่อตรง'
@@ -746,7 +746,7 @@ export default function GameMode() {
     unsubRef.current?.();
     const uid = auth.currentUser.uid;
     roomMeta.current = { code, isHost, uid };
-    mine.current = { ready: false, score: 0, lives: 0, kcal: 0, done: false };
+    mine.current = { ready: false, score: 0, lives: 0, kcal: 0, done: false, out: false };
     rtcUnsub.current?.();
     pendingOffer.current = null; rtcLastId.current = ''; rtcMyId.current = '';
     rtcUnsub.current = onSnapshot(rtcDoc(code), (sn) => {
@@ -770,7 +770,7 @@ export default function GameMode() {
       const oppName = (isHost ? d.guestName : d.hostName) || 'เพื่อน';
       const p = oppUid ? d.p?.[oppUid] : null;
       setRoom({ code, isHost, joined: !!oppUid, oppName });
-      const o = oppUid ? { name: oppName, score: p?.score || 0, done: !!p?.done, ready: !!p?.ready } : null;
+      const o = oppUid ? { name: oppName, score: p?.score || 0, done: !!p?.done, ready: !!p?.ready, out: !!p?.out } : null;
       oppRef.current = o;
       setOpp(o);
       if (oppUid && liveFor.current !== oppUid) { // ฟังภาพการเล่นของเพื่อน
@@ -914,7 +914,7 @@ export default function GameMode() {
     startRtc();
     if (roomMeta.current) {
       // เริ่มรอบใหม่: ล้างสถานะเดิมของเรา และให้เจ้าของห้องสุ่มชุดผลไม้ใหม่
-      pushMine({ ready: false, score: 0, lives: 0, kcal: 0, done: false });
+      pushMine({ ready: false, score: 0, lives: 0, kcal: 0, done: false, out: false });
       if (roomMeta.current.isHost) updateDoc(roomDoc(roomMeta.current.code), { seed: newSeed() }).catch(() => {});
     }
     setChk(CHK0);
@@ -981,9 +981,19 @@ export default function GameMode() {
       res.opp = { name: b.p.name, score: b.score, done: true };
     }
     if (s.mode === 'real' && roomMeta.current) {
-      pushMine({ score: s.score, kcal: Math.round(s.kcal * 10) / 10, done: true });
+      // โหมดมีหัวใจ: ใครหัวใจหมดก่อนแพ้ทันที อีกฝั่งชนะทันที (ไม่ต้องรอ ไม่เทียบคะแนน)
+      const iOut = !!s.cfg.lives && s.lives <= 0;
+      const oppOut = !!s.cfg.lives && (!!oppRef.current?.out || !!s.forceWin);
+      pushMine({ score: s.score, lives: Math.max(0, s.lives), kcal: Math.round(s.kcal * 10) / 10, done: true, out: iOut && !oppOut });
       finalRef.current = res;
-      if (oppRef.current?.done) res.opp = oppRef.current;
+      const o = oppRef.current;
+      if (iOut && !oppOut) { // เราแพ้ (หัวใจหมดก่อน)
+        res.opp = { name: o?.name || 'เพื่อน', score: o?.score || 0, done: true };
+        res.outcome = 'lose';
+      } else if (oppOut && !iOut) { // เพื่อนแพ้ (หัวใจหมดก่อน) เราชนะทันที
+        res.opp = { name: o?.name || 'เพื่อน', score: o?.score || 0, done: true };
+        res.outcome = 'win';
+      } else if (o?.done) res.opp = o;
       else { setResult(res); setStatus('waitend'); return; }
     }
     setResult(res);
@@ -1058,6 +1068,7 @@ export default function GameMode() {
           const sig = `${s.score}|${s.lives}`;
           if (sig !== s.sent) { s.sent = sig; pushMine({ score: s.score, lives: s.lives, kcal: Math.round(s.kcal * 10) / 10 }); }
         }
+        if (s.mode === 'real' && s.cfg.lives && s.lives > 0 && oppRef.current?.out) { s.forceWin = true; finish(s); return; }
         if (s.cfg.time ? s.activeMs >= s.cfg.time * 1000 : s.lives <= 0) { finish(s); return; }
       }
       raf = requestAnimationFrame(loop);
@@ -1084,7 +1095,7 @@ export default function GameMode() {
   const diff = result ? Math.abs(result.left - result.right) : 0;
   const total = result ? result.left + result.right : 0;
   const weaker = result && total >= 10 && diff / total > 0.3 ? (result.left > result.right ? 'ขวา' : 'ซ้าย') : null;
-  const vs = result?.opp ? (result.score > result.opp.score ? 'win' : result.score < result.opp.score ? 'lose' : 'draw') : null;
+  const vs = result?.opp ? (result.outcome || (result.score > result.opp.score ? 'win' : result.score < result.opp.score ? 'lose' : 'draw')) : null;
   const modeLabel = setup.mode === 'solo' ? 'เล่นคนเดียว'
     : setup.mode === 'bot' ? `แข่งกับ ${BOTS[setup.botLvl].name}`
       : `แข่งกับเพื่อน · ห้อง ${room?.code || ''} · ${room?.joined ? room.oppName : 'กำลังรอเพื่อนเข้าห้อง...'}`;
@@ -1256,6 +1267,7 @@ export default function GameMode() {
               <li>ระหว่างเล่นกดปุ่ม ×0.75 – ×2 (หรือลูกศรขึ้น/ลง) เพื่อเร่งความเร็วผลไม้ ยิ่งเร็วยิ่งได้คะแนนคูณ และเผาผลาญมากขึ้น</li>
               <li>ระบบจะนับแคลอรี่ที่เผาผลาญให้ตามน้ำหนักตัว {clampW(setup.weight)} กก. และความถี่ของหมัด</li>
               {versus && <li>แข่งกับ{setup.mode === 'bot' ? 'บอท' : 'เพื่อน'}: ใครได้คะแนนรวมมากกว่าชนะ{setup.mode === 'real' ? ' ผลไม้และระเบิดเรียงเหมือนกันทั้งสองฝั่ง' : ''}</li>}
+              {setup.mode === 'real' && !game.time && <li>ถ้าใครหัวใจหมดก่อน คนนั้นแพ้ทันที เกมจบ และอีกฝั่งชนะเลยโดยไม่ต้องรอ</li>}
               <li>ก้าวเท้าซ้าย-ขวาตามตำแหน่งผลไม้ และสลับแขนให้สมดุลกัน</li>
               <li>วอร์มไหล่และแขนก่อนเล่น หากรู้สึกเจ็บหรือเวียนศีรษะให้หยุดพักทันที</li>
               <li>ภาพจากกล้องถูกประมวลผลบนเครื่องของคุณเท่านั้น{setup.mode === 'real' ? ' แต่ตอนแข่งกับเพื่อนตัวจริง ภาพกล้องของคุณจะถูกส่งตรงไปให้เพื่อนในห้องดูด้วย (และคุณก็เห็นกล้องเพื่อน)' : ''}</li>
@@ -1307,31 +1319,37 @@ export default function GameMode() {
         )}
 
         {status === 'over' && result && (
-          <div className="gm-overlay">
-            <h2>จบเกม</h2>
-            <div className="gm-final">{result.score}</div>
-            {vs && (
-              <p className={`gm-vs ${vs}`}>
-                {vs === 'win' ? '🏆 คุณชนะ!' : vs === 'lose' ? 'แพ้นิดเดียว สู้ใหม่อีกที!' : 'เสมอกัน!'} · {result.opp.name} {result.opp.score} คะแนน
-              </p>
-            )}
-            <p className="gm-sub">{result.record ? 'สถิติใหม่!' : `คะแนนรอบนี้ · สถิติสูงสุด ${bests[result.game] || 0}`}</p>
-            <div className="gm-stats">
-              <div><b>{result.kcal.toFixed(1)}</b><span>แคลอรี่ที่เผาผลาญ (kcal)</span></div>
-              <div><b>{result.hits}</b><span>ผลไม้ที่ต่อยแตก</span></div>
-              <div><b>{result.left}</b><span>หมัดซ้าย</span></div>
-              <div><b>{result.right}</b><span>หมัดขวา</span></div>
-              <div><b>{result.ppm}</b><span>หมัดต่อนาที</span></div>
-              <div><b>{result.maxCombo}</b><span>คอมโบสูงสุด</span></div>
-              <div><b>{result.bombs}</b><span>โดนระเบิด</span></div>
-              <div><b>{result.secs}</b><span>วินาทีที่ออกกำลัง</span></div>
-            </div>
-            <p className="gm-note">แคลอรี่เป็นค่าประมาณจากน้ำหนัก {result.weight} กก. เวลาที่เล่น และความถี่ของหมัด ไม่ใช่ค่าที่วัดได้จริง</p>
-            {weaker && <p className="gm-sub">รอบนี้ใช้แขน{weaker}น้อยกว่าอย่างชัดเจน รอบหน้าลองสลับแขนให้สมดุลขึ้น</p>}
-            <div className="gm-actions">
-              <button type="button" className="gm-btn primary" onClick={begin} disabled={setup.mode === 'real' && !room?.joined}>เล่นอีกครั้ง</button>
-              <button type="button" className="gm-btn" onClick={() => toMenu()}>เปลี่ยนเกม/โหมด</button>
-              <button type="button" className="gm-btn" onClick={() => navigate('/dashboard')}>กลับหน้าหลัก</button>
+          <div className="gm-overlay gm-overlay-result">
+            <div className={`gm-panel${vs ? ` ${vs}` : ''}`}>
+              <h2 className="gm-result-title">{vs === 'win' ? '🏆 คุณชนะ!' : vs === 'lose' ? 'คุณแพ้ในรอบนี้' : vs === 'draw' ? '🤝 เสมอกัน' : 'จบเกม'}</h2>
+              <div className="gm-final">{result.score}</div>
+              <p className="gm-final-label">คะแนนของคุณ</p>
+              {vs && (
+                <p className={`gm-vs ${vs}`}>
+                  {result.outcome === 'win' ? `${result.opp.name} หัวใจหมดก่อน คุณชนะทันที!`
+                    : result.outcome === 'lose' ? 'หัวใจของคุณหมดก่อน เพื่อนชนะทันที'
+                      : vs === 'win' ? 'ชนะด้วยคะแนนที่มากกว่า' : vs === 'lose' ? 'แพ้นิดเดียว สู้ใหม่อีกที!' : 'คะแนนเท่ากันพอดี'}
+                  <span className="gm-vs-score">{result.opp.name} · {result.opp.score} คะแนน</span>
+                </p>
+              )}
+              <p className="gm-sub">{result.record ? '🎉 สถิติใหม่!' : `สถิติสูงสุด ${bests[result.game] || 0}`}</p>
+              <div className="gm-stats">
+                <div className="hot"><b>{result.kcal.toFixed(1)}</b><span>แคลอรี่ที่เผาผลาญ (kcal)</span></div>
+                <div><b>{result.hits}</b><span>ผลไม้ที่ต่อยแตก</span></div>
+                <div><b>{result.left}</b><span>หมัดซ้าย</span></div>
+                <div><b>{result.right}</b><span>หมัดขวา</span></div>
+                <div><b>{result.ppm}</b><span>หมัดต่อนาที</span></div>
+                <div><b>{result.maxCombo}</b><span>คอมโบสูงสุด</span></div>
+                <div><b>{result.bombs}</b><span>โดนระเบิด</span></div>
+                <div><b>{result.secs}</b><span>วินาทีที่ออกกำลัง</span></div>
+              </div>
+              <p className="gm-note">แคลอรี่เป็นค่าประมาณจากน้ำหนัก {result.weight} กก. เวลาที่เล่น และความถี่ของหมัด ไม่ใช่ค่าที่วัดได้จริง</p>
+              {weaker && <p className="gm-tipbox">💡 รอบนี้ใช้แขน{weaker}น้อยกว่าอย่างชัดเจน รอบหน้าลองสลับแขนให้สมดุลขึ้น</p>}
+              <div className="gm-actions">
+                <button type="button" className="gm-btn primary" onClick={begin} disabled={setup.mode === 'real' && !room?.joined}>เล่นอีกครั้ง</button>
+                <button type="button" className="gm-btn" onClick={() => toMenu()}>เปลี่ยนเกม/โหมด</button>
+                <button type="button" className="gm-btn" onClick={() => navigate('/dashboard')}>กลับหน้าหลัก</button>
+              </div>
             </div>
           </div>
         )}
@@ -1380,13 +1398,13 @@ const css = `
 .gm-wrap { flex:1; min-height:0; display:flex; flex-direction:row; gap:6px; padding:0 10px 10px; }
 .gm-wrap.imm { padding:0; gap:3px; }
 @media (orientation:portrait) { .gm-wrap { flex-direction:column; } }
-.gm-back { min-height:44px; padding:0 16px; border:1px solid #2a5360; border-radius:10px; background:transparent; color:inherit; font-size:14px; cursor:pointer; transition:border-color .2s, color .2s, transform .15s; }
+.gm-back { min-height:44px; padding:0 16px; border:1px solid #4f8f9c; border-radius:10px; background:rgba(255,255,255,.06); color:#f4fbf7; font-size:14px; cursor:pointer; transition:border-color .2s, color .2s, transform .15s; }
 .gm-back:hover { border-color:#7cff31; color:#7cff31; }
 .gm-back:active { transform:scale(.96); }
 .gm-title { flex:1; min-width:0; }
 .gm-title h1 { margin:0; font:600 26px/1.2 'Kanit',sans-serif; }
-.gm-title p { margin:2px 0 0; font-size:13px; color:#9fb4b8; }
-.gm-best { font-size:13px; color:#9fb4b8; white-space:nowrap; }
+.gm-title p { margin:2px 0 0; font-size:13px; color:#c4d6da; }
+.gm-best { font-size:13px; color:#c4d6da; white-space:nowrap; }
 .gm-best b { margin-left:4px; font:600 20px 'Kanit',sans-serif; color:#c6ff38; }
 .gm-stage { position:relative; flex:1 1 0; min-width:0; min-height:0; overflow:hidden; border:1px solid #1f6d6a; border-radius:16px; background:linear-gradient(160deg,#07161a,#030b0e); user-select:none; box-shadow:0 0 28px rgba(80,255,120,.08); }
 .gm-wrap.imm .gm-stage { border-radius:0; border-width:0; }
@@ -1394,32 +1412,33 @@ const css = `
 .gm-video.on { opacity:.9; }
 .gm-canvas { position:absolute; inset:0; width:100%; height:100%; }
 .gm-hud { position:absolute; inset:0 0 auto 0; padding:14px 18px; display:grid; grid-template-columns:1fr auto 1fr; align-items:start; pointer-events:none; }
-.gm-hearts { display:flex; gap:4px; font-size:clamp(18px,5vmin,32px); line-height:1; color:#ff476d; text-shadow:0 0 12px rgba(255,71,109,.6); }
-.gm-hearts .lost { color:#3a4a50; text-shadow:none; }
-.gm-score { font:700 clamp(26px,7vmin,46px)/1 'Kanit',sans-serif; color:#fff; text-shadow:0 2px 12px rgba(0,0,0,.7); }
+.gm-hearts { display:flex; gap:4px; width:max-content; padding:4px 10px; border-radius:99px; background:rgba(2,8,10,.6); font-size:clamp(18px,5vmin,32px); line-height:1; color:#ff476d; text-shadow:0 0 12px rgba(255,71,109,.6); }
+.gm-hearts .lost { color:rgba(255,255,255,.34); text-shadow:0 1px 3px rgba(0,0,0,.8); }
+.gm-score { padding:4px 18px; border-radius:16px; background:rgba(2,8,10,.6); backdrop-filter:blur(6px); font:700 clamp(26px,7vmin,46px)/1 'Kanit',sans-serif; color:#fff; text-shadow:0 2px 10px rgba(0,0,0,.9); }
 .gm-side { justify-self:end; display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
-.gm-combo { font:600 20px 'Kanit',sans-serif; color:#e9ffb0; text-shadow:0 2px 10px rgba(0,0,0,.7); min-height:1em; }
+.gm-combo { padding:2px 12px; border-radius:99px; background:rgba(2,8,10,.6); font:600 20px 'Kanit',sans-serif; color:#e9ffb0; text-shadow:0 2px 8px rgba(0,0,0,.9); min-height:1em; }
+.gm-combo:empty { display:none; }
 .gm-combo.hot { color:#ffd24a; }
-.gm-lr { font-size:13px; color:#dff1ec; text-shadow:0 2px 10px rgba(0,0,0,.8); }
-.gm-end { position:absolute; right:12px; bottom:12px; min-height:38px; padding:0 16px; border:1px solid rgba(255,255,255,.28); border-radius:10px; background:rgba(2,8,10,.55); color:#eef6f1; font:500 13px 'Anuphan',sans-serif; cursor:pointer; transition:border-color .2s, transform .15s; }
+.gm-lr { padding:2px 10px; border-radius:99px; background:rgba(2,8,10,.6); font-size:13px; color:#f0faf6; text-shadow:0 1px 6px rgba(0,0,0,.9); }
+.gm-end { position:absolute; right:12px; bottom:12px; min-height:38px; padding:0 16px; border:1px solid rgba(255,255,255,.28); border-radius:10px; background:rgba(2,8,10,.75); color:#f4fbf7; font:500 13px 'Anuphan',sans-serif; cursor:pointer; transition:border-color .2s, transform .15s; }
 .gm-end:hover { border-color:#ff6b81; }
 .gm-end:active { transform:scale(.95); }
-.gm-overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:safe center; gap:14px; padding:20px; overflow-y:auto; text-align:center; background:rgba(2,8,10,.82); }
+.gm-overlay { color:#f4fbf7; position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:safe center; gap:14px; padding:20px; overflow-y:auto; text-align:center; background:rgba(2,8,10,.82); }
 .gm-overlay.dim { background:rgba(2,8,10,.45); }
-.gm-overlay h2 { margin:0; font:600 32px 'Kanit',sans-serif; }
+.gm-overlay h2 { margin:0; font:600 32px 'Kanit',sans-serif; color:#fff; text-shadow:0 2px 12px rgba(0,0,0,.6); }
 .gm-overlay p { margin:0; }
-.gm-rules { margin:0; padding:0; list-style:none; display:grid; gap:7px; max-width:520px; font-size:14px; line-height:1.5; color:#dfe8e6; }
-.gm-msg { max-width:460px; font-size:14px; line-height:1.5; color:#ffb4c0; }
+.gm-rules { margin:0; padding:0; list-style:none; display:grid; gap:7px; max-width:520px; font-size:14px; line-height:1.5; color:#eaf3f0; }
+.gm-msg { max-width:460px; font-size:14px; line-height:1.5; color:#ffc2cc; }
 .gm-check { position:absolute; left:0; right:0; bottom:0; padding:28px 18px 18px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; background:linear-gradient(0deg,rgba(2,8,10,.94),rgba(2,8,10,.7) 70%,transparent); }
-.gm-check h2 { margin:0; font:600 22px 'Kanit',sans-serif; }
+.gm-check h2 { margin:0; font:600 22px 'Kanit',sans-serif; color:#fff; text-shadow:0 2px 10px rgba(0,0,0,.8); }
 .gm-chips { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
-.gm-chip { padding:6px 14px; border:1px solid #2a5360; border-radius:999px; font-size:13px; color:#9fb4b8; transition:border-color .2s, color .2s, background .2s; }
+.gm-chip { padding:6px 14px; border:1px solid #4f8f9c; border-radius:999px; font-size:13px; color:#c4d6da; transition:border-color .2s, color .2s, background .2s; }
 .gm-chip.ok { border-color:#7cff31; color:#c6ff38; background:rgba(124,255,49,.1); }
 .gm-bar { width:min(320px,80%); height:8px; border-radius:99px; background:#12323a; overflow:hidden; }
 .gm-bar i { display:block; height:100%; background:linear-gradient(90deg,#72ed2e,#baff3e); transition:width .15s; }
 .gm-tip { margin:0; font-size:14px; color:#e9ffb0; }
 .gm-actions { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; margin-top:4px; }
-.gm-btn { min-height:46px; padding:0 24px; border:1px solid #2a5360; border-radius:12px; background:transparent; color:inherit; font:500 15px 'Anuphan',sans-serif; cursor:pointer; transition:transform .15s, box-shadow .2s, border-color .2s; }
+.gm-btn { min-height:46px; padding:0 24px; border:1px solid #4f8f9c; border-radius:12px; background:rgba(255,255,255,.06); color:#f4fbf7; font:500 15px 'Anuphan',sans-serif; cursor:pointer; transition:transform .15s, box-shadow .2s, border-color .2s; }
 .gm-btn:hover { border-color:#7cff31; }
 .gm-btn:active { transform:scale(.95); }
 .gm-btn.primary { border-color:transparent; background:linear-gradient(90deg,#72ed2e,#baff3e); color:#071005; font-weight:700; }
@@ -1427,51 +1446,64 @@ const css = `
 .gm-btn:focus-visible, .gm-back:focus-visible, .gm-end:focus-visible { outline:2px solid #c6ff38; outline-offset:2px; }
 .gm-count { font:700 clamp(72px,22vmin,140px)/1 'Kanit',sans-serif; color:#c6ff38; text-shadow:0 0 30px rgba(110,255,50,.5); animation:gm-pop .8s ease-out both; }
 @keyframes gm-pop { from { transform:scale(1.6); opacity:0; } 35% { opacity:1; } to { transform:scale(.9); opacity:.9; } }
-.gm-final { font:700 80px/1 'Kanit',sans-serif; color:#c6ff38; }
-.gm-sub { color:#9fb4b8; font-size:14px; max-width:460px; }
+.gm-final { font:700 84px/1 'Kanit',sans-serif; color:#c6ff38; text-shadow:0 0 28px rgba(110,255,50,.35); }
+.gm-sub { color:#c4d6da; font-size:14px; max-width:460px; }
 .gm-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(112px,1fr)); gap:10px; width:min(600px,100%); }
-.gm-stats div { display:flex; flex-direction:column; gap:2px; padding:10px 6px; border:1px solid #1f4f55; border-radius:12px; }
-.gm-stats b { font:600 24px 'Kanit',sans-serif; }
-.gm-stats span { font-size:11.5px; color:#9fb4b8; }
+.gm-stats div { display:flex; flex-direction:column; gap:2px; padding:12px 6px; border:1px solid #3c7581; border-radius:14px; background:rgba(255,255,255,.05); }
+.gm-stats b { font:600 26px 'Kanit',sans-serif; color:#fff; }
+.gm-stats .hot b { color:#ffc58a; }
+.gm-stats span { font-size:12.5px; color:#d3e2e5; }
 .gm-btn:disabled { opacity:.4; cursor:not-allowed; }
 .gm-friend { background:radial-gradient(circle at 50% 0%,rgba(124,255,49,.06),transparent 60%),#030b0e; }
-.gm-fhud { position:absolute; left:0; right:0; top:0; padding:12px 16px; display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:none; text-shadow:0 2px 10px rgba(0,0,0,.8); }
-.gm-fname { font-size:clamp(11px,2.4vmin,15px); color:#dff1ec; }
+.gm-fhud { position:absolute; left:50%; top:10px; transform:translateX(-50%); padding:6px 18px; border-radius:16px; background:rgba(2,8,10,.62); backdrop-filter:blur(6px); display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:none; text-shadow:0 2px 8px rgba(0,0,0,.9); }
+.gm-fname { font-size:clamp(11px,2.4vmin,15px); color:#f0faf6; }
 .gm-fscore { font:700 clamp(26px,7vmin,46px)/1 'Kanit',sans-serif; color:#ffd24a; }
-.gm-fstate { font-size:clamp(10px,2.2vmin,13px); color:#9fb4b8; }
+.gm-fstate { font-size:clamp(10px,2.2vmin,13px); color:#c4d6da; }
 .gm-botcard { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; }
 .gm-bot-ico { font-size:clamp(48px,14vmin,96px); line-height:1; }
 .gm-botcard b { font:600 clamp(16px,3.5vmin,24px) 'Kanit',sans-serif; }
 .gm-wrap.split .gm-speed span, .gm-wrap.split .gm-lr { display:none; }
 .gm-rvideo { position:absolute; width:2px; height:2px; opacity:0; pointer-events:none; }
 .gm-btn.small { min-height:38px; padding:0 14px; font-size:13px; }
-.gm-pick { display:flex; flex-direction:column; align-items:center; gap:8px; font-size:13px; color:#9fb4b8; }
+.gm-pick { display:flex; flex-direction:column; align-items:center; gap:8px; font-size:13px; color:#c4d6da; }
 .gm-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; width:min(620px,100%); }
-.gm-card { display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 14px; border:1px solid #2a5360; border-radius:14px; background:rgba(8,28,34,.7); color:inherit; font-family:inherit; text-align:center; cursor:pointer; transition:border-color .2s, transform .15s, box-shadow .2s; }
+.gm-card { color:#f4fbf7; display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 14px; border:1px solid #4f8f9c; border-radius:14px; background:rgba(8,28,34,.85); font-family:inherit; text-align:center; cursor:pointer; transition:border-color .2s, transform .15s, box-shadow .2s; }
 .gm-card:hover { border-color:#7cff31; box-shadow:0 0 16px rgba(125,255,45,.2); }
 .gm-card:active { transform:scale(.97); }
 .gm-card:focus-visible, .gm-input:focus-visible, .gm-speed button:focus-visible { outline:2px solid #c6ff38; outline-offset:2px; }
 .gm-card-ico { font-size:38px; line-height:1; }
 .gm-card b { font:600 18px 'Kanit',sans-serif; }
-.gm-card small { font-size:12.5px; line-height:1.45; color:#9fb4b8; }
+.gm-card small { font-size:12.5px; line-height:1.45; color:#c4d6da; }
 .gm-card .gm-card-best { color:#c6ff38; }
 .gm-row { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; }
-.gm-input { width:140px; min-height:46px; padding:0 14px; border:1px solid #2a5360; border-radius:12px; background:rgba(8,28,34,.7); color:inherit; font:500 16px 'Anuphan',sans-serif; text-align:center; }
-.gm-weight { display:flex; align-items:center; gap:10px; font-size:14px; color:#dfe8e6; }
+.gm-input { width:140px; min-height:46px; padding:0 14px; border:1px solid #4f8f9c; border-radius:12px; background:rgba(8,28,34,.85); color:#f4fbf7; font:500 16px 'Anuphan',sans-serif; text-align:center; }
+.gm-weight { display:flex; align-items:center; gap:10px; font-size:14px; color:#eaf3f0; }
 .gm-weight .gm-input { width:96px; }
-.gm-note { max-width:460px; font-size:11.5px; line-height:1.5; color:#7f969b; }
+.gm-note { max-width:460px; font-size:12px; line-height:1.5; color:#a9bdc2; }
 .gm-code { font:700 72px/1 'Kanit',sans-serif; letter-spacing:.12em; color:#c6ff38; text-shadow:0 0 24px rgba(110,255,50,.4); }
 .gm-mid { display:flex; flex-direction:column; align-items:center; gap:4px; }
-.gm-opp { padding:3px 12px; border-radius:99px; background:rgba(2,8,10,.6); font-size:13px; color:#dff1ec; white-space:nowrap; }
+.gm-opp { padding:3px 12px; border-radius:99px; background:rgba(2,8,10,.7); font-size:13px; color:#f0faf6; white-space:nowrap; }
 .gm-opp b { margin-left:4px; font:600 16px 'Kanit',sans-serif; color:#ffd24a; }
-.gm-timer { font:700 30px/1 'Kanit',sans-serif; color:#ffd24a; text-shadow:0 2px 12px rgba(0,0,0,.7); }
-.gm-kcal { font-size:13px; color:#ffb870; text-shadow:0 2px 10px rgba(0,0,0,.8); }
-.gm-speed { position:absolute; left:12px; bottom:12px; display:flex; align-items:center; gap:4px; padding:4px 6px 4px 10px; border:1px solid rgba(255,255,255,.28); border-radius:12px; background:rgba(2,8,10,.55); font-size:12px; color:#dff1ec; }
-.gm-speed button { min-width:42px; min-height:36px; border:1px solid transparent; border-radius:8px; background:transparent; color:inherit; font:600 13px 'Kanit',sans-serif; cursor:pointer; }
+.gm-timer { width:max-content; padding:6px 14px; border-radius:14px; background:rgba(2,8,10,.6); font:700 30px/1 'Kanit',sans-serif; color:#ffd24a; text-shadow:0 2px 10px rgba(0,0,0,.9); }
+.gm-kcal { padding:2px 10px; border-radius:99px; background:rgba(2,8,10,.6); font-size:13px; color:#ffc58a; text-shadow:0 1px 6px rgba(0,0,0,.9); }
+.gm-speed { position:absolute; left:12px; bottom:12px; display:flex; align-items:center; gap:4px; padding:4px 6px 4px 10px; border:1px solid rgba(255,255,255,.28); border-radius:12px; background:rgba(2,8,10,.75); font-size:12px; color:#f0faf6; }
+.gm-speed button { min-width:42px; min-height:36px; border:1px solid transparent; border-radius:8px; background:transparent; color:#f4fbf7; font:600 13px 'Kanit',sans-serif; cursor:pointer; }
 .gm-speed button.on { background:linear-gradient(90deg,#72ed2e,#baff3e); color:#071005; }
-.gm-vs { font:600 20px 'Kanit',sans-serif; }
-.gm-vs.win { color:#c6ff38; } .gm-vs.lose { color:#ff8da1; } .gm-vs.draw { color:#ffd24a; }
+.gm-vs { display:flex; flex-direction:column; align-items:center; gap:2px; font:600 21px 'Kanit',sans-serif; }
+.gm-vs-score { font:500 14px 'Anuphan',sans-serif; color:#eaf3f0; }
+.gm-vs.win { color:#d6ff5a; } .gm-vs.lose { color:#ffa3b3; } .gm-vs.draw { color:#ffe07a; }
+.gm-overlay-result { background:rgba(2,8,10,.78); backdrop-filter:blur(8px); }
+.gm-panel { display:flex; flex-direction:column; align-items:center; gap:12px; width:min(660px,100%); padding:26px 22px 22px; border:1px solid rgba(124,255,49,.4); border-radius:24px; background:linear-gradient(165deg,rgba(12,36,42,.97),rgba(4,15,19,.98)); box-shadow:0 18px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08); color:#f4fbf7; }
+.gm-panel.win { border-color:rgba(198,255,56,.7); box-shadow:0 18px 60px rgba(0,0,0,.6), 0 0 40px rgba(124,255,49,.22); }
+.gm-panel.lose { border-color:rgba(255,141,161,.6); box-shadow:0 18px 60px rgba(0,0,0,.6), 0 0 36px rgba(255,71,109,.18); }
+.gm-panel.draw { border-color:rgba(255,210,74,.6); }
+.gm-panel.lose .gm-final { color:#ffd0d8; text-shadow:0 0 24px rgba(255,71,109,.3); }
+.gm-result-title { font:700 30px 'Kanit',sans-serif !important; }
+.gm-final-label { margin:-6px 0 0; font-size:13px; color:#c4d6da; letter-spacing:.04em; }
+.gm-tipbox { margin:0; max-width:480px; padding:10px 14px; border:1px solid rgba(255,210,74,.5); border-radius:12px; background:rgba(255,210,74,.1); font-size:13.5px; line-height:1.5; color:#fff1c2; }
 @media (max-width:640px) {
+  .gm-panel { padding:18px 14px 16px; gap:10px; border-radius:18px; }
+  .gm-result-title { font-size:24px !important; }
   .gm-speed span { display:none; }
   .gm-code { font-size:52px; }
   .gm-timer { font-size:24px; }
@@ -1491,4 +1523,4 @@ const css = `
   .gm-check h2 { font-size:18px; }
 }
 @media (prefers-reduced-motion: reduce) { .gm-count { animation:none; } .gm-btn, .gm-back, .gm-end, .gm-bar i, .gm-chip { transition:none; } }
-`;
+`;ห
