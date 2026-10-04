@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from "firebase/firestore";
 import { auth, db } from "../firebase";
-import { readEnergy, readTdee, subscribeEnergy, writeTarget, writeTdee } from "../calorieSync";
+import { readEnergy, subscribeEnergy, writeTarget, writeTdee } from "../calorieSync";
 
 // แคชชื่อผู้ใช้ไว้ เพื่อให้เปลี่ยนหน้าแล้วชื่อขึ้นทันที ไม่กระพริบเป็นชื่ออื่น
 const NAME_CACHE_KEY = "fittrack-user-name";
@@ -69,7 +69,7 @@ export default function Dashboard() {
   const [height, setHeight] = useState("");
   const [age, setAge] = useState("");
   const [bmiResult, setBmiResult] = useState(null);
-  const [tdeeResult, setTdeeResult] = useState(readTdee);
+  const [tdeeResult, setTdeeResult] = useState(null);
 
   const [itemImage, setItemImage] = useState(null);
   const [itemCalories, setItemCalories] = useState(0);
@@ -324,7 +324,9 @@ export default function Dashboard() {
     showToast(`เพิ่ม ${meal.name} แล้ว +${calories.toLocaleString()} kcal`);
   };
 
-  const dailyTarget = Number(tdeeResult || 1650);
+  // เริ่มที่ 0 จนกว่าจะกดคำนวณ (ยังไม่มีเป้าหมาย → ไม่คิดเกิน/เหลือ)
+  const dailyTarget = Number(tdeeResult || 0);
+  const noTarget = dailyTarget <= 0;
   // ได้รับสุทธิ = กินเข้าไป − เผาผลาญ (ออกกำลังกาย + โหมดเกม)  |  เหลือ = เป้าหมาย − ได้รับสุทธิ
   const gameBurned = energy.burned;
   const workoutBurned = workoutLog.reduce(
@@ -332,12 +334,12 @@ export default function Dashboard() {
   );
   const burnedKcal = gameBurned + workoutBurned;
   const netCalories = Math.max(0, Math.round(dailyConsumedCalories - burnedKcal));
-  const remainingCalories = dailyTarget - netCalories;
-  const overCalories = Math.max(0, -remainingCalories);
-  const progress = Math.min((netCalories / dailyTarget) * 100, 100);
+  const remainingCalories = noTarget ? 0 : dailyTarget - netCalories;
+  const overCalories = noTarget ? 0 : Math.max(0, -remainingCalories);
+  const progress = noTarget ? 0 : Math.min((netCalories / dailyTarget) * 100, 100);
 
   // แชร์เป้าหมายพลังงานให้หน้าโหมดเกมดึงไปใช้ และจำค่า TDEE ที่คำนวณไว้ (รีเฟรชแล้วไม่หาย)
-  useEffect(() => { writeTarget(dailyTarget); }, [dailyTarget]);
+  useEffect(() => { if (dailyTarget > 0) writeTarget(dailyTarget); }, [dailyTarget]);
   useEffect(() => { if (tdeeResult) writeTdee(tdeeResult); }, [tdeeResult]);
   // รับยอดเผาผลาญจากหน้าเกมแบบเรียลไทม์ (แท็บอื่น/ตอนกลับมาหน้านี้)
   useEffect(() => subscribeEnergy(setEnergy), []);
@@ -356,7 +358,9 @@ export default function Dashboard() {
 
   const calorieNotice = dailyConsumedCalories === 0
     ? "วันนี้ยังไม่มีข้อมูลอาหารที่บันทึกไว้"
-    : overCalories > 0
+    : noTarget
+      ? `วันนี้บันทึกพลังงานจากอาหารแล้ว ${dailyConsumedCalories.toLocaleString()} kcal (ยังไม่ได้คำนวณเป้าหมายพลังงาน)`
+      : overCalories > 0
       ? `วันนี้ได้รับพลังงานเกินเป้าหมาย ${overCalories.toLocaleString()} kcal`
       : `วันนี้ยังได้รับพลังงานต่ำกว่าเป้าหมาย ${Math.max(0, remainingCalories).toLocaleString()} kcal`;
   const gameLabels = { fruit: "ชกผลไม้", time: "ชกจับเวลา" };
@@ -399,20 +403,29 @@ export default function Dashboard() {
       { name: "ข้าวโอ๊ต + ไข่ต้ม + กล้วย", kcal: 350, img: "/meal-breakfast.png" },
       { name: "ข้าวกล้อง + อกไก่ย่าง + ผักสด", kcal: 400, img: "/meal-chicken.png" },
       { name: "โยเกิร์ต + ผลไม้ + ถั่ว", kcal: 300, img: "/meal-yogurt.png" },
+      { name: "ขนมปังโฮลวีท + ไข่ดาว + อะโวคาโด", kcal: 380, img: "/meal-breakfast.png" },
+      { name: "สมูทตี้ผลไม้ + อัลมอนด์", kcal: 280, img: "/meal-yogurt.png" },
     ],
     กลางวัน: [
       { name: "ข้าวกล้อง + อกไก่ + ผัก", kcal: 500, img: "/meal-chicken.png" },
       { name: "ปลา + ข้าวกล้อง + ผักรวม", kcal: 480, img: "/meal-fish.png" },
       { name: "สลัดไก่ + ไข่ต้ม", kcal: 420, img: "/meal-salad.png" },
+      { name: "แกงจืดเต้าหู้ + ข้าวกล้อง + ปลา", kcal: 410, img: "/meal-soup.png" },
+      { name: "ก๋วยเตี๋ยวน้ำใส + ไก่ต้ม + ผักบุ้ง", kcal: 430, img: "/meal-chicken.png" },
     ],
     เย็น: [
       { name: "ปลาแซลมอน + ผักต้ม", kcal: 380, img: "/meal-fish.png" },
       { name: "อกไก่ + ผักย่าง", kcal: 350, img: "/meal-chicken.png" },
       { name: "ซุปผัก + ไข่ต้ม", kcal: 300, img: "/meal-soup.png" },
+      { name: "สลัดทูน่า + ไข่ต้ม", kcal: 320, img: "/meal-salad.png" },
+      { name: "ต้มจืดไก่ + ผักรวม", kcal: 280, img: "/meal-soup.png" },
     ],
     ว่าง: [
       { name: "โยเกิร์ต + ผลไม้", kcal: 180, img: "/meal-yogurt.png" },
       { name: "กล้วย + อัลมอนด์", kcal: 200, img: "/meal-snack.png" },
+      { name: "แอปเปิล + เนยถั่ว", kcal: 190, img: "/meal-snack.png" },
+      { name: "ถั่วลิสงต้ม + แตงกวา", kcal: 150, img: "/meal-snack.png" },
+      { name: "นมถั่วเหลืองไม่หวาน + ขนมปังกรอบ", kcal: 170, img: "/meal-snack.png" },
     ],
   };
 
@@ -527,52 +540,12 @@ export default function Dashboard() {
             </div>
 
             <div className="daily-energy">
-              <span className="energy-flame" aria-hidden="true">
-                <svg className="fire-mascot" viewBox="0 0 64 76" role="img" aria-label="ตัวละครไฟสไตล์เกม">
-                  <defs>
-                    <linearGradient id="mascot-fire-shell" x1="0" y1="1" x2=".8" y2="0">
-                      <stop offset="0%" stopColor="#ed3213" />
-                      <stop offset="48%" stopColor="#ff6712" />
-                      <stop offset="100%" stopColor="#ffc52f" />
-                    </linearGradient>
-                    <linearGradient id="mascot-fire-core" x1="0" y1="1" x2=".7" y2="0">
-                      <stop offset="0%" stopColor="#ff8a10" />
-                      <stop offset="62%" stopColor="#ffe34b" />
-                      <stop offset="100%" stopColor="#fffbd0" />
-                    </linearGradient>
-                    <radialGradient id="mascot-fire-aura" cx="50%" cy="70%" r="60%">
-                      <stop offset="0%" stopColor="#ff8a18" stopOpacity=".55" />
-                      <stop offset="100%" stopColor="#ff4a12" stopOpacity="0" />
-                    </radialGradient>
-                  </defs>
-                  <ellipse className="mascot-aura" cx="32" cy="61" rx="27" ry="14" fill="url(#mascot-fire-aura)" />
-                  <g className="mascot-body">
-                    <path className="mascot-shell" d="M17 65C11 61 9 54 12 47C6 43 5 35 10 29C14 24 17 21 16 13C23 16 25 21 24 27C29 22 31 14 29 7C39 15 40 24 36 31C42 27 44 21 43 17C52 27 55 37 50 45C55 53 50 62 44 65C36 70 25 70 17 65Z" fill="url(#mascot-fire-shell)" />
-                    <path className="mascot-core" d="M23 62C18 57 19 51 23 46C26 42 27 37 26 32C32 37 33 43 31 47C36 44 38 39 37 35C44 44 44 52 40 58C36 64 29 65 23 62Z" fill="url(#mascot-fire-core)" />
-                    <path className="mascot-arm mascot-arm-left" d="M14 43C8 41 5 44 6 49C8 53 13 52 17 49Z" fill="#ff6413" />
-                    <path className="mascot-arm mascot-arm-right" d="M48 41C55 39 59 43 57 48C55 52 50 51 46 47Z" fill="#ff6413" />
-                    <path className="mascot-leg mascot-leg-left" d="M23 63L21 70Q22 73 28 71L31 66Z" fill="#d93417" />
-                    <path className="mascot-leg mascot-leg-right" d="M36 65L39 71Q43 73 46 69L42 62Z" fill="#d93417" />
-                    <path d="M20 39Q25 35 29 39" fill="none" stroke="#9b2a12" strokeWidth="2.2" strokeLinecap="round" />
-                    <path d="M36 39Q40 35 44 38" fill="none" stroke="#9b2a12" strokeWidth="2.2" strokeLinecap="round" />
-                    <ellipse cx="25" cy="43" rx="3.5" ry="4.6" fill="#fff9df" />
-                    <ellipse cx="39" cy="42.5" rx="3.5" ry="4.6" fill="#fff9df" />
-                    <ellipse cx="26" cy="44" rx="1.55" ry="2.4" fill="#442015" />
-                    <ellipse cx="40" cy="43.5" rx="1.55" ry="2.4" fill="#442015" />
-                    <path d="M29 51Q33 55 38 50" fill="none" stroke="#8e2614" strokeWidth="2.5" strokeLinecap="round" />
-                    <path d="M17 29Q14 35 16 39M47 28Q51 34 49 38" fill="none" stroke="#ffd65a" strokeWidth="2" strokeLinecap="round" opacity=".75" />
-                  </g>
-                  <path className="mascot-spark mascot-spark-left" d="M6 24L8 20L10 24L14 26L10 28L8 32L6 28L2 26Z" fill="#ffe15a" />
-                  <path className="mascot-spark mascot-spark-right" d="M54 18L56 15L58 18L61 20L58 22L56 25L54 22L51 20Z" fill="#ff9b27" />
-                </svg>
-              </span>
               <small className="energy-heading">พลังงานที่ควรได้รับต่อวัน (โดยประมาณ)</small>
               <strong className="energy-value">{dailyTarget.toLocaleString()} <em>kcal</em></strong>
               <b className="energy-info">ⓘ</b>
             </div>
 
             <div className="burn-today">
-              <span className="burn-ico" aria-hidden="true">🔥</span>
               <div className="burn-main">
                 <small className="burn-label">พลังงานแคลอรี่ที่ลดในวันนี้</small>
                 <strong className="burn-value" key={Math.round(burnedKcal * 10)}>{fmtBurn(burnedKcal)} <em>kcal</em></strong>
@@ -644,10 +617,10 @@ export default function Dashboard() {
                 <div className="progress-track"><span style={{ width: `${progress}%` }}></span></div>
                 <div className="calorie-stats" key={`${dailyConsumedCalories}-${Math.round(burnedKcal)}`}><div>ได้รับสุทธิ<strong>{netCalories.toLocaleString()} <small>kcal</small></strong><small>กิน {dailyConsumedCalories.toLocaleString()} − เผาผลาญ {Math.round(burnedKcal).toLocaleString()} kcal</small></div><div>เหลืออีก<strong>{Math.max(0, remainingCalories).toLocaleString()} <small>kcal</small></strong><small>จากเป้าหมาย {dailyTarget.toLocaleString()} kcal</small></div></div>
               </div>
-              <div className={`warning-card ${overCalories ? "danger" : "safe"}`}>
-                <strong>{overCalories ? "⚠️ คุณได้รับพลังงานเกินเป้าหมาย!" : "✓ พลังงานวันนี้อยู่ในเป้าหมาย"}</strong>
-                <p>{overCalories ? "แนะนำให้ลดอาหารที่มีแคลอรี่สูง และออกกำลังกายเพิ่มประมาณ 30 นาที" : "รักษาสมดุลอาหารและออกกำลังกายอย่างสม่ำเสมอ"}</p>
-                {overCalories && <button onClick={() => navigate("/exercises")}>ดูโปรแกรมออกกำลังกายเพิ่มเติม</button>}
+              <div className={`warning-card ${overCalories > 0 ? "danger" : "safe"}`}>
+                <strong>{overCalories > 0 ? "⚠️ คุณได้รับพลังงานเกินเป้าหมาย!" : noTarget ? "ℹ️ ยังไม่ได้คำนวณเป้าหมายพลังงาน" : "✓ พลังงานวันนี้อยู่ในเป้าหมาย"}</strong>
+                <p>{overCalories > 0 ? "แนะนำให้ลดอาหารที่มีแคลอรี่สูง และออกกำลังกายเพิ่มประมาณ 30 นาที" : noTarget ? "กรอกน้ำหนัก ส่วนสูง อายุ แล้วกดคำนวณ เพื่อดูพลังงานที่ควรได้รับต่อวัน" : "รักษาสมดุลอาหารและออกกำลังกายอย่างสม่ำเสมอ"}</p>
+                {overCalories > 0 && <button onClick={() => navigate("/exercises")}>ดูโปรแกรมออกกำลังกายเพิ่มเติม</button>}
               </div>
             </div>
           </section>
@@ -1989,6 +1962,20 @@ html[data-theme="light"] .daily-energy .energy-value { color: #1d6f16; }
   .quick-grid { align-self: stretch; }
   .bmi-card .daily-energy { min-height: 118px; }
 }
+
+/* ===== เมนูแนะนำเต็มช่อง (ไม่เหลือที่ว่างสีขาวด้านล่าง) + ปรับกล่องพลังงานหลังลบไอคอนไฟ ===== */
+@media (min-width: 1101px) {
+  .content-grid > .recommend-card { align-self: stretch !important; }
+}
+.content-grid > .recommend-card { height: auto !important; min-height: 480px !important; max-height: none !important; }
+.recommend-card .meal-list { display: flex; flex-direction: column; }
+.recommend-card .meal-row { flex: 1 1 auto; min-height: 66px; max-height: 104px; }
+
+.bmi-card .daily-energy { padding-left: 24px; padding-right: 24px; }
+.bmi-card .daily-energy .energy-heading { left: 24px; right: 24px; }
+.bmi-card .burn-today { justify-content: center; text-align: center; }
+.bmi-card .burn-main { flex: 0 1 auto; justify-items: center; }
+.bmi-card .burn-split { justify-content: center; }
 
 `;
 
