@@ -34,6 +34,24 @@ const getSavedDailyCalories = () => {
   }
 };
 
+// ---------- จำผลคำนวณ BMI / TDEE ไว้ ตราบที่ยังล็อกอินอยู่ (รีเฟรชหรือเปลี่ยนหน้าแล้วไม่หาย) ----------
+const HEALTH_CACHE_KEY = "fittrack-health-result";
+const readHealthCache = () => {
+  try {
+    const raw = localStorage.getItem(HEALTH_CACHE_KEY);
+    const data = raw ? JSON.parse(raw) : null;
+    return data && typeof data === "object" ? data : null;
+  } catch {
+    return null;
+  }
+};
+const writeHealthCache = (data) => {
+  try { localStorage.setItem(HEALTH_CACHE_KEY, JSON.stringify(data)); } catch { /* storage optional */ }
+};
+const clearHealthCache = () => {
+  try { localStorage.removeItem(HEALTH_CACHE_KEY); } catch { /* storage optional */ }
+};
+
 // ---------- พลังงานที่เผาผลาญจากการออกกำลังกาย (ข้อมูลชุดเดียวกับหน้าประวัติ) ----------
 const WORKOUT_CACHE_KEY = "fittrack-history-workouts";
 const CAL_PER_REP = { squat: 0.32, jumping_jack: 0.2, high_knees: 0.15, punches: 0.25 };
@@ -65,11 +83,17 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState(getInitialName);
   const [userInitial, setUserInitial] = useState(() => getInitialName().charAt(0).toUpperCase());
-  const [weight, setWeight] = useState("");
-  const [height, setHeight] = useState("");
-  const [age, setAge] = useState("");
-  const [bmiResult, setBmiResult] = useState(null);
-  const [tdeeResult, setTdeeResult] = useState(null);
+  const [weight, setWeight] = useState(() => readHealthCache()?.weight ?? "");
+  const [height, setHeight] = useState(() => readHealthCache()?.height ?? "");
+  const [age, setAge] = useState(() => readHealthCache()?.age ?? "");
+  const [bmiResult, setBmiResult] = useState(() => {
+    const c = readHealthCache();
+    return c && Number.isFinite(Number(c.bmi)) && c.status ? { value: Number(c.bmi), status: c.status } : null;
+  });
+  const [tdeeResult, setTdeeResult] = useState(() => {
+    const t = Number(readHealthCache()?.tdee);
+    return Number.isFinite(t) && t > 0 ? t : null;
+  });
 
   const [itemImage, setItemImage] = useState(null);
   const [itemCalories, setItemCalories] = useState(0);
@@ -77,6 +101,8 @@ export default function Dashboard() {
   const [itemCategory, setItemCategory] = useState("");
   const [itemConfidence, setItemConfidence] = useState(null);
   const [itemNote, setItemNote] = useState("");
+  // true เมื่อผู้ใช้กดยืนยันแล้วว่ากินอาหารนี้จริง (บันทึกเข้า "พลังงานที่ได้รับวันนี้")
+  const [itemAdded, setItemAdded] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [dailyConsumedCalories, setDailyConsumedCalories] = useState(getSavedDailyCalories);
@@ -173,7 +199,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (!currentUser) { clearCachedName(); return; }
+      if (!currentUser) { clearCachedName(); clearHealthCache(); return; }
+      const cachedHealth = readHealthCache();
+      if (cachedHealth?.uid && cachedHealth.uid !== currentUser.uid) {
+        clearHealthCache();
+        setBmiResult(null);
+        setTdeeResult(null);
+      }
       try {
         const snap = await getDoc(doc(db, "users", currentUser.uid));
         const data = snap.exists() ? snap.data() : {};
@@ -221,10 +253,17 @@ export default function Dashboard() {
     setBmiResult({ value: bmi, status });
     showToast(`คำนวณ BMI เรียบร้อยแล้ว: ${bmi} (${status})`);
 
+    let nextTdee = tdeeResult;
     if (a > 0) {
       const bmr = 10 * w + 6.25 * h - 5 * a + 5;
-      setTdeeResult(Math.round(bmr * 1.55));
+      nextTdee = Math.round(bmr * 1.55);
+      setTdeeResult(nextTdee);
     }
+    writeHealthCache({
+      uid: auth.currentUser?.uid ?? null,
+      bmi, status, tdee: nextTdee,
+      weight: String(weight), height: String(height), age: String(age),
+    });
   };
 
   const handleImageSelect = async (e) => {
@@ -245,6 +284,7 @@ export default function Dashboard() {
     setItemCalories(0);
     setItemConfidence(null);
     setItemNote("");
+    setItemAdded(false);
     setItemImage(URL.createObjectURL(file));
     setIsAnalyzing(true);
 
@@ -282,12 +322,8 @@ export default function Dashboard() {
       setItemCalories(Math.round(calories));
       setItemConfidence(Number.isFinite(confidence) ? confidence : null);
       setItemNote(note);
-      setDailyConsumedCalories((prev) => {
-        const nextTotal = prev + Math.round(calories);
-        try { localStorage.setItem(`fittrack-calories-${getLocalDateKey()}`, String(nextTotal)); } catch { /* storage optional */ }
-        return nextTotal;
-      });
-      showToast(`วิเคราะห์อาหารเรียบร้อยแล้ว +${Math.round(calories).toLocaleString()} kcal`);
+      setItemAdded(false);
+      showToast(`วิเคราะห์อาหารเรียบร้อยแล้ว ${Math.round(calories).toLocaleString()} kcal · ยังไม่ได้บันทึกเป็นพลังงานที่ได้รับ`);
     } catch (error) {
       console.error("Food analysis error:", error);
       setItemName("");
@@ -297,6 +333,19 @@ export default function Dashboard() {
       setIsAnalyzing(false);
       e.target.value = "";
     }
+  };
+
+  // กดยืนยันว่ากินอาหารที่สแกนไว้จริง → ค่อยบวกเข้า "พลังงานที่ได้รับวันนี้"
+  const addItemToDaily = () => {
+    const calories = Math.max(0, Math.round(Number(itemCalories) || 0));
+    if (itemAdded || calories <= 0) return;
+    setDailyConsumedCalories((prev) => {
+      const nextTotal = prev + calories;
+      try { localStorage.setItem(`fittrack-calories-${getLocalDateKey()}`, String(nextTotal)); } catch { /* storage optional */ }
+      return nextTotal;
+    });
+    setItemAdded(true);
+    showToast(`เพิ่ม ${itemName} แล้ว +${calories.toLocaleString()} kcal ในพลังงานที่ได้รับวันนี้`);
   };
 
   const handleRecommendedMeal = (meal) => {
@@ -311,6 +360,7 @@ export default function Dashboard() {
     setItemCalories(calories);
     setItemConfidence(null);
     setItemNote("พลังงานโดยประมาณต่อหนึ่งมื้อ ปริมาณจริงอาจแตกต่างตามวัตถุดิบและขนาดเสิร์ฟ");
+    setItemAdded(true);
 
     setDailyConsumedCalories((prev) => {
       const nextTotal = prev + calories;
@@ -433,6 +483,7 @@ export default function Dashboard() {
     try {
       await signOut(auth);
       clearCachedName();
+      clearHealthCache();
       navigate("/login", { replace: true });
     } catch (error) {
       console.error("Logout error:", error);
@@ -603,7 +654,13 @@ export default function Dashboard() {
                         )}
                       </div>
                     </div>
-                  <div className="food-kcal"><small>พลังงานทั้งหมด</small><strong>{itemCalories}</strong><em> kcal</em></div>
+                  <div className="food-kcal-row">
+                    <div className="food-kcal"><small>พลังงานทั้งหมด</small><strong>{itemCalories}</strong><em> kcal</em></div>
+                    <button type="button" className={`food-add-btn${itemAdded ? " added" : ""}`} onClick={addItemToDaily} disabled={itemAdded}>
+                      {itemAdded ? "✓ เพิ่มในพลังงานวันนี้แล้ว" : "＋ เพิ่มไปยังพลังงานที่ได้รับวันนี้"}
+                    </button>
+                  </div>
+                  {!itemAdded && <p className="food-note food-add-hint">แค่ดูแคลอรี่ได้เลย ระบบจะบันทึกก็ต่อเมื่อกดปุ่มเพิ่มเท่านั้น</p>}
                   {itemNote && <p className="food-note">{itemNote}</p>}
                   <div className="macro-row"><span>โปรตีน<br /><b>35 g</b></span><span>คาร์โบไฮเดรต<br /><b>45 g</b></span><span>ไขมัน<br /><b>8 g</b></span></div>
                 </> : <div className="food-placeholder"><strong>เพิ่มภาพอาหารเพื่อเริ่มการวิเคราะห์</strong><span>AI จะช่วยประเมินประเภทอาหาร พลังงาน และข้อมูลโภชนาการ</span></div>}
@@ -1976,6 +2033,36 @@ html[data-theme="light"] .daily-energy .energy-value { color: #1d6f16; }
 .bmi-card .burn-today { justify-content: center; text-align: center; }
 .bmi-card .burn-main { flex: 0 1 auto; justify-items: center; }
 .bmi-card .burn-split { justify-content: center; }
+
+/* ===== ปุ่ม "เพิ่มไปยังพลังงานที่ได้รับวันนี้" (วิเคราะห์อาหาร) ===== */
+.food-kcal-row { display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:10px 16px; margin-top:9px; }
+.food-kcal-row .food-kcal { margin-top:0; }
+.food-add-btn { min-height:40px; padding:0 20px; border:0; border-radius:10px; background:linear-gradient(90deg,#72ed2e,#baff3e); color:#071005; font-weight:700; font-size:13px; cursor:pointer; box-shadow:0 0 16px rgba(125,255,45,.18); transition:transform .15s ease, box-shadow .2s ease; }
+.food-add-btn:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 0 22px rgba(125,255,45,.42); }
+.food-add-btn:active:not(:disabled) { transform:scale(.97); }
+.food-add-btn:disabled, .food-add-btn.added { background:transparent; border:1px solid #4f8f2e; color:#9cff43; box-shadow:none; cursor:default; }
+.food-add-hint { margin:7px 0 0; }
+html[data-theme="light"] .food-add-btn:disabled, html[data-theme="light"] .food-add-btn.added { border-color:#6cc943; color:#2a7a16; background:#f1faec; }
+@media (max-width: 560px) { .food-add-btn { width:100%; } }
+
+/* ===== จอกว้าง: ทำการ์ด BMI ให้กระชับ เพื่อให้ช่อง "ออกกำลังกาย / ประวัติ" สูงพอดี ไม่มีช่องว่างเยอะ ===== */
+@media (min-width: 1101px) {
+  .bmi-card { padding: 14px 17px 14px; }
+  .bmi-card .bmi-inputs { margin-top: 8px; }
+  .bmi-card .bmi-extra-row { margin-top: 7px; }
+  .bmi-card .bmi-result { margin-top: 9px; padding: 8px 12px; }
+  .bmi-card .daily-energy { flex: 1 1 auto; min-height: 96px; margin-top: 9px; padding: 34px 24px 10px; }
+  .bmi-card .daily-energy .energy-heading { top: 11px; }
+  .bmi-card .daily-energy .energy-value { font-size: 32px; }
+  .bmi-card .burn-today { margin-top: 8px; padding: 8px 12px; gap: 8px; }
+  .bmi-card .burn-label { line-height: 1.3; }
+  .bmi-card .burn-value { font-size: 22px; line-height: 1.15; }
+  .bmi-card .burn-split { line-height: 1.3; }
+
+  .quick-grid { align-self: stretch; }
+  .quick-grid .feature-card { min-height: 190px; padding: 16px 20px; }
+  .quick-grid .feature-art { top: 16px; }
+}
 
 `;
 
