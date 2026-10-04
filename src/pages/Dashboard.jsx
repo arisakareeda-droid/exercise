@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { readEnergy, readTdee, subscribeEnergy, writeTarget, writeTdee } from "../calorieSync";
 
@@ -34,6 +34,33 @@ const getSavedDailyCalories = () => {
   }
 };
 
+// ---------- พลังงานที่เผาผลาญจากการออกกำลังกาย (ข้อมูลชุดเดียวกับหน้าประวัติ) ----------
+const WORKOUT_CACHE_KEY = "fittrack-history-workouts";
+const CAL_PER_REP = { squat: 0.32, jumping_jack: 0.2, high_knees: 0.15, punches: 0.25 };
+const workoutKcal = (w) => (
+  w.calories !== undefined ? Number(w.calories) || 0 : (Number(w.count) || 0) * (CAL_PER_REP[w.exercise] ?? 0.32)
+);
+const workoutTime = (t) => {
+  if (!t) return null;
+  if (typeof t.toDate === "function") return t.toDate().getTime();
+  if (typeof t.__ts === "number") return t.__ts;
+  if (typeof t.seconds === "number") return t.seconds * 1000;
+  return null;
+};
+const toWorkoutLog = (list) => list
+  .map((w) => ({ t: workoutTime(w.completedAt), kcal: workoutKcal(w) }))
+  .filter((x) => x.t);
+const readWorkoutLog = () => {
+  try {
+    const raw = localStorage.getItem(WORKOUT_CACHE_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? toWorkoutLog(list) : [];
+  } catch {
+    return [];
+  }
+};
+const fmtBurn = (n) => (Math.round((n || 0) * 10) / 10).toLocaleString();
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState(getInitialName);
@@ -55,6 +82,8 @@ export default function Dashboard() {
   const [dailyConsumedCalories, setDailyConsumedCalories] = useState(getSavedDailyCalories);
   // ยอดเผาผลาญจากโหมดเกม (หน้าเกมส่งมาเรียลไทม์ผ่าน calorieSync)
   const [energy, setEnergy] = useState(() => readEnergy());
+  // เซสชันออกกำลังกายที่บันทึกไว้ (แสดงค่าจากแคชก่อน แล้วรีเฟรชจาก Firestore)
+  const [workoutLog, setWorkoutLog] = useState(readWorkoutLog);
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [goalWeight, setGoalWeight] = useState("");
@@ -86,10 +115,19 @@ export default function Dashboard() {
   }, [theme]);
 
   // ออกจากหน้านี้แล้วคืนค่า ไม่ให้ธีมไปกระทบหน้าอื่น
-  useEffect(() => () => document.documentElement.removeAttribute("data-theme"), []);
+  useLayoutEffect(() => () => document.documentElement.removeAttribute("data-theme"), []);
+
+  // สลับธีมจากแท็บ/หน้าอื่น → ตามทันที
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === "fittrack-theme") setTheme(e.newValue === "light" ? "light" : "dark");
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   // ใช้ค่า Animation จากหน้าตั้งค่า (ปิดแล้วอนิเมชันการ์ดในหน้านี้จะหยุด)
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
     try {
       const saved = JSON.parse(localStorage.getItem("fittrack_user_settings") || "{}");
@@ -149,6 +187,18 @@ export default function Dashboard() {
         if (data.goalWeight || data.targetWeight) setGoalWeight(String(data.goalWeight || data.targetWeight));
       } catch (err) {
         console.error("โหลดข้อมูลโปรไฟล์ไม่สำเร็จ:", err);
+      }
+
+      try {
+        const snapshot = await getDocs(query(
+          collection(db, "workouts"),
+          where("userId", "==", currentUser.uid),
+          orderBy("completedAt", "desc"),
+          limit(200)
+        ));
+        setWorkoutLog(toWorkoutLog(snapshot.docs.map((item) => item.data())));
+      } catch (err) {
+        console.error("โหลดข้อมูลการออกกำลังกายไม่สำเร็จ:", err);
       }
     });
     return () => unsubscribe();
@@ -275,8 +325,12 @@ export default function Dashboard() {
   };
 
   const dailyTarget = Number(tdeeResult || 1650);
-  // ได้รับสุทธิ = กินเข้าไป − เผาผลาญจากโหมดเกม  |  เหลือ = เป้าหมาย − ได้รับสุทธิ
-  const burnedKcal = energy.burned;
+  // ได้รับสุทธิ = กินเข้าไป − เผาผลาญ (ออกกำลังกาย + โหมดเกม)  |  เหลือ = เป้าหมาย − ได้รับสุทธิ
+  const gameBurned = energy.burned;
+  const workoutBurned = workoutLog.reduce(
+    (sum, w) => (getLocalDateKey(new Date(w.t)) === todayKey ? sum + w.kcal : sum), 0
+  );
+  const burnedKcal = gameBurned + workoutBurned;
   const netCalories = Math.max(0, Math.round(dailyConsumedCalories - burnedKcal));
   const remainingCalories = dailyTarget - netCalories;
   const overCalories = Math.max(0, -remainingCalories);
@@ -295,7 +349,7 @@ export default function Dashboard() {
     const diff = energy.burned - lastBurnToast.current;
     if (diff >= 1) {
       lastBurnToast.current = energy.burned;
-      showToast(`เผาผลาญจากโหมดเกม +${diff.toFixed(1)} kcal · วันนี้ลดไปแล้ว ${Math.round(energy.burned).toLocaleString()} kcal`);
+      showToast(`เผาผลาญจากโหมดเกม +${diff.toFixed(1)} kcal · วันนี้ลดไปแล้ว ${Math.round(burnedKcal).toLocaleString()} kcal`);
     } else if (diff < 0) lastBurnToast.current = energy.burned;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [energy.burned]);
@@ -311,8 +365,8 @@ export default function Dashboard() {
     .map(([k, v]) => `${gameLabels[k] || k} ${v.toLocaleString()} kcal`)
     .join(" · ");
   const burnNotice = burnedKcal > 0
-    ? `เล่นโหมดเกมเผาผลาญไปแล้ว ${burnedKcal.toLocaleString()} kcal (หักออกจากพลังงานที่ได้รับ)`
-    : "วันนี้ยังไม่ได้เล่นโหมดเกม";
+    ? `วันนี้เผาผลาญไปแล้ว ${fmtBurn(burnedKcal)} kcal (ออกกำลังกาย ${fmtBurn(workoutBurned)} · เล่นเกม ${fmtBurn(gameBurned)}) หักออกจากพลังงานที่ได้รับ`
+    : "วันนี้ยังไม่มีการเผาผลาญจากการออกกำลังกายหรือโหมดเกม";
   const goalNotice = goalWeight && Number(weight) > 0
     ? `น้ำหนักปัจจุบัน ${Number(weight).toLocaleString()} กก. · เป้าหมาย ${Number(goalWeight).toLocaleString()} กก.`
     : "เพิ่มน้ำหนักปัจจุบันและน้ำหนักเป้าหมายในโปรไฟล์ เพื่อดูความคืบหน้าสู่เป้าหมาย";
@@ -338,7 +392,7 @@ export default function Dashboard() {
 
   const bmiPosition = bmiResult
     ? Math.max(0, Math.min(100, ((bmiResult.value - 10) / 30) * 100))
-    : 38;
+    : 0;
 
   const meals = {
     เช้า: [
@@ -464,8 +518,8 @@ export default function Dashboard() {
             </form>
 
             <div className="bmi-result">
-              <div className="result-label">ค่า BMI <span>{bmiResult?.status || "ปกติ"}</span></div>
-              <div className="bmi-number" key={bmiResult?.value ?? "init"}>{bmiResult?.value ?? "21.48"}</div>
+              <div className="result-label">ค่า BMI <span>{bmiResult?.status || "ยังไม่คำนวณ"}</span></div>
+              <div className="bmi-number" key={bmiResult?.value ?? "init"}>{bmiResult?.value ?? "0"}</div>
               <div className="bmi-bar"><i style={{ left: `${bmiPosition}%` }}></i></div>
               <div className="bmi-scale-labels">
                 <span>&lt; 18.5<br />ผอม</span><span>18.5 - 22.9<br /><b>ปกติ</b></span><span>23 - 24.9<br />น้ำหนักเกิน</span><span>25 - 29.9<br />อ้วนระดับ 1</span><span>&gt; 30<br />อ้วนระดับ 2</span>
@@ -515,6 +569,18 @@ export default function Dashboard() {
               <small className="energy-heading">พลังงานที่ควรได้รับต่อวัน (โดยประมาณ)</small>
               <strong className="energy-value">{dailyTarget.toLocaleString()} <em>kcal</em></strong>
               <b className="energy-info">ⓘ</b>
+            </div>
+
+            <div className="burn-today">
+              <span className="burn-ico" aria-hidden="true">🔥</span>
+              <div className="burn-main">
+                <small className="burn-label">พลังงานแคลอรี่ที่ลดในวันนี้</small>
+                <strong className="burn-value" key={Math.round(burnedKcal * 10)}>{fmtBurn(burnedKcal)} <em>kcal</em></strong>
+                <span className="burn-split">
+                  <span>ออกกำลังกาย <b>{fmtBurn(workoutBurned)} kcal</b></span>
+                  <span>เล่นเกม <b>{fmtBurn(gameBurned)} kcal</b></span>
+                </span>
+              </div>
             </div>
           </section>
 
@@ -576,7 +642,7 @@ export default function Dashboard() {
               <div className="calorie-progress-card">
                 <div className="progress-title">พลังงานที่ได้รับวันนี้</div>
                 <div className="progress-track"><span style={{ width: `${progress}%` }}></span></div>
-                <div className="calorie-stats" key={`${dailyConsumedCalories}-${Math.round(burnedKcal)}`}><div>ได้รับสุทธิ<strong>{netCalories.toLocaleString()} <small>kcal</small></strong><small>กิน {dailyConsumedCalories.toLocaleString()} − เผาผลาญจากเกม {Math.round(burnedKcal).toLocaleString()} kcal</small></div><div>เหลืออีก<strong>{Math.max(0, remainingCalories).toLocaleString()} <small>kcal</small></strong><small>จากเป้าหมาย {dailyTarget.toLocaleString()} kcal</small></div></div>
+                <div className="calorie-stats" key={`${dailyConsumedCalories}-${Math.round(burnedKcal)}`}><div>ได้รับสุทธิ<strong>{netCalories.toLocaleString()} <small>kcal</small></strong><small>กิน {dailyConsumedCalories.toLocaleString()} − เผาผลาญ {Math.round(burnedKcal).toLocaleString()} kcal</small></div><div>เหลืออีก<strong>{Math.max(0, remainingCalories).toLocaleString()} <small>kcal</small></strong><small>จากเป้าหมาย {dailyTarget.toLocaleString()} kcal</small></div></div>
               </div>
               <div className={`warning-card ${overCalories ? "danger" : "safe"}`}>
                 <strong>{overCalories ? "⚠️ คุณได้รับพลังงานเกินเป้าหมาย!" : "✓ พลังงานวันนี้อยู่ในเป้าหมาย"}</strong>
@@ -591,7 +657,6 @@ export default function Dashboard() {
             <div className="section-title"><span className="title-icon yellow recommend-food-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="4.5"/><path d="M3 4v6M1.8 6.5h2.4M5 4v6M20.5 4v7M20.5 11v9M18.8 4v4"/></svg></span><h2>เมนูแนะนำ <small>(ตัวเลือกอาหารสมดุล)</small></h2></div>
             <div className="meal-tabs">{Object.keys(meals).map((tab) => <button key={tab} className={mealTab === tab ? "active" : ""} onClick={() => setMealTab(tab)}>{tab}</button>)}</div>
             <div className="meal-list" key={mealTab}>{meals[mealTab].map((meal, index) => <div className="meal-row" key={meal.name}><span className="meal-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span><div className="meal-info"><strong>{meal.name}</strong><span className="meal-kcal">พลังงานโดยประมาณ <b>{meal.kcal} kcal</b></span></div><button type="button" aria-label={`เพิ่มเมนู ${meal.name} ไปยังบันทึกพลังงาน`} onClick={() => handleRecommendedMeal(meal)}>เพิ่ม</button></div>)}</div>
-            <div className="tips-box"><h3><span aria-hidden="true">💡</span> เคล็ดลับเพิ่มเติม</h3><div className="tips-copy"><p>ลดอาหารหวาน มัน เค็ม</p><p>ดื่มน้ำให้เพียงพอ อย่างน้อย 2–3 ลิตร/วัน</p><p>ออกกำลังกายสม่ำเสมออย่างน้อย 3–5 วัน/สัปดาห์</p></div></div>
           </section>
         </div>
 
@@ -1894,6 +1959,37 @@ html[data-anim="off"] .ft-toast { animation:none !important; }
   .logout-link { display:flex !important; align-items:center; justify-content:center; position:absolute; top:10px; right:10px; z-index:2; width:42px; height:42px; padding:0; border:1px solid rgba(120,160,150,.45); border-radius:12px; font-size:0; }
   .logout-link span { margin:0; font-size:22px; }
 }
+/* ===================== พลังงานที่ลดวันนี้ + ปรับขนาดให้เลย์เอาต์ไม่มีช่องว่าง ===================== */
+.bmi-card .burn-today { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 10px 14px; border: 1px solid rgba(255,140,60,.45); border-radius: 11px; background: linear-gradient(135deg, rgba(255,120,40,.13), rgba(2,8,10,.4)); }
+.burn-ico { font-size: 26px; line-height: 1; filter: drop-shadow(0 0 6px rgba(255,111,25,.5)); }
+.burn-main { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.burn-label { font-size: 12px; font-weight: 500; color: #ffd9bd; }
+.burn-value { font-family: 'Kanit'; font-size: 26px; line-height: 1.15; color: #ffb36b; animation: ft-pop .4s cubic-bezier(.2,.8,.2,1) both; }
+.burn-value em { margin-left: 3px; font-size: 13px; font-style: normal; }
+.burn-split { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 11px; color: #cdd5d6; }
+.burn-split b { color: #fff; font-weight: 600; }
+html[data-anim="off"] .burn-value { animation: none !important; }
+@media (prefers-reduced-motion: reduce) { .burn-value { animation: none !important; } }
+
+/* โหมดสว่าง: ตัวหนังสือเข้มขึ้นให้อ่านชัด */
+html[data-theme="light"] .bmi-card .burn-today { background: linear-gradient(135deg, #fff1e3, #ffffff); border-color: #e39a5f; box-shadow: 0 4px 12px rgba(180,90,20,.08); }
+html[data-theme="light"] .burn-label { color: #4a2208; }
+html[data-theme="light"] .burn-value { color: #a63700; }
+html[data-theme="light"] .burn-split { color: #2b3b36; }
+html[data-theme="light"] .burn-split b { color: #12201c; }
+html[data-theme="light"] .bmi-card .daily-energy .energy-heading,
+html[data-theme="light"] .daily-energy small { color: #2b3f36; font-weight: 500; }
+html[data-theme="light"] .daily-energy .energy-info { color: #3e5248; }
+html[data-theme="light"] .daily-energy strong,
+html[data-theme="light"] .daily-energy .energy-value { color: #1d6f16; }
+
+/* จอกว้าง: ให้แถวปุ่มลัดยืดรับความสูงของการ์ด BMI (ไม่เหลือช่องว่างใต้การ์ด) */
+@media (min-width: 1101px) {
+  .content-grid { grid-template-rows: auto 1fr auto; }
+  .quick-grid { align-self: stretch; }
+  .bmi-card .daily-energy { min-height: 118px; }
+}
+
 `;
 
 if (typeof document !== "undefined" && !document.getElementById("fittrack-final-styles")) {

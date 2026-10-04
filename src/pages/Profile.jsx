@@ -10,6 +10,7 @@ import { auth, db } from '../firebase';
 // ---------- คีย์ข้อมูลที่ใช้ร่วมกับหน้าอื่น ----------
 const SETTINGS_KEY = 'fittrack_user_settings';
 const HISTORY_GOALS_KEY = 'fittrack-history-goals'; // หน้า History อ่านเป้าหมายจากคีย์นี้
+const SYS_MARK_KEY = 'fittrack-theme-system-mark'; // ค่าที่หน้านี้เขียนไว้ตอนใช้โหมด "ตามระบบ" (ไว้แยกว่ามีหน้าอื่นมาสลับธีมหรือไม่)
 const THEME_KEY = 'fittrack-theme';                 // Dashboard/Exercise/History ใช้คีย์เดียวกัน
 const NAME_CACHE_KEY = 'fittrack-user-name';
 const avatarKey = (uid) => `fittrack_avatar_${uid}`;
@@ -104,8 +105,12 @@ const loadSettings = () => {
       ? saved.reminderDays : DEFAULT_SETTINGS.reminderDays,
   };
   // ธีมที่สลับจากหน้าอื่นมีผลก่อน ยกเว้นผู้ใช้เลือก "ตามระบบ"
+  const stored = lsGet(THEME_KEY) === 'light' ? 'light' : 'dark';
   if (merged.display.theme !== 'system') {
-    merged.display.theme = lsGet(THEME_KEY) === 'light' ? 'light' : 'dark';
+    merged.display.theme = stored;
+  } else if (lsGet(SYS_MARK_KEY) && lsGet(SYS_MARK_KEY) !== stored) {
+    // เลือก "ตามระบบ" ไว้ แต่มีหน้าอื่นสลับธีมมาแล้ว → ยึดตามหน้านั้น
+    merged.display.theme = stored;
   }
   return merged;
 };
@@ -246,7 +251,18 @@ export default function Profile() {
     const root = document.documentElement;
     root.setAttribute('data-theme', theme);
     lsSet(THEME_KEY, theme); // หน้าอื่นอ่านแค่ light/dark
-  }, [theme]);
+    lsSet(SYS_MARK_KEY, themePref === 'system' ? theme : '');
+  }, [theme, themePref]);
+
+  // สลับธีมจากแท็บอื่น → ตามทันที (ยกเลิก "ตามระบบ")
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== THEME_KEY || !e.newValue) return;
+      setSettings((s) => (s.display.theme === e.newValue ? s : { ...s, display: { ...s.display, theme: e.newValue === 'light' ? 'light' : 'dark' } }));
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
   useLayoutEffect(() => {
     const root = document.documentElement;
     root.setAttribute('data-neon', settings.display.neon ? 'on' : 'off');

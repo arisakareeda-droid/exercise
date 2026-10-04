@@ -178,8 +178,17 @@ export default function History() {
   // ออกจากหน้านี้แล้วคืนค่า ก่อนหน้าถัดไปจะตั้งธีมของตัวเอง
   useLayoutEffect(() => () => document.documentElement.removeAttribute('data-theme'), []);
 
-  // ใช้ค่า Animation จากหน้าตั้งค่า (ปิดแล้วอนิเมชันในหน้านี้จะหยุด) — เหมือนหน้า Dashboard
+  // สลับธีมจากแท็บ/หน้าอื่น → ตามทันที
   useEffect(() => {
+    const onStorage = (ev) => {
+      if (ev.key === 'fittrack-theme') setTheme(ev.newValue === 'light' ? 'light' : 'dark');
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  // ใช้ค่า Animation จากหน้าตั้งค่า (ปิดแล้วอนิเมชันในหน้านี้จะหยุด) — เหมือนหน้า Dashboard
+  useLayoutEffect(() => {
     const root = document.documentElement;
     try {
       const saved = JSON.parse(localStorage.getItem('fittrack_user_settings') || '{}');
