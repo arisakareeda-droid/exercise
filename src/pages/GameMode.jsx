@@ -66,6 +66,22 @@ const CHK0 = { sh: false, el: false, wr: false, dist: 'none', progress: 0 };
 
 const r3 = (n) => Math.round(n * 1000) / 1000;
 const JI = Object.fromEntries(JOINTS.map((id, i) => [id, i]));
+// ---- เชื่อมกล้องหากันแบบตรงระหว่างเครื่อง (WebRTC) โดยใช้ Firestore แลกข้อมูลจับคู่ ----
+const ICE = {
+  iceServers: [
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+    // รีเลย์สาธารณะสำหรับทดสอบ ใช้เมื่อสองเครื่องเชื่อมตรงกันไม่ได้ (เช่นคนละเครือข่ายมือถือ) ถ้าจะใช้งานจริงจัง ควรเปลี่ยนเป็น TURN ของคุณเอง
+    { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
+  ],
+};
+const rtcDoc = (code) => doc(getFirestore(auth.app), ROOMS, `${code}-rtc`);
+const waitIce = (pc) => new Promise((resolve) => { // รอเก็บเส้นทางเชื่อมต่อครบ แล้วส่งไปทีเดียว
+  if (pc.iceGatheringState === 'complete') { resolve(); return; }
+  const t = setTimeout(resolve, 3500);
+  pc.addEventListener('icegatheringstatechange', () => {
+    if (pc.iceGatheringState === 'complete') { clearTimeout(t); resolve(); }
+  });
+});
 let liveErr = ''; // ข้อผิดพลาดล่าสุดตอนส่ง/รับภาพการเล่น (ไว้บอกผู้เล่น)
 const newView = () => ({ tgt: null, curJ: null, curF: null, recvAt: 0, last: 0, since: performance.now() });
 const liveDoc = (code, uid) => doc(getFirestore(auth.app), ROOMS, `${code}-live-${uid}`);
@@ -91,8 +107,8 @@ function easeArr(cur, tgt, a, stride) {
   return cur;
 }
 
-// วาดมุมมองของเพื่อนลงแคนวาสฝั่งขวา (ย่อ/ขยายตามพื้นที่ วางตามสัดส่วนจอของเพื่อน เลื่อนตำแหน่งให้นุ่ม และคาดเดาผลไม้ที่ตกระหว่างรอข้อมูลใหม่)
-function renderOpp(canvas, v, now, done) {
+// วาดฝั่งเพื่อน: ภาพกล้องของเพื่อน (ถ้าเชื่อมได้) + โครงร่าง กำปั้น ผลไม้ ที่เพื่อนกำลังเล่น วางตามสัดส่วนจอของเพื่อนเพื่อให้ตำแหน่งตรงกัน
+function renderOpp(canvas, v, now, done, rv, conn) {
   if (!canvas) return;
   const bw = canvas.clientWidth || 320;
   const bh = canvas.clientHeight || 240;
@@ -104,22 +120,19 @@ function renderOpp(canvas, v, now, done) {
   ctx.clearRect(0, 0, cw, ch);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  const hasVideo = !!rv && rv.readyState >= 2 && rv.videoWidth > 0;
   const d = v.tgt;
-  if (!d) {
+  if (!d && !hasVideo) {
     ctx.fillStyle = '#9fb4b8';
     ctx.font = `${Math.max(12, Math.round(cw * 0.035))}px Anuphan, sans-serif`;
     const msg = liveErr ? `รับ/ส่งข้อมูลกับเพื่อนไม่ได้ (${liveErr}) ตรวจกฎ Firestore`
-      : now - v.since > 4000 ? 'ยังไม่ได้รับภาพจากเพื่อน ให้เพื่อนรีเฟรชหน้าเกมเพื่อใช้เวอร์ชันล่าสุด'
-        : 'รอภาพจากเพื่อน...';
+      : conn === 'failed' ? 'เชื่อมต่อกล้องเพื่อนไม่สำเร็จ เครือข่ายอาจบล็อกการเชื่อมต่อตรง'
+        : now - v.since > 8000 ? 'ยังไม่ได้รับภาพจากเพื่อน ให้เพื่อนวางไฟล์เวอร์ชันล่าสุดแล้วรีเฟรชหน้าเกม'
+          : 'กำลังเชื่อมต่อกล้องเพื่อน...';
     ctx.fillText(msg, cw / 2, ch / 2, cw * 0.9);
     return;
   }
-  const dt = Math.min(0.1, (now - (v.last || now)) / 1000);
-  v.last = now;
-  const a = Math.min(1, dt * 12);
-  v.curJ = easeArr(v.curJ, d.j, a, 2);
-  v.curF = easeArr(v.curF, d.f, a, 3);
-  const ar = d.ar || 1.333;
+  const ar = d?.ar || (hasVideo ? rv.videoWidth / rv.videoHeight : 1.333);
   let rw = cw;
   let rh = cw / ar;
   if (rh > ch) { rh = ch; rw = ch * ar; }
@@ -128,9 +141,28 @@ function renderOpp(canvas, v, now, done) {
   const u = Math.max(rw, rh) / 960;
   ctx.fillStyle = 'rgba(255,255,255,.035)';
   ctx.fillRect(ox, oy, rw, rh);
+  if (hasVideo) { // ครอปแบบ cover และกลับซ้ายขวา เหมือนที่เพื่อนเห็นตัวเอง
+    const va = rv.videoWidth / rv.videoHeight;
+    const ra = rw / rh;
+    let sw; let sh; let sx; let sy;
+    if (va > ra) { sh = rv.videoHeight; sw = sh * ra; sx = (rv.videoWidth - sw) / 2; sy = 0; }
+    else { sw = rv.videoWidth; sh = sw / ra; sx = 0; sy = (rv.videoHeight - sh) / 2; }
+    ctx.save();
+    ctx.translate(ox + rw, oy);
+    ctx.scale(-1, 1);
+    ctx.globalAlpha = 0.92;
+    ctx.drawImage(rv, sx, sy, sw, sh, 0, 0, rw, rh);
+    ctx.restore();
+  }
   ctx.strokeStyle = 'rgba(124,255,49,.18)';
   ctx.lineWidth = 1;
   ctx.strokeRect(ox, oy, rw, rh);
+  if (!d) return; // ยังไม่มีข้อมูลโครงร่าง/ผลไม้ แสดงแค่ภาพกล้อง
+  const dt = Math.min(0.1, (now - (v.last || now)) / 1000);
+  v.last = now;
+  const a = Math.min(1, dt * 12);
+  v.curJ = easeArr(v.curJ, d.j, a, 2);
+  v.curF = easeArr(v.curF, d.f, a, 3);
   ctx.save();
   ctx.beginPath();
   ctx.rect(ox, oy, rw, rh);
@@ -190,7 +222,7 @@ const newGame = (o = {}) => ({
   cfg: GAMES[o.game] || GAMES.fruit, mode: o.mode || 'solo',
   rng: mulberry(o.seed ?? newSeed()), speed: o.speed || 1,
   weight: o.weight || 60, kcal: 0,
-  bot: o.mode === 'bot' ? newBot(o.botLvl) : null, syncAt: 0, sent: '', liveAt: 0,
+  bot: o.mode === 'bot' ? newBot(o.botLvl) : null, syncAt: 0, sent: '', liveAt: 0, dcAt: 0,
 });
 
 // แปลงพิกัดจากวิดีโอ (object-fit: cover + กลับซ้ายขวา) ไปเป็นพิกัดแคนวาส
@@ -507,6 +539,14 @@ export default function GameMode() {
   const finishedRef = useRef(false);
   const pipRef = useRef(null); // แคนวาสมุมมองของเพื่อน
   const stageRef = useRef(null); // พื้นที่เล่นของเรา (ใช้วัดขนาดจริง)
+  const remoteRef = useRef(null); // <video> ที่รับภาพกล้องของเพื่อน (ซ่อนไว้ แล้ววาดลงแคนวาสฝั่งเพื่อน)
+  const pcRef = useRef(null);
+  const dcRef = useRef(null);
+  const pcStream = useRef(null);
+  const rtcUnsub = useRef(null);
+  const rtcMyId = useRef('');
+  const rtcLastId = useRef('');
+  const pendingOffer = useRef(null);
   const oppView = useRef(newView());
   const liveUnsub = useRef(null);
   const liveFor = useRef(null);
@@ -593,6 +633,78 @@ export default function GameMode() {
     }
   }, [status, opp]);
 
+  // ---------- เชื่อมกล้องกับเพื่อน (WebRTC) ----------
+  const closePeer = () => {
+    try { dcRef.current?.close(); } catch { /* ปิดไม่ได้ก็ข้าม */ }
+    try { pcRef.current?.close(); } catch { /* ปิดไม่ได้ก็ข้าม */ }
+    dcRef.current = null;
+    pcRef.current = null;
+    pcStream.current = null;
+    if (remoteRef.current) remoteRef.current.srcObject = null;
+  };
+
+  const makePeer = () => {
+    closePeer();
+    const pc = new RTCPeerConnection(ICE);
+    pcRef.current = pc;
+    pcStream.current = streamRef.current;
+    streamRef.current?.getTracks().forEach((t) => pc.addTrack(t, streamRef.current));
+    pc.ontrack = (ev) => {
+      const v = remoteRef.current;
+      if (!v) return;
+      v.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+      v.play?.().catch(() => {});
+    };
+    return pc;
+  };
+
+  // ช่องข้อมูลตรงระหว่างเครื่อง ส่งโครงร่าง/ผลไม้ได้ถี่และลื่นกว่าผ่าน Firestore
+  const wireDc = (dc) => {
+    dcRef.current = dc;
+    dc.onmessage = (e) => {
+      try { oppView.current.tgt = JSON.parse(e.data); oppView.current.recvAt = performance.now(); } catch { /* ข้อมูลเสียก็ข้าม */ }
+    };
+  };
+
+  const hostOffer = async () => {
+    const m = roomMeta.current;
+    if (!m?.isHost) return;
+    const id = String(Date.now());
+    rtcMyId.current = id;
+    const pc = makePeer();
+    wireDc(pc.createDataChannel('live', { ordered: false, maxRetransmits: 0 }));
+    await pc.setLocalDescription(await pc.createOffer());
+    await waitIce(pc);
+    if (pcRef.current !== pc) return; // เปลี่ยนรอบไปแล้ว
+    await setDoc(rtcDoc(m.code), { id, offer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp }, answer: null });
+  };
+
+  const guestAnswer = async (d) => {
+    const m = roomMeta.current;
+    if (!m || m.isHost || !streamRef.current || rtcLastId.current === d.id) return;
+    rtcLastId.current = d.id;
+    try {
+      const pc = makePeer();
+      pc.ondatachannel = (ev) => wireDc(ev.channel);
+      await pc.setRemoteDescription(d.offer);
+      await pc.setLocalDescription(await pc.createAnswer());
+      await waitIce(pc);
+      if (pcRef.current !== pc) return;
+      await updateDoc(rtcDoc(m.code), { answer: { id: d.id, type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
+    } catch (e) { rtcLastId.current = ''; console.warn('rtc answer', e); }
+  };
+
+  // เรียกหลังเปิดกล้องแล้ว: เจ้าของห้องส่งข้อเสนอเชื่อมต่อ ส่วนเพื่อนตอบกลับ
+  const startRtc = () => {
+    const m = roomMeta.current;
+    if (!m || typeof RTCPeerConnection === 'undefined') return;
+    const pc = pcRef.current;
+    const alive = !!pc && pcStream.current === streamRef.current && !['closed', 'failed', 'disconnected'].includes(pc.connectionState);
+    if (alive) return;
+    if (m.isHost) hostOffer().catch((e) => console.warn('rtc offer', e));
+    else { rtcLastId.current = ''; if (pendingOffer.current) guestAnswer(pendingOffer.current); }
+  };
+
   // ---------- ห้องแข่งกับเพื่อนจริง ----------
   const pushMine = (patch) => {
     const m = roomMeta.current;
@@ -608,7 +720,12 @@ export default function GameMode() {
     liveUnsub.current = null;
     liveFor.current = null;
     const m = roomMeta.current;
+    rtcUnsub.current?.();
+    rtcUnsub.current = null;
+    closePeer();
+    pendingOffer.current = null;
     if (m) deleteDoc(liveDoc(m.code, m.uid)).catch(() => {});
+    if (m?.isHost) deleteDoc(rtcDoc(m.code)).catch(() => {});
     roomMeta.current = null; roomData.current = null; oppRef.current = null; mine.current = null;
     setRoom(null);
     if (!m) return;
@@ -630,6 +747,21 @@ export default function GameMode() {
     const uid = auth.currentUser.uid;
     roomMeta.current = { code, isHost, uid };
     mine.current = { ready: false, score: 0, lives: 0, kcal: 0, done: false };
+    rtcUnsub.current?.();
+    pendingOffer.current = null; rtcLastId.current = ''; rtcMyId.current = '';
+    rtcUnsub.current = onSnapshot(rtcDoc(code), (sn) => {
+      if (!sn.exists()) return;
+      const d = sn.data();
+      if (isHost) {
+        const pc = pcRef.current;
+        if (d.answer && d.answer.id === rtcMyId.current && pc && pc.signalingState === 'have-local-offer') {
+          pc.setRemoteDescription({ type: d.answer.type, sdp: d.answer.sdp }).catch((e) => console.warn('rtc remote', e));
+        }
+      } else if (d.offer) {
+        pendingOffer.current = d;
+        guestAnswer(d);
+      }
+    }, (e) => { liveErr = e?.code || 'rtc'; console.warn('rtc listen', e); });
     unsubRef.current = onSnapshot(roomDoc(code), (snap) => {
       if (!snap.exists()) { toMenu('เพื่อนออกจากห้องแล้ว'); return; }
       const d = snap.data();
@@ -742,6 +874,7 @@ export default function GameMode() {
   };
 
   const stopCamera = () => {
+    closePeer();
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
   };
@@ -778,6 +911,7 @@ export default function GameMode() {
     g.current = mk();
     finishedRef.current = false;
     oppView.current = newView();
+    startRtc();
     if (roomMeta.current) {
       // เริ่มรอบใหม่: ล้างสถานะเดิมของเรา และให้เจ้าของห้องสุ่มชุดผลไม้ใหม่
       pushMine({ ready: false, score: 0, lives: 0, kcal: 0, done: false });
@@ -868,14 +1002,14 @@ export default function GameMode() {
     const ctx = canvasRef.current.getContext('2d');
     const loop = (now) => {
       if (status === 'waitend') { // เล่นจบแล้ว ยังดูเพื่อนเล่นต่อได้
-        renderOpp(pipRef.current, oppView.current, now, oppRef.current?.done);
+        renderOpp(pipRef.current, oppView.current, now, oppRef.current?.done, remoteRef.current, pcRef.current?.connectionState);
         raf = requestAnimationFrame(loop);
         return;
       }
       const s = g.current;
       const dt = Math.min(0.05, (now - (s.last || now)) / 1000);
       s.last = now;
-      if (s.mode === 'real') renderOpp(pipRef.current, oppView.current, now, oppRef.current?.done);
+      if (s.mode === 'real') renderOpp(pipRef.current, oppView.current, now, oppRef.current?.done, remoteRef.current, pcRef.current?.connectionState);
       trackFists(s, videoRef.current, landmarkerRef.current, now);
 
       if (status === 'check') {
@@ -911,7 +1045,10 @@ export default function GameMode() {
           if (k !== shownBot) { shownBot = k; setOpp({ name: s.bot.p.name, score: s.bot.score, done: s.bot.done, lives: s.bot.lives }); }
         }
         if (s.mode === 'real') {
-          if (roomMeta.current && now - s.liveAt > LIVE_MS) {
+          const dc = dcRef.current;
+          if (dc && dc.readyState === 'open') {
+            if (now - s.dcAt > 50) { s.dcAt = now; try { dc.send(JSON.stringify(packLive(s))); } catch { /* ส่งไม่ได้ก็ข้าม */ } }
+          } else if (roomMeta.current && now - s.liveAt > LIVE_MS) {
             s.liveAt = now;
             setDoc(liveDoc(roomMeta.current.code, roomMeta.current.uid), packLive(s)).catch((e) => { liveErr = e?.code || 'error'; console.warn('live send', e); });
           }
@@ -1121,7 +1258,7 @@ export default function GameMode() {
               {versus && <li>แข่งกับ{setup.mode === 'bot' ? 'บอท' : 'เพื่อน'}: ใครได้คะแนนรวมมากกว่าชนะ{setup.mode === 'real' ? ' ผลไม้และระเบิดเรียงเหมือนกันทั้งสองฝั่ง' : ''}</li>}
               <li>ก้าวเท้าซ้าย-ขวาตามตำแหน่งผลไม้ และสลับแขนให้สมดุลกัน</li>
               <li>วอร์มไหล่และแขนก่อนเล่น หากรู้สึกเจ็บหรือเวียนศีรษะให้หยุดพักทันที</li>
-              <li>ภาพจากกล้องถูกประมวลผลบนเครื่องของคุณเท่านั้น{setup.mode === 'real' ? ' เพื่อนจะเห็นแค่คะแนนและโครงร่างท่าทางของคุณ ไม่เห็นภาพวิดีโอ' : ''}</li>
+              <li>ภาพจากกล้องถูกประมวลผลบนเครื่องของคุณเท่านั้น{setup.mode === 'real' ? ' แต่ตอนแข่งกับเพื่อนตัวจริง ภาพกล้องของคุณจะถูกส่งตรงไปให้เพื่อนในห้องดูด้วย (และคุณก็เห็นกล้องเพื่อน)' : ''}</li>
             </ul>
             {message && <p className="gm-msg" role="alert">{message}</p>}
             <div className="gm-actions">
@@ -1230,6 +1367,7 @@ export default function GameMode() {
       )}
       </div>
 
+      <video ref={remoteRef} className="gm-rvideo" muted playsInline autoPlay />
       <style>{css}</style>
     </div>
   );
@@ -1305,6 +1443,7 @@ const css = `
 .gm-bot-ico { font-size:clamp(48px,14vmin,96px); line-height:1; }
 .gm-botcard b { font:600 clamp(16px,3.5vmin,24px) 'Kanit',sans-serif; }
 .gm-wrap.split .gm-speed span, .gm-wrap.split .gm-lr { display:none; }
+.gm-rvideo { position:absolute; width:2px; height:2px; opacity:0; pointer-events:none; }
 .gm-btn.small { min-height:38px; padding:0 14px; font-size:13px; }
 .gm-pick { display:flex; flex-direction:column; align-items:center; gap:8px; font-size:13px; color:#9fb4b8; }
 .gm-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; width:min(620px,100%); }
