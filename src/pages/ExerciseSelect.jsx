@@ -595,6 +595,27 @@ export default function ExerciseSelect() {
   // ใช้ layout effect เพื่อให้คืนค่าก่อนหน้าถัดไปตั้งธีมใหม่ (กันธีมหายตอนเปลี่ยนหน้า)
   useLayoutEffect(() => () => document.documentElement.removeAttribute("data-theme"), []);
 
+  // ใช้ค่า Animation จากหน้าตั้งค่า (ปิดแล้วอนิเมชันในหน้านี้จะหยุด) — เหมือนหน้า Dashboard
+  useEffect(() => {
+    const root = document.documentElement;
+    try {
+      const saved = JSON.parse(localStorage.getItem("fittrack_user_settings") || "{}");
+      root.setAttribute("data-anim", saved?.display?.animation === false ? "off" : "on");
+    } catch {
+      root.setAttribute("data-anim", "on");
+    }
+    return () => root.removeAttribute("data-anim");
+  }, []);
+
+  // Toast เด้งขึ้นมาเมื่อกดปุ่ม (เหมือนหน้า Dashboard)
+  const [toast, setToast] = useState(null);
+  const showToast = (text, type = "success") => setToast({ text, type, id: Date.now() });
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(null), 3200);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   const toggleTheme = () => {
     const root = document.documentElement;
     root.classList.add("theme-anim");
@@ -655,10 +676,14 @@ export default function ExerciseSelect() {
   const closeProgramDetail = () => setShowProgramDetail(false);
 
   // เพิ่ม/ลบท่าในโปรแกรมของฉัน (ไม่เพิ่มซ้ำ)
-  const toggleProgramExercise = (id) =>
+  const toggleProgramExercise = (id) => {
+    showToast(
+      selectedExercises.includes(id) ? "นำท่าออกจากโปรแกรมแล้ว" : "เพิ่มท่าเข้าโปรแกรมของคุณแล้ว"
+    );
     setSelectedExercises((current) =>
       current.includes(id) ? current.filter((x) => x !== id) : [...current, id]
     );
+  };
 
   const addProgramExercises = (ids) =>
     setSelectedExercises((current) => [
@@ -720,7 +745,8 @@ export default function ExerciseSelect() {
         <nav className="side-menu">
           <button className="side-link" type="button" onClick={() => navigate("/dashboard")}><span className="side-icon">⌂</span>หน้าหลัก</button>
           <button className="side-link active" type="button" onClick={() => navigate("/exercises")}><span className="side-icon side-icon-dumbbell" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 18v12M14 14v20M34 14v20M40 18v12M14 24h20M8 24h6M34 24h6" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 18v12M11 14v20M37 14v20M43 18v12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg></span>ออกกำลังกาย</button>
-          <button className="side-link" type="button" onClick={() => navigate("/history")}><span className="side-icon">◷</span>ประวัติการออกกำลังกาย</button>
+          <button className="side-link" type="button" onClick={() => navigate("/gamemode")}><span className="side-icon side-icon-dumbbell" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M15 15h18a9 9 0 0 1 8.7 6.7l2.2 8.6a5.2 5.2 0 0 1-8.9 4.8L31 31H17l-4 4.1a5.2 5.2 0 0 1-8.9-4.8l2.2-8.6A9 9 0 0 1 15 15z" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/><path d="M16 21v8M12 25h8" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/><circle cx="32" cy="22.5" r="2" fill="currentColor"/><circle cx="36" cy="27" r="2" fill="currentColor"/></svg></span>โหมดเกม</button>
+          <button className="side-link" type="button" onClick={() => navigate("/history")}><span className="side-icon">◷</span>ประวัติ</button>
           <button className="side-link" type="button" onClick={() => navigate("/profile")}><span className="side-icon">⚙</span>ตั้งค่า</button>
         </nav>
 
@@ -914,7 +940,7 @@ export default function ExerciseSelect() {
 
                 <div>
                   <h2>
-                    ท่าออกกำลังกายสำหรับ:{" "}
+                    ท่าออกกำลังกายสำหรับ{" "}
                     <span>{partTitle}</span>
                   </h2>
                   <p>เลือกท่าที่เหมาะสมกับเป้าหมายของคุณ</p>
@@ -966,7 +992,11 @@ export default function ExerciseSelect() {
               )}
 
               {/* exercise list */}
-              <div className="exercise-list" aria-live="polite">
+              <div
+                className="exercise-list"
+                aria-live="polite"
+                key={`${selectedPart}-${equipmentType}-${selectedEquipment}`}
+              >
                 {filteredExercises.length > 0 ? (
                   filteredExercises.map((exercise) => {
                     const added = selectedExercises.includes(exercise.id);
@@ -1162,7 +1192,7 @@ export default function ExerciseSelect() {
                 เริ่มออกกำลังกาย
               </button>
               {myProgramItems.length > 0 && (
-                <button type="button" className="mp-clear" onClick={() => setSelectedExercises([])}>
+                <button type="button" className="mp-clear" onClick={() => { setSelectedExercises([]); showToast("ล้างโปรแกรมของฉันแล้ว"); }}>
                   ล้างทั้งหมด
                 </button>
               )}
@@ -1192,6 +1222,13 @@ export default function ExerciseSelect() {
             openExerciseDetail(item);
           }}
         />
+      )}
+
+      {toast && (
+        <div key={toast.id} className={`ft-toast ${toast.type === "error" ? "error" : ""}`} role="status">
+          <span>{toast.type === "error" ? "!" : "✓"}</span>
+          {toast.text}
+        </div>
       )}
 
       <style>{`
@@ -3059,7 +3096,7 @@ export default function ExerciseSelect() {
           .sidebar { position:relative;width:100%;height:auto;min-height:auto;padding:10px }
           .sidebar:after { display:none }
           .sidebar-logo { width:155px;height:88px }
-          .side-menu { display:grid;grid-template-columns:repeat(4,1fr) }
+          .side-menu { display:grid;grid-template-columns:repeat(5,1fr) }
           .side-link { height:48px;padding:0 5px;justify-content:center;flex-direction:column;gap:2px;font-size:9px }
           .side-icon { font-size:18px }
           .sidebar-quote,
@@ -3100,7 +3137,7 @@ export default function ExerciseSelect() {
           .sidebar-logo-wrap { padding:0 2px 8px; }
           .sidebar-logo { width:132px; height:68px; max-width:42vw; }
           .logo-caption { margin-top:-5px; font-size:6px; letter-spacing:1.5px; }
-          .side-menu { width:100%; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; }
+          .side-menu { width:100%; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
           .side-link { width:100%; min-width:0; height:54px; padding:5px 2px; gap:3px; font-size:clamp(8px,2.25vw,10px); line-height:1.15; white-space:normal; overflow-wrap:anywhere; }
           .side-icon { width:auto; min-height:19px; font-size:19px; line-height:1; }
         }
@@ -3596,6 +3633,130 @@ html[data-theme="light"] .sidebar-logo {
   filter: invert(1) hue-rotate(180deg);
   mix-blend-mode: multiply;
   animation-name: fittrack-logo-glow-light !important;
+}
+
+/* ===================== MOTION (เหมือนหน้า Dashboard) ===================== */
+@keyframes ft-rise { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
+@keyframes ft-pop { 0% { opacity:0; transform:scale(.85); } 60% { transform:scale(1.06); } 100% { opacity:1; transform:none; } }
+@keyframes ft-slide { from { opacity:0; transform:translateX(-14px); } to { opacity:1; transform:none; } }
+
+/* ส่วนหลักไหลขึ้นทีละใบ (ใช้ backwards เพื่อไม่ให้ทับ transform ตอน hover) */
+.fit-content > .page-title { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) backwards; }
+.fit-content > .exercise-workspace > .body-panel { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .08s backwards; }
+.fit-content > .exercise-workspace > .exercise-panel { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .16s backwards; }
+.fit-content > .bottom-grid > .recommendation-panel { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .24s backwards; }
+.fit-content > .bottom-grid > .ai-panel { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .32s backwards; }
+.fit-content > .my-program-panel { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .4s backwards; }
+
+/* ชี้แล้วเรืองแสง/ยกขึ้นเล็กน้อย */
+.body-panel, .exercise-panel, .recommendation-panel, .ai-panel, .my-program-panel {
+  transition:border-color .25s ease, box-shadow .25s ease, transform .25s ease;
+}
+.body-panel:hover, .exercise-panel:hover, .recommendation-panel:hover, .ai-panel:hover, .my-program-panel:hover {
+  border-color:#2f7a52; box-shadow:0 8px 28px rgba(80,255,120,.10); transform:translateY(-2px);
+}
+
+/* รายการท่า: แถวเลื่อนเข้าทีละแถวเมื่อเปลี่ยนตัวกรอง */
+.exercise-row { animation:ft-slide .4s cubic-bezier(.2,.8,.2,1) backwards; transition:border-color .2s ease, box-shadow .2s ease, background .2s ease, transform .2s ease; }
+.exercise-row:nth-child(2) { animation-delay:.06s; }
+.exercise-row:nth-child(3) { animation-delay:.12s; }
+.exercise-row:nth-child(4) { animation-delay:.18s; }
+.exercise-row:nth-child(5) { animation-delay:.24s; }
+.exercise-row:nth-child(6) { animation-delay:.30s; }
+.exercise-row:nth-child(n+7) { animation-delay:.36s; }
+.exercise-row:hover { transform:translateX(3px); }
+.empty-exercises { animation:ft-rise .45s ease backwards; }
+
+/* ปุ่มกดแล้วยุบเล็กน้อย + เรืองแสงเมื่อชี้ */
+.equipment-toggle button, .equipment-tabs button, .body-part, .body-view { transition:background .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease, transform .15s ease; }
+.equipment-toggle button:active, .equipment-tabs button:active:not(:disabled), .body-part:active, .body-view:active { transform:scale(.96); }
+.play-button, .choose-button, .program-card button, .mp-start, .mp-clear { transition:transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease; }
+.choose-button:hover, .program-card button:hover:not(:disabled), .mp-start:hover:not(:disabled) { box-shadow:0 0 18px rgba(125,255,45,.4); }
+.play-button:active, .choose-button:active, .program-card button:active:not(:disabled), .mp-start:active:not(:disabled), .mp-clear:active { transform:scale(.94); }
+.choose-button.added { animation:ft-pop .4s cubic-bezier(.2,.8,.2,1); }
+
+/* รายการอื่น ๆ */
+.equipment-tabs button { animation:ft-pop .35s cubic-bezier(.2,.8,.2,1) backwards; }
+.ai-item { animation:ft-slide .4s cubic-bezier(.2,.8,.2,1) backwards; }
+.ai-item:nth-child(2) { animation-delay:.08s; }
+.ai-item:nth-child(3) { animation-delay:.16s; }
+.ai-item:nth-child(4) { animation-delay:.24s; }
+.my-program-list li { animation:ft-slide .35s cubic-bezier(.2,.8,.2,1) backwards; }
+.my-program-list li:nth-child(2) { animation-delay:.05s; }
+.my-program-list li:nth-child(3) { animation-delay:.1s; }
+.my-program-list li:nth-child(4) { animation-delay:.15s; }
+.my-program-list li:nth-child(n+5) { animation-delay:.2s; }
+
+html[data-theme="light"] .body-panel:hover, html[data-theme="light"] .exercise-panel:hover,
+html[data-theme="light"] .recommendation-panel:hover, html[data-theme="light"] .ai-panel:hover,
+html[data-theme="light"] .my-program-panel:hover { border-color:#6cc943; box-shadow:0 8px 22px rgba(29,76,56,.10); }
+
+/* ปิดอนิเมชันตามค่าที่ตั้งไว้ หรือตามระบบ */
+html[data-anim="off"] .page-title, html[data-anim="off"] .body-panel, html[data-anim="off"] .exercise-panel,
+html[data-anim="off"] .recommendation-panel, html[data-anim="off"] .ai-panel, html[data-anim="off"] .my-program-panel,
+html[data-anim="off"] .exercise-row, html[data-anim="off"] .empty-exercises, html[data-anim="off"] .equipment-tabs button,
+html[data-anim="off"] .choose-button.added, html[data-anim="off"] .ai-item, html[data-anim="off"] .my-program-list li { animation:none !important; }
+html[data-anim="off"] .body-panel:hover, html[data-anim="off"] .exercise-panel:hover, html[data-anim="off"] .recommendation-panel:hover,
+html[data-anim="off"] .ai-panel:hover, html[data-anim="off"] .my-program-panel:hover, html[data-anim="off"] .exercise-row:hover { transform:none; }
+@media (prefers-reduced-motion: reduce) {
+  .page-title, .body-panel, .exercise-panel, .recommendation-panel, .ai-panel, .my-program-panel,
+  .exercise-row, .empty-exercises, .equipment-tabs button, .choose-button.added, .ai-item, .my-program-list li { animation:none !important; }
+  .body-panel:hover, .exercise-panel:hover, .recommendation-panel:hover, .ai-panel:hover, .my-program-panel:hover, .exercise-row:hover { transform:none; }
+}
+
+/* ===== Toast เด้งขึ้นมาเมื่อกดปุ่ม (เหมือนหน้า Dashboard) ===== */
+.ft-toast { position:fixed; left:50%; bottom:26px; z-index:400; transform:translateX(-50%); display:flex; align-items:center; gap:10px; max-width:calc(100vw - 28px); padding:12px 20px; border:1px solid #7cff31; border-radius:12px; background:#071a10; color:#e9ffe0; font-size:14px; box-shadow:0 0 22px rgba(110,255,50,.3); animation:ft-toast-in .5s cubic-bezier(.2,.8,.2,1) both; }
+.ft-toast span { width:22px; height:22px; flex:none; display:grid; place-items:center; border-radius:50%; background:#7cff31; color:#071005; font-weight:700; font-size:13px; }
+.ft-toast.error { border-color:#ff476d; background:#1f0a10; color:#ffd5db; box-shadow:0 0 22px rgba(255,71,109,.3); }
+.ft-toast.error span { background:#ff476d; color:#fff; }
+@keyframes ft-toast-in { 0% { opacity:0; transform:translate(-50%,28px) scale(.9); } 60% { opacity:1; transform:translate(-50%,-8px) scale(1.04); } 100% { opacity:1; transform:translate(-50%,0) scale(1); } }
+html[data-theme="light"] .ft-toast { background:#f1faec; color:#12201c; box-shadow:0 4px 14px rgba(0,0,0,.12); }
+html[data-theme="light"] .ft-toast.error { background:#fff0f3; color:#8a2438; }
+html[data-anim="off"] .ft-toast { animation:none !important; }
+@media (prefers-reduced-motion: reduce) { .ft-toast { animation:none !important; } }
+/* sidebar 5 เมนู: ปรับระยะตามความสูงจอ ให้ข้อความ "สุขภาพที่ดี…" และปุ่มออกจากระบบอยู่ในจอเสมอ */
+.sidebar { overflow-y:auto; overflow-x:hidden; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.sidebar::-webkit-scrollbar { display:none; }
+.sidebar-logo-wrap, .side-menu, .logout-link { flex-shrink:0; }
+@media (min-width:761px) {
+  .sidebar { padding-top:clamp(10px,2.2vh,22px); padding-bottom:clamp(8px,1.8vh,18px); }
+  .sidebar-logo-wrap { padding-bottom:clamp(6px,2.5vh,25px); }
+  .sidebar-logo { height:clamp(64px,11vh,112px); }
+  .side-menu { gap:clamp(3px,.9vh,9px); }
+  .side-link { height:clamp(40px,7.2vh,57px); }
+  .sidebar-quote { margin-bottom:clamp(4px,2vh,24px); padding:clamp(4px,1vh,12px) 14px; font-size:clamp(11px,1.7vh,15px); line-height:1.45; }
+  .pulse-line { margin-top:clamp(4px,1.2vh,12px); }
+  .logout-link { height:clamp(40px,6vh,54px); }
+}
+@supports (height:1dvh) {
+  @media (min-width:761px) {
+    .sidebar { padding-top:clamp(10px,2.2dvh,22px); padding-bottom:clamp(8px,1.8dvh,18px); }
+    .sidebar-logo-wrap { padding-bottom:clamp(6px,2.5dvh,25px); }
+    .sidebar-logo { height:clamp(64px,11dvh,112px); }
+    .side-menu { gap:clamp(3px,.9dvh,9px); }
+    .side-link { height:clamp(40px,7.2dvh,57px); }
+    .sidebar-quote { margin-bottom:clamp(4px,2dvh,24px); padding:clamp(4px,1dvh,12px) 14px; font-size:clamp(11px,1.7dvh,15px); line-height:1.45; }
+    .pulse-line { margin-top:clamp(4px,1.2dvh,12px); }
+    .logout-link { height:clamp(40px,6dvh,54px); }
+  }
+}
+/* sidebar สมส่วน: ทุกส่วนโตตามความสูงจอ และเมนูกระจายตัวกินพื้นที่ที่เหลือ ไม่เกิดช่องว่างใหญ่ใต้เมนู */
+@media (min-width:761px) {
+  .sidebar-logo-wrap { padding-bottom:clamp(8px,2.6vh,28px); }
+  .sidebar-logo { width:100%; height:clamp(78px,15vh,170px); transform:scale(1.18); transform-origin:center top; }
+  .logo-caption { font-size:clamp(8px,1.15vh,11px); letter-spacing:2.4px; margin-top:clamp(4px,1.2vh,14px); }
+  .side-menu { flex:1 0 auto; justify-content:space-evenly; gap:clamp(3px,.9vh,10px); }
+  .side-link { height:clamp(44px,8vh,66px); font-size:clamp(14px,1.9vh,17px); }
+  .side-icon { font-size:clamp(22px,2.9vh,28px); }
+  .sidebar-quote { margin-top:clamp(6px,2vh,22px); margin-bottom:clamp(6px,2vh,22px); padding:clamp(4px,1vh,12px) 14px; font-size:clamp(14px,2.3vh,20px); line-height:1.5; text-align:center; }
+  .pulse-line { margin-top:clamp(8px,1.8vh,18px); }
+  .logout-link { height:clamp(44px,6.4vh,60px); font-size:clamp(14px,1.9vh,17px); }
+}
+/* มือถือ: แสดงปุ่มออกจากระบบเป็นไอคอนมุมขวาบนของแถบเมนู */
+@media (max-width:760px) {
+  .sidebar { overflow:visible; }
+  .logout-link { display:flex !important; align-items:center; justify-content:center; position:absolute; top:10px; right:10px; z-index:2; width:42px; height:42px; padding:0; border:1px solid rgba(120,160,150,.45); border-radius:12px; font-size:0; }
+  .logout-link span { margin:0; font-size:22px; }
 }
 `}</style>
     </div>

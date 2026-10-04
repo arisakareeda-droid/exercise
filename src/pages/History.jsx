@@ -15,6 +15,35 @@ const getExerciseInfo = (id) =>
   EXERCISES[id] || { name: id || 'ไม่ทราบท่า', thai: '', muscle: 'อื่นๆ', equipment: 'ไม่มีอุปกรณ์', video: '', calPerRep: 0.32, secPerRep: 3 };
 
 // เป้าหมายของผู้ใช้ (เก็บในเครื่อง)
+// แคชประวัติการออกกำลังกายไว้ เพื่อให้เปิดหน้าแล้วเห็นค่าล่าสุดทันที (ไม่ขึ้น 0 ก่อน)
+// แล้วค่อยรีเฟรชจาก Firestore เงียบ ๆ เมื่อข้อมูลล่าสุดมาถึง
+const WORKOUT_CACHE_KEY = 'fittrack-history-workouts';
+const readWorkoutCache = () => {
+  try {
+    const raw = localStorage.getItem(WORKOUT_CACHE_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw, (_k, v) => (
+      v && typeof v === 'object' && typeof v.__ts === 'number'
+        ? { seconds: Math.floor(v.__ts / 1000), toDate: () => new Date(v.__ts) }
+        : v
+    ));
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
+};
+const writeWorkoutCache = (list) => {
+  try {
+    localStorage.setItem(WORKOUT_CACHE_KEY, JSON.stringify(list, function replacer(key, value) {
+      const original = this[key];
+      return original && typeof original.toDate === 'function'
+        ? { __ts: original.toDate().getTime() }
+        : value;
+    }));
+  } catch { /* storage optional */ }
+};
+const clearWorkoutCache = () => {
+  try { localStorage.removeItem(WORKOUT_CACHE_KEY); } catch { /* storage optional */ }
+};
+
 const GOALS_KEY = 'fittrack-history-goals';
 const DEFAULT_GOALS = { weeklyBurn: 10000, daysMin: 3, daysMax: 5, minMin: 45, minMax: 60, dailyKcal: 1650 };
 const loadGoals = () => {
@@ -117,8 +146,9 @@ const StatCard = ({ icon, label, children, delta, ring, color }) => (
 
 export default function History() {
   const navigate = useNavigate();
-  const [workouts, setWorkouts] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [workouts, setWorkouts] = useState(readWorkoutCache);
+  // มีแคชอยู่แล้วก็ไม่ต้องโชว์สถานะ "กำลังโหลด" — แสดงค่าล่าสุดที่มีไว้ก่อน
+  const [loading, setLoading] = useState(() => readWorkoutCache().length === 0);
   const [error, setError] = useState('');
 
   const [displayName, setDisplayName] = useState(getInitialName);
@@ -148,6 +178,27 @@ export default function History() {
   // ออกจากหน้านี้แล้วคืนค่า ก่อนหน้าถัดไปจะตั้งธีมของตัวเอง
   useLayoutEffect(() => () => document.documentElement.removeAttribute('data-theme'), []);
 
+  // ใช้ค่า Animation จากหน้าตั้งค่า (ปิดแล้วอนิเมชันในหน้านี้จะหยุด) — เหมือนหน้า Dashboard
+  useEffect(() => {
+    const root = document.documentElement;
+    try {
+      const saved = JSON.parse(localStorage.getItem('fittrack_user_settings') || '{}');
+      root.setAttribute('data-anim', saved?.display?.animation === false ? 'off' : 'on');
+    } catch {
+      root.setAttribute('data-anim', 'on');
+    }
+    return () => root.removeAttribute('data-anim');
+  }, []);
+
+  // Toast เด้งขึ้นมาเมื่อกดปุ่ม (เหมือนหน้า Dashboard)
+  const [toast, setToast] = useState(null);
+  const showToast = (text, type = 'success') => setToast({ text, type, id: Date.now() });
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(null), 3200);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   // วันที่/เวลาจริง
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentDateTime(new Date()), 30_000);
@@ -158,6 +209,7 @@ export default function History() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
         clearCachedName();
+        clearWorkoutCache();
         navigate('/login');
         return;
       }
@@ -181,7 +233,9 @@ export default function History() {
           orderBy('completedAt', 'desc')
         );
         const snapshot = await getDocs(q);
-        setWorkouts(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
+        const fresh = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setWorkouts(fresh);
+        writeWorkoutCache(fresh);
       } catch (err) {
         console.error('โหลดประวัติไม่สำเร็จ:', err);
         setError('ไม่สามารถโหลดประวัติได้ กรุณาลองใหม่อีกครั้ง');
@@ -211,6 +265,7 @@ export default function History() {
     try {
       await signOut(auth);
       clearCachedName();
+      clearWorkoutCache();
       navigate('/login', { replace: true });
     } catch (err) {
       console.error('Logout error:', err);
@@ -370,6 +425,7 @@ export default function History() {
     setGoals(next);
     try { localStorage.setItem(GOALS_KEY, JSON.stringify(next)); } catch { /* storage optional */ }
     setGoalOpen(false);
+    showToast('บันทึกเป้าหมายเรียบร้อยแล้ว');
   };
 
   const { total, week, prev, month } = stats;
@@ -402,7 +458,8 @@ export default function History() {
         <nav className="side-menu">
           <button className="side-link" onClick={() => navigate('/dashboard')}><span className="side-icon">⌂</span>หน้าหลัก</button>
           <button className="side-link" onClick={() => navigate('/exercises')}><span className="side-icon side-icon-dumbbell" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 18v12M14 14v20M34 14v20M40 18v12M14 24h20M8 24h6M34 24h6" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 18v12M11 14v20M37 14v20M43 18v12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg></span>ออกกำลังกาย</button>
-          <button className="side-link active" onClick={() => navigate('/history')}><span className="side-icon">◷</span>ประวัติการออกกำลังกาย</button>
+          <button className="side-link" type="button" onClick={() => navigate('/gamemode')}><span className="side-icon side-icon-dumbbell" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M15 15h18a9 9 0 0 1 8.7 6.7l2.2 8.6a5.2 5.2 0 0 1-8.9 4.8L31 31H17l-4 4.1a5.2 5.2 0 0 1-8.9-4.8l2.2-8.6A9 9 0 0 1 15 15z" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/><path d="M16 21v8M12 25h8" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/><circle cx="32" cy="22.5" r="2" fill="currentColor"/><circle cx="36" cy="27" r="2" fill="currentColor"/></svg></span>โหมดเกม</button>
+          <button className="side-link active" onClick={() => navigate('/history')}><span className="side-icon">◷</span>ประวัติ</button>
           <button className="side-link" onClick={() => navigate('/profile')}><span className="side-icon">⚙</span>ตั้งค่า</button>
         </nav>
 
@@ -482,7 +539,8 @@ export default function History() {
             </div>
 
             {/* ===== กราฟ + แคลอรี่ที่ลดได้ ===== */}
-            <div className="hx-row hx-row-chart">
+            <div className="hx-row hx-row-main">
+              <div className="hx-col-main">
               <section className="hx-card">
                 <div className="hx-card-head">
                   <span className="hx-mini-icon"><Ico n="chart" size={20} /></span>
@@ -516,25 +574,8 @@ export default function History() {
                 </div>
               </section>
 
-              <section className="hx-card hx-burn">
-                <div className="hx-card-head">
-                  <span className="hx-mini-icon"><Ico n="flame" size={20} /></span>
-                  <h2>แคลอรี่ที่ลดได้จากการออกกำลังกาย</h2>
-                </div>
-                <div className="hx-burn-main">
-                  <div>
-                    <div className="hx-burn-value">{fmtInt(week.kcal)} <small>kcal</small></div>
-                    <div className="hx-burn-eq">7 วันล่าสุด · เทียบเท่าข้าวมันไก่ {ricePlates.toFixed(1)} จาน</div>
-                  </div>
-                  <span className="hx-ring big" style={{ '--p': Math.min(100, weeklyPct), '--c': '#8cff32' }}><Ico n="flame" size={30} /></span>
-                </div>
-                <div className="hx-progress"><i style={{ width: `${Math.min(100, weeklyPct)}%` }} /></div>
-                <div className="hx-progress-label"><span>เป้าหมายรายสัปดาห์ ({Math.round(weeklyPct)}%)</span><span>{fmtInt(goals.weeklyBurn)} kcal</span></div>
-              </section>
-            </div>
 
-            {/* ===== รายการ + คอลัมน์ขวา ===== */}
-            <div className="hx-row hx-row-list">
+              {/* ===== รายการประวัติ ===== */}
               <section className="hx-card hx-list-card">
                 <div className="hx-card-head">
                   <span className="hx-mini-icon"><Ico n="cal" size={20} /></span>
@@ -560,7 +601,7 @@ export default function History() {
                     <button className="lime-btn hx-cta" type="button" onClick={() => navigate('/exercises')}>เริ่มออกกำลังกายเลย ›</button>
                   </div>
                 ) : (
-                  <div className="hx-list">
+                  <div className="hx-list" key={`${typeFilter}-${periodFilter}`}>
                     {filtered.slice(0, visibleCount).map((s) => {
                       const open = expandedId === s.id;
                       return (
@@ -603,8 +644,26 @@ export default function History() {
                   </div>
                 )}
               </section>
+              </div>
 
+              {/* ===== คอลัมน์ขวา: แคลอรี่ที่ลดได้ + สถิติ + เป้าหมาย ===== */}
               <aside className="hx-side">
+                <section className="hx-card hx-burn">
+                  <div className="hx-card-head">
+                    <span className="hx-mini-icon"><Ico n="flame" size={20} /></span>
+                    <h2>แคลอรี่ที่ลดได้จากการออกกำลังกาย</h2>
+                  </div>
+                  <div className="hx-burn-main">
+                    <div>
+                      <div className="hx-burn-value">{fmtInt(week.kcal)} <small>kcal</small></div>
+                      <div className="hx-burn-eq">7 วันล่าสุด · เทียบเท่าข้าวมันไก่ {ricePlates.toFixed(1)} จาน</div>
+                    </div>
+                    <span className="hx-ring big" style={{ '--p': Math.min(100, weeklyPct), '--c': '#8cff32' }}><Ico n="flame" size={30} /></span>
+                  </div>
+                  <div className="hx-progress"><i style={{ width: `${Math.min(100, weeklyPct)}%` }} /></div>
+                  <div className="hx-progress-label"><span>เป้าหมายรายสัปดาห์ ({Math.round(weeklyPct)}%)</span><span>{fmtInt(goals.weeklyBurn)} kcal</span></div>
+                </section>
+
                 <section className="hx-card">
                   <div className="hx-card-head">
                     <span className="hx-mini-icon"><Ico n="chart" size={20} /></span>
@@ -674,6 +733,13 @@ export default function History() {
           <span className="footer-copyright">ดูแลสุขภาพของคุณในทุกวัน</span>
         </footer>
       </main>
+
+      {toast && (
+        <div key={toast.id} className={`ft-toast ${toast.type === 'error' ? 'error' : ''}`} role="status">
+          <span>{toast.type === 'error' ? '!' : '✓'}</span>
+          {toast.text}
+        </div>
+      )}
 
       <style>{styles}</style>
     </div>
@@ -749,7 +815,7 @@ input { font:inherit }
   .sidebar { position:relative;width:100%;height:auto;min-height:auto;padding:10px }
   .sidebar:after { display:none }
   .sidebar-logo { width:155px;height:88px }
-  .side-menu { display:grid;grid-template-columns:repeat(4,1fr) }
+  .side-menu { display:grid;grid-template-columns:repeat(5,1fr) }
   .side-link { height:48px;padding:0 5px;justify-content:center;flex-direction:column;gap:2px;font-size:9px }
   .side-icon { font-size:18px }
   .sidebar-quote,
@@ -958,7 +1024,7 @@ body,
   .sidebar-logo-wrap { padding:0 2px 8px; }
   .sidebar-logo { width:132px; height:68px; max-width:42vw; }
   .logo-caption { margin-top:-5px; font-size:6px; letter-spacing:1.5px; }
-  .side-menu { width:100%; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; }
+  .side-menu { width:100%; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
   .side-link { width:100%; min-width:0; height:54px; padding:5px 2px; gap:3px; font-size:clamp(8px,2.25vw,10px); line-height:1.15; white-space:normal; overflow-wrap:anywhere; }
   .side-icon { width:auto; min-height:19px; font-size:19px; line-height:1; }
   .main-area { margin:0!important; width:100%!important; min-width:0; padding:0 10px 22px!important; }
@@ -1042,8 +1108,8 @@ html[data-theme="light"] .footer-brand { color:#20382d }
 .hx-ring.big { width:78px; height:78px; }
 
 .hx-row { display:grid; gap:14px; align-items:start; }
-.hx-row-chart { grid-template-columns:minmax(0,1.9fr) minmax(0,1fr); }
-.hx-row-list { grid-template-columns:minmax(0,1.9fr) minmax(0,1fr); }
+.hx-row-main { grid-template-columns:minmax(0,1.9fr) minmax(0,1fr); align-items:stretch; }
+.hx-col-main { display:grid; gap:14px; min-width:0; }
 .hx-card { padding:16px 18px 18px; border:1px solid #1f6d6a; border-radius:14px; background:linear-gradient(145deg,rgba(6,18,22,.85),rgba(3,10,13,.95)); min-width:0; }
 .hx-card-head { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
 .hx-card-head h2 { margin:0; font:500 18px 'Kanit',sans-serif; color:var(--text); }
@@ -1109,7 +1175,10 @@ html[data-theme="light"] .footer-brand { color:#20382d }
 .hx-empty p { margin:0; }
 .hx-cta { padding:0 22px; }
 
-.hx-side { display:grid; gap:14px; min-width:0; }
+.hx-side { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.hx-side > .hx-card { flex:none; }
+/* การ์ดสุดท้าย (คุณเก่งมาก) ยืดลงมาจนสุดแนวเดียวกับคอลัมน์ซ้าย ไม่เหลือช่องว่าง */
+.hx-side > .hx-praise { flex:1 1 auto; }
 .hx-kv { list-style:none; margin:0; padding:0; display:grid; gap:2px; }
 .hx-kv li { display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid rgba(120,170,190,.14); font-size:13px; }
 .hx-kv li:last-child { border-bottom:0; }
@@ -1135,7 +1204,7 @@ html[data-theme="light"] .footer-brand { color:#20382d }
 .hx-ghost { height:37px; padding:0 18px; border:1px solid #2a5360; border-radius:8px; background:transparent; color:var(--text); cursor:pointer; }
 
 @media (max-width:1200px) {
-  .hx-row-chart, .hx-row-list { grid-template-columns:1fr; }
+  .hx-row-main { grid-template-columns:1fr; }
   .hx-item-main { grid-template-columns:72px minmax(110px,1.3fr) minmax(100px,1fr) minmax(100px,1fr) 18px; }
   .hx-done { display:none; }
 }
@@ -1214,4 +1283,132 @@ html[data-theme="light"] .sidebar-logo {
   animation-name: fittrack-logo-glow-light !important;
 }
 
+/* ===================== MOTION (เหมือนหน้า Dashboard) ===================== */
+@keyframes ft-rise { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
+@keyframes ft-pop { 0% { opacity:0; transform:scale(.85); } 60% { transform:scale(1.06); } 100% { opacity:1; transform:none; } }
+@keyframes ft-slide { from { opacity:0; transform:translateX(-14px); } to { opacity:1; transform:none; } }
+@keyframes ft-grow { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+
+/* ส่วนหลักไหลขึ้นทีละใบ (ใช้ backwards เพื่อไม่ให้ทับ transform ตอน hover) */
+.hx-shell { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) backwards; }
+.hx-head { animation:ft-rise .5s cubic-bezier(.2,.8,.2,1) .05s backwards; }
+.hx-stats > .hx-stat:nth-child(1) { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .1s backwards; }
+.hx-stats > .hx-stat:nth-child(2) { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .18s backwards; }
+.hx-stats > .hx-stat:nth-child(3) { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .26s backwards; }
+.hx-col-main > .hx-card:nth-child(1) { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .3s backwards; }
+.hx-col-main > .hx-card:nth-child(2) { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .38s backwards; }
+.hx-side > .hx-card:nth-child(1) { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .34s backwards; }
+.hx-side > .hx-card:nth-child(2) { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .42s backwards; }
+.hx-side > .hx-card:nth-child(3) { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .5s backwards; }
+.hx-side > .hx-card:nth-child(4) { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .58s backwards; }
+.hx-alert { animation:ft-rise .4s ease backwards; }
+
+/* ชี้แล้วเรืองแสง/ยกขึ้นเล็กน้อย */
+.hx-card, .hx-stat { transition:border-color .25s ease, box-shadow .25s ease, transform .25s ease; }
+.hx-card:hover, .hx-stat:hover { border-color:#2f7a52; box-shadow:0 8px 28px rgba(80,255,120,.10); transform:translateY(-2px); }
+.hx-head-icon { transition:box-shadow .3s ease, transform .2s ease; }
+.hx-head-icon:hover { box-shadow:0 0 26px rgba(110,255,50,.4); transform:translateY(-2px); }
+
+/* ตัวเลข / วงแหวน / แถบความคืบหน้า */
+.hx-stat-value, .hx-burn-value { animation:ft-pop .45s cubic-bezier(.2,.8,.2,1) .2s backwards; }
+.hx-progress i { transform-origin:left center; animation:ft-grow .9s cubic-bezier(.2,.8,.2,1) .5s backwards; }
+.hx-kv li { animation:ft-slide .4s cubic-bezier(.2,.8,.2,1) backwards; transition:background .2s ease, transform .2s ease; }
+.hx-kv li:nth-child(2) { animation-delay:.06s; }
+.hx-kv li:nth-child(3) { animation-delay:.12s; }
+.hx-kv li:nth-child(4) { animation-delay:.18s; }
+.hx-trophy { animation:ft-pop .6s cubic-bezier(.2,.8,.2,1) .7s backwards; }
+
+/* ปุ่มกดแล้วยุบเล็กน้อย */
+.hx-tabs button { transition:background .2s ease, border-color .2s ease, transform .15s ease; }
+.hx-tabs button:active { transform:scale(.96); }
+.hx-goal-btn, .hx-more, .hx-cta, .hx-ghost, .hx-modal-actions .lime-btn { transition:transform .15s ease, box-shadow .2s ease, border-color .2s ease, color .2s ease; }
+.hx-goal-btn:active, .hx-more:active, .hx-cta:active, .hx-ghost:active, .hx-modal-actions .lime-btn:active { transform:scale(.96); }
+.hx-cta:hover, .hx-modal-actions .lime-btn:hover { box-shadow:0 0 18px rgba(125,255,45,.4); }
+
+/* รายการประวัติ: แถวเลื่อนเข้าทีละแถวเมื่อเปลี่ยนตัวกรอง */
+.hx-item { animation:ft-slide .4s cubic-bezier(.2,.8,.2,1) backwards; transition:border-color .2s ease, background .2s ease, transform .2s ease; }
+.hx-item:nth-child(2) { animation-delay:.06s; }
+.hx-item:nth-child(3) { animation-delay:.12s; }
+.hx-item:nth-child(4) { animation-delay:.18s; }
+.hx-item:nth-child(5) { animation-delay:.24s; }
+.hx-item:nth-child(6) { animation-delay:.3s; }
+.hx-item:nth-child(n+7) { animation-delay:.36s; }
+.hx-item:hover { transform:translateX(3px); }
+.hx-detail { animation:ft-rise .3s ease backwards; }
+.hx-chev { transition:transform .25s ease; }
+.hx-empty { animation:ft-rise .45s ease backwards; }
+
+/* Modal เด้งขึ้นมา */
+.hx-modal-bg { animation:ft-fade .2s ease backwards; }
+.hx-modal { animation:ft-pop .35s cubic-bezier(.2,.8,.2,1) backwards; }
+@keyframes ft-fade { from { opacity:0; } to { opacity:1; } }
+
+html[data-theme="light"] .hx-card:hover, html[data-theme="light"] .hx-stat:hover { border-color:#6cc943; box-shadow:0 8px 22px rgba(29,76,56,.10); }
+
+/* ปิดอนิเมชันตามค่าที่ตั้งไว้ หรือตามระบบ */
+html[data-anim="off"] .hx-shell, html[data-anim="off"] .hx-head, html[data-anim="off"] .hx-stat, html[data-anim="off"] .hx-card,
+html[data-anim="off"] .hx-alert, html[data-anim="off"] .hx-stat-value, html[data-anim="off"] .hx-burn-value, html[data-anim="off"] .hx-progress i,
+html[data-anim="off"] .hx-kv li, html[data-anim="off"] .hx-trophy, html[data-anim="off"] .hx-item, html[data-anim="off"] .hx-detail,
+html[data-anim="off"] .hx-empty, html[data-anim="off"] .hx-modal-bg, html[data-anim="off"] .hx-modal, html[data-anim="off"] .hx-bar { animation:none !important; }
+html[data-anim="off"] .hx-card:hover, html[data-anim="off"] .hx-stat:hover, html[data-anim="off"] .hx-item:hover, html[data-anim="off"] .hx-head-icon:hover { transform:none; }
+@media (prefers-reduced-motion: reduce) {
+  .hx-shell, .hx-head, .hx-stat, .hx-card, .hx-alert, .hx-stat-value, .hx-burn-value, .hx-progress i, .hx-kv li, .hx-trophy,
+  .hx-item, .hx-detail, .hx-empty, .hx-modal-bg, .hx-modal { animation:none !important; }
+  .hx-card:hover, .hx-stat:hover, .hx-item:hover, .hx-head-icon:hover { transform:none; }
+}
+
+/* ===== Toast เด้งขึ้นมาเมื่อกดปุ่ม (เหมือนหน้า Dashboard) ===== */
+.ft-toast { position:fixed; left:50%; bottom:26px; z-index:400; transform:translateX(-50%); display:flex; align-items:center; gap:10px; max-width:calc(100vw - 28px); padding:12px 20px; border:1px solid #7cff31; border-radius:12px; background:#071a10; color:#e9ffe0; font-size:14px; box-shadow:0 0 22px rgba(110,255,50,.3); animation:ft-toast-in .5s cubic-bezier(.2,.8,.2,1) both; }
+.ft-toast span { width:22px; height:22px; flex:none; display:grid; place-items:center; border-radius:50%; background:#7cff31; color:#071005; font-weight:700; font-size:13px; }
+.ft-toast.error { border-color:#ff476d; background:#1f0a10; color:#ffd5db; box-shadow:0 0 22px rgba(255,71,109,.3); }
+.ft-toast.error span { background:#ff476d; color:#fff; }
+@keyframes ft-toast-in { 0% { opacity:0; transform:translate(-50%,28px) scale(.9); } 60% { opacity:1; transform:translate(-50%,-8px) scale(1.04); } 100% { opacity:1; transform:translate(-50%,0) scale(1); } }
+html[data-theme="light"] .ft-toast { background:#f1faec; color:#12201c; box-shadow:0 4px 14px rgba(0,0,0,.12); }
+html[data-theme="light"] .ft-toast.error { background:#fff0f3; color:#8a2438; }
+html[data-anim="off"] .ft-toast { animation:none !important; }
+@media (prefers-reduced-motion: reduce) { .ft-toast { animation:none !important; } }
+/* sidebar 5 เมนู: ปรับระยะตามความสูงจอ ให้ข้อความ "สุขภาพที่ดี…" และปุ่มออกจากระบบอยู่ในจอเสมอ */
+.sidebar { overflow-y:auto; overflow-x:hidden; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.sidebar::-webkit-scrollbar { display:none; }
+.sidebar-logo-wrap, .side-menu, .logout-link { flex-shrink:0; }
+@media (min-width:761px) {
+  .sidebar { padding-top:clamp(10px,2.2vh,22px); padding-bottom:clamp(8px,1.8vh,18px); }
+  .sidebar-logo-wrap { padding-bottom:clamp(6px,2.5vh,25px); }
+  .sidebar-logo { height:clamp(64px,11vh,112px); }
+  .side-menu { gap:clamp(3px,.9vh,9px); }
+  .side-link { height:clamp(40px,7.2vh,57px); }
+  .sidebar-quote { margin-bottom:clamp(4px,2vh,24px); padding:clamp(4px,1vh,12px) 14px; font-size:clamp(11px,1.7vh,15px); line-height:1.45; }
+  .pulse-line { margin-top:clamp(4px,1.2vh,12px); }
+  .logout-link { height:clamp(40px,6vh,54px); }
+}
+@supports (height:1dvh) {
+  @media (min-width:761px) {
+    .sidebar { padding-top:clamp(10px,2.2dvh,22px); padding-bottom:clamp(8px,1.8dvh,18px); }
+    .sidebar-logo-wrap { padding-bottom:clamp(6px,2.5dvh,25px); }
+    .sidebar-logo { height:clamp(64px,11dvh,112px); }
+    .side-menu { gap:clamp(3px,.9dvh,9px); }
+    .side-link { height:clamp(40px,7.2dvh,57px); }
+    .sidebar-quote { margin-bottom:clamp(4px,2dvh,24px); padding:clamp(4px,1dvh,12px) 14px; font-size:clamp(11px,1.7dvh,15px); line-height:1.45; }
+    .pulse-line { margin-top:clamp(4px,1.2dvh,12px); }
+    .logout-link { height:clamp(40px,6dvh,54px); }
+  }
+}
+/* sidebar สมส่วน: ทุกส่วนโตตามความสูงจอ และเมนูกระจายตัวกินพื้นที่ที่เหลือ ไม่เกิดช่องว่างใหญ่ใต้เมนู */
+@media (min-width:761px) {
+  .sidebar-logo-wrap { padding-bottom:clamp(8px,2.6vh,28px); }
+  .sidebar-logo { width:100%; height:clamp(78px,15vh,170px); transform:scale(1.18); transform-origin:center top; }
+  .logo-caption { font-size:clamp(8px,1.15vh,11px); letter-spacing:2.4px; margin-top:clamp(4px,1.2vh,14px); }
+  .side-menu { flex:1 0 auto; justify-content:space-evenly; gap:clamp(3px,.9vh,10px); }
+  .side-link { height:clamp(44px,8vh,66px); font-size:clamp(14px,1.9vh,17px); }
+  .side-icon { font-size:clamp(22px,2.9vh,28px); }
+  .sidebar-quote { margin-top:clamp(6px,2vh,22px); margin-bottom:clamp(6px,2vh,22px); padding:clamp(4px,1vh,12px) 14px; font-size:clamp(14px,2.3vh,20px); line-height:1.5; text-align:center; }
+  .pulse-line { margin-top:clamp(8px,1.8vh,18px); }
+  .logout-link { height:clamp(44px,6.4vh,60px); font-size:clamp(14px,1.9vh,17px); }
+}
+/* มือถือ: แสดงปุ่มออกจากระบบเป็นไอคอนมุมขวาบนของแถบเมนู */
+@media (max-width:760px) {
+  .sidebar { overflow:visible; }
+  .logout-link { display:flex !important; align-items:center; justify-content:center; position:absolute; top:10px; right:10px; z-index:2; width:42px; height:42px; padding:0; border:1px solid rgba(120,160,150,.45); border-radius:12px; font-size:0; }
+  .logout-link span { margin:0; font-size:22px; }
+}
 `;

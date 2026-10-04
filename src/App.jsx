@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Profile from './pages/Profile';
@@ -8,6 +8,7 @@ import ExerciseSetting from './pages/ExerciseSetting';
 import Exercise from './pages/Exercise';
 import Result from './pages/Result';
 import History from './pages/History';
+import GameMode from './pages/GameMode';
 
 function App() {
   return (
@@ -22,6 +23,8 @@ function App() {
         <Route path="/exercise" element={<Exercise />} />
         <Route path="/result" element={<Result />} />
         <Route path="/history" element={<History />} />
+        <Route path="/gamemode" element={<GameMode />} />
+        <Route path="/game" element={<Navigate to="/gamemode" replace />} />
         <Route path="*" element={<Login />} />
       </Routes>
     </Router>
