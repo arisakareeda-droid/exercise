@@ -13,7 +13,7 @@ const ROOMS = 'fittrack_rooms'; // คอลเลกชัน Firestore สำ�
 
 let W = 960; // ขนาดแคนวาส: แนวนอน 960x720 / แนวตั้ง 720x960 (ตั้งค่าตอนเริ่มเกมในฟังก์ชัน setSize)
 let H = 720;
-const setSize = (portrait) => { W = portrait ? 720 : 960; H = portrait ? 960 : 720; };
+const setSize = (w, h) => { W = w; H = h; }; // เรียกจาก ResizeObserver ให้สัดส่วนแคนวาสตรงกับพื้นที่เล่นจริง
 const MAX_LIVES = 3;
 const FRUIT_R = 50;
 const FIST_R = 38;
@@ -66,7 +66,8 @@ const CHK0 = { sh: false, el: false, wr: false, dist: 'none', progress: 0 };
 
 const r3 = (n) => Math.round(n * 1000) / 1000;
 const JI = Object.fromEntries(JOINTS.map((id, i) => [id, i]));
-const newView = () => ({ tgt: null, curJ: null, curF: null, recvAt: 0, last: 0 });
+let liveErr = ''; // ข้อผิดพลาดล่าสุดตอนส่ง/รับภาพการเล่น (ไว้บอกผู้เล่น)
+const newView = () => ({ tgt: null, curJ: null, curF: null, recvAt: 0, last: 0, since: performance.now() });
 const liveDoc = (code, uid) => doc(getFirestore(auth.app), ROOMS, `${code}-live-${uid}`);
 
 // แพ็กภาพการเล่น (โครงร่าง กำปั้น ผลไม้) เป็นอาร์เรย์ตัวเลขแบน ๆ — Firestore ไม่รองรับอาร์เรย์ซ้อนอาร์เรย์
@@ -90,23 +91,27 @@ function easeArr(cur, tgt, a, stride) {
   return cur;
 }
 
-// วาดมุมมองของเพื่อนลงแคนวาสเล็ก (เลื่อนตำแหน่งให้นุ่ม และคาดเดาผลไม้ที่กำลังตกระหว่างรอข้อมูลใหม่)
+// วาดมุมมองของเพื่อนลงแคนวาสฝั่งขวา (ย่อ/ขยายตามพื้นที่ วางตามสัดส่วนจอของเพื่อน เลื่อนตำแหน่งให้นุ่ม และคาดเดาผลไม้ที่ตกระหว่างรอข้อมูลใหม่)
 function renderOpp(canvas, v, now, done) {
   if (!canvas) return;
-  const d = v.tgt;
-  const portrait = !!d && d.ar < 1;
-  const cw = portrait ? 240 : 320;
-  const ch = portrait ? 320 : 240;
-  if (canvas.width !== cw) { canvas.width = cw; canvas.height = ch; }
+  const bw = canvas.clientWidth || 320;
+  const bh = canvas.clientHeight || 240;
+  const k = Math.min(1, 720 / Math.max(bw, bh));
+  const cw = Math.max(2, Math.round(bw * k));
+  const ch = Math.max(2, Math.round(bh * k));
+  if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#030b0e';
-  ctx.fillRect(0, 0, cw, ch);
+  ctx.clearRect(0, 0, cw, ch);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  const d = v.tgt;
   if (!d) {
     ctx.fillStyle = '#9fb4b8';
-    ctx.font = '14px Anuphan, sans-serif';
-    ctx.fillText('รอภาพจากเพื่อน...', cw / 2, ch / 2);
+    ctx.font = `${Math.max(12, Math.round(cw * 0.035))}px Anuphan, sans-serif`;
+    const msg = liveErr ? `รับ/ส่งข้อมูลกับเพื่อนไม่ได้ (${liveErr}) ตรวจกฎ Firestore`
+      : now - v.since > 4000 ? 'ยังไม่ได้รับภาพจากเพื่อน ให้เพื่อนรีเฟรชหน้าเกมเพื่อใช้เวอร์ชันล่าสุด'
+        : 'รอภาพจากเพื่อน...';
+    ctx.fillText(msg, cw / 2, ch / 2, cw * 0.9);
     return;
   }
   const dt = Math.min(0.1, (now - (v.last || now)) / 1000);
@@ -114,34 +119,52 @@ function renderOpp(canvas, v, now, done) {
   const a = Math.min(1, dt * 12);
   v.curJ = easeArr(v.curJ, d.j, a, 2);
   v.curF = easeArr(v.curF, d.f, a, 3);
+  const ar = d.ar || 1.333;
+  let rw = cw;
+  let rh = cw / ar;
+  if (rh > ch) { rh = ch; rw = ch * ar; }
+  const ox = (cw - rw) / 2;
+  const oy = (ch - rh) / 2;
+  const u = Math.max(rw, rh) / 960;
+  ctx.fillStyle = 'rgba(255,255,255,.035)';
+  ctx.fillRect(ox, oy, rw, rh);
+  ctx.strokeStyle = 'rgba(124,255,49,.18)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(ox, oy, rw, rh);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(ox, oy, rw, rh);
+  ctx.clip();
   ctx.lineCap = 'round';
   BONES.forEach(([p, q]) => {
     const i = JI[p] * 2;
-    const k = JI[q] * 2;
-    if (v.curJ[i] < 0 || v.curJ[k] < 0) return;
+    const j = JI[q] * 2;
+    if (v.curJ[i] < 0 || v.curJ[j] < 0) return;
     ctx.beginPath();
-    ctx.moveTo(v.curJ[i] * cw, v.curJ[i + 1] * ch);
-    ctx.lineTo(v.curJ[k] * cw, v.curJ[k + 1] * ch);
-    ctx.strokeStyle = 'rgba(124,255,49,.7)';
-    ctx.lineWidth = 3;
+    ctx.moveTo(ox + v.curJ[i] * rw, oy + v.curJ[i + 1] * rh);
+    ctx.lineTo(ox + v.curJ[j] * rw, oy + v.curJ[j + 1] * rh);
+    ctx.strokeStyle = 'rgba(124,255,49,.65)';
+    ctx.lineWidth = Math.max(3, 6 * u);
     ctx.stroke();
   });
   if (!done) {
     const el = Math.min(0.6, (now - v.recvAt) / 1000);
-    ctx.font = '26px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
-    for (let i = 0; i + 3 < d.o.length; i += 4) {
-      const y = d.o[i + 2] + d.o[i + 3] * el;
-      if (y <= 1.1) ctx.fillText(d.o[i] < 0 ? '💣' : (FRUITS[d.o[i]]?.[0] || '🍎'), d.o[i + 1] * cw, y * ch);
+    const o = d.o || [];
+    ctx.font = `${Math.round(76 * u)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    for (let i = 0; i + 3 < o.length; i += 4) {
+      const y = o[i + 2] + o[i + 3] * el;
+      if (y <= 1.1) ctx.fillText(o[i] < 0 ? '💣' : (FRUITS[o[i]]?.[0] || '🍎'), ox + o[i + 1] * rw, oy + y * rh);
     }
   }
   for (let i = 0; i < 6; i += 3) {
     if (v.curF[i] < 0) continue;
     ctx.beginPath();
-    ctx.arc(v.curF[i] * cw, v.curF[i + 1] * ch, 10, 0, Math.PI * 2);
-    ctx.lineWidth = v.curF[i + 2] ? 4 : 2;
+    ctx.arc(ox + v.curF[i] * rw, oy + v.curF[i + 1] * rh, FIST_R * u, 0, Math.PI * 2);
+    ctx.lineWidth = Math.max(2, (v.curF[i + 2] ? 8 : 4) * u);
     ctx.strokeStyle = v.curF[i + 2] ? '#e9ffb0' : '#7cff31';
     ctx.stroke();
   }
+  ctx.restore();
 }
 
 const readBest = (game) => {
@@ -215,11 +238,13 @@ function trackFists(s, video, landmarker, now) {
       const b = mapPoint(lm[12], video);
       const raw = Math.hypot(a.x - b.x, a.y - b.y);
       shoulder = Math.max(80, raw);
+      // วัดระยะห่างจากกล้องเป็นสัดส่วนของภาพวิดีโอ (ไม่ขึ้นกับการครอปตามขนาดจอ)
+      const rawN = Math.hypot((lm[11].x - lm[12].x) * (video.videoWidth || 4), (lm[11].y - lm[12].y) * (video.videoHeight || 3)) / (video.videoWidth || 4);
       s.view = {
         sh: seen(11, 0.5) && seen(12, 0.5),
         el: seen(13, 0.5) && seen(14, 0.5),
         wr: seen(15, 0.5) && seen(16, 0.5),
-        dist: raw < W * 0.10 ? 'far' : raw > W * 0.40 ? 'near' : 'ok',
+        dist: rawN < 0.10 ? 'far' : rawN > 0.40 ? 'near' : 'ok',
       };
     }
     pts = [[15, 19], [16, 20]].map(([wrist, index]) => {
@@ -481,6 +506,7 @@ export default function GameMode() {
   const finalRef = useRef(null);
   const finishedRef = useRef(false);
   const pipRef = useRef(null); // แคนวาสมุมมองของเพื่อน
+  const stageRef = useRef(null); // พื้นที่เล่นของเรา (ใช้วัดขนาดจริง)
   const oppView = useRef(newView());
   const liveUnsub = useRef(null);
   const liveFor = useRef(null);
@@ -500,7 +526,7 @@ export default function GameMode() {
   const [chk, setChk] = useState(CHK0);
   const [lost, setLost] = useState(false);
   const [result, setResult] = useState(null);
-  const [portrait, setPortrait] = useState(false);
+  const [dims, setDims] = useState({ w: 960, h: 720 });
 
   const statusRef = useRef(status); statusRef.current = status;
   const setupRef = useRef(setup); setupRef.current = setup;
@@ -510,6 +536,24 @@ export default function GameMode() {
     const st = setupRef.current;
     return newGame({ ...st, weight: clampW(st.weight), speed: speedRef.current, ...extra });
   };
+
+  // ให้แคนวาสมีสัดส่วนเท่าพื้นที่เล่นจริง (เต็มจอ แบ่งครึ่ง แนวตั้ง/แนวนอน) ตำแหน่งกำปั้นจึงตรงกับภาพกล้อง
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return undefined;
+    const apply = () => {
+      const { width, height } = el.getBoundingClientRect();
+      if (width < 40 || height < 40) return;
+      const r = width / height;
+      const w = r >= 1 ? 960 : Math.round(960 * r);
+      const h = r >= 1 ? Math.round(960 / r) : 960;
+      if (w !== W || h !== H) { setSize(w, h); setDims({ w, h }); }
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => { if (!user) navigate('/login'); });
@@ -604,7 +648,7 @@ export default function GameMode() {
           if (!sn.exists()) return;
           oppView.current.tgt = sn.data();
           oppView.current.recvAt = performance.now();
-        }, () => {});
+        }, (e) => { liveErr = e?.code || 'error'; console.warn('live recv', e); });
       }
       if (!isHost && d.game !== setupRef.current.game) setSetup((s) => ({ ...s, game: d.game }));
       if (isHost && oppUid && statusRef.current === 'menu') setStatus('idle'); // เพื่อนเข้าห้องแล้ว
@@ -705,8 +749,6 @@ export default function GameMode() {
   const begin = async () => {
     // มือถือ/iPad แนวตั้ง ใช้เวทีแนวตั้ง ส่วนจอแนวนอนใช้เวทีแนวนอน
     const isPortrait = window.innerHeight > window.innerWidth;
-    setSize(isPortrait);
-    setPortrait(isPortrait);
     setMessage('กำลังเปิดกล้อง...');
     setStatus('loading');
     try {
@@ -735,6 +777,7 @@ export default function GameMode() {
     try { localStorage.setItem(WEIGHT_KEY, String(clampW(setupRef.current.weight))); } catch { /* storage optional */ }
     g.current = mk();
     finishedRef.current = false;
+    oppView.current = newView();
     if (roomMeta.current) {
       // เริ่มรอบใหม่: ล้างสถานะเดิมของเรา และให้เจ้าของห้องสุ่มชุดผลไม้ใหม่
       pushMine({ ready: false, score: 0, lives: 0, kcal: 0, done: false });
@@ -832,6 +875,7 @@ export default function GameMode() {
       const s = g.current;
       const dt = Math.min(0.05, (now - (s.last || now)) / 1000);
       s.last = now;
+      if (s.mode === 'real') renderOpp(pipRef.current, oppView.current, now, oppRef.current?.done);
       trackFists(s, videoRef.current, landmarkerRef.current, now);
 
       if (status === 'check') {
@@ -863,14 +907,13 @@ export default function GameMode() {
           setHud(shown);
         }
         if (s.bot) {
-          const k = `${s.bot.score}${s.bot.done}`;
-          if (k !== shownBot) { shownBot = k; setOpp({ name: s.bot.p.name, score: s.bot.score, done: s.bot.done }); }
+          const k = `${s.bot.score}${s.bot.done}${s.bot.lives}`;
+          if (k !== shownBot) { shownBot = k; setOpp({ name: s.bot.p.name, score: s.bot.score, done: s.bot.done, lives: s.bot.lives }); }
         }
         if (s.mode === 'real') {
-          renderOpp(pipRef.current, oppView.current, now, oppRef.current?.done);
           if (roomMeta.current && now - s.liveAt > LIVE_MS) {
             s.liveAt = now;
-            setDoc(liveDoc(roomMeta.current.code, roomMeta.current.uid), packLive(s)).catch(() => {});
+            setDoc(liveDoc(roomMeta.current.code, roomMeta.current.uid), packLive(s)).catch((e) => { liveErr = e?.code || 'error'; console.warn('live send', e); });
           }
         }
         if (s.mode === 'real' && now - s.syncAt > 700) {
@@ -891,6 +934,15 @@ export default function GameMode() {
   const versus = setup.mode !== 'solo';
   const playing = status === 'playing';
   const camOn = status !== 'menu' && status !== 'idle';
+  const immersive = ['check', 'waiting', 'countdown', 'playing', 'waitend'].includes(status); // ซ่อนหัวเรื่อง เล่นเต็มจอ
+  const split = setup.mode !== 'solo' && immersive; // แบ่ง 2 ฝั่ง: เรา | เพื่อน/บอท
+  const friendState = opp?.done ? 'จบแล้ว ✓' : status === 'playing' ? 'กำลังเล่น...' : opp?.ready ? 'พร้อมแล้ว' : 'กำลังเตรียมตัว...';
+  const toggleFull = () => {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen?.();
+    } catch { /* เบราว์เซอร์ไม่รองรับก็ข้าม */ }
+  };
   const best = bests[setup.game] || 0;
   const diff = result ? Math.abs(result.left - result.right) : 0;
   const total = result ? result.left + result.right : 0;
@@ -907,18 +959,22 @@ export default function GameMode() {
 
   return (
     <div className="gm-page">
+      {!immersive && (
       <header className="gm-top">
         <button type="button" className="gm-back" onClick={() => navigate('/dashboard')}>‹ หน้าหลัก</button>
         <div className="gm-title">
           <h1>โหมดเกม · {game.name}</h1>
           <p>ออกกำลังกายด้วยท่าต่อยหมัด ระบบตรวจจับท่าทางจากกล้อง</p>
         </div>
+        <button type="button" className="gm-back" onClick={toggleFull} aria-label="เต็มจอ">⛶</button>
         <div className="gm-best">สถิติสูงสุด <b>{best}</b></div>
       </header>
+      )}
 
-      <div className="gm-stage" style={{ aspectRatio: portrait ? '3 / 4' : '4 / 3', '--ar': portrait ? 0.75 : 1.3333 }}>
+      <div className={`gm-wrap${split ? ' split' : ''}${immersive ? ' imm' : ''}`}>
+      <div className="gm-stage" ref={stageRef}>
         <video ref={videoRef} className={`gm-video${camOn ? ' on' : ''}`} muted playsInline />
-        <canvas ref={canvasRef} className="gm-canvas" width={portrait ? 720 : 960} height={portrait ? 960 : 720} />
+        <canvas ref={canvasRef} className="gm-canvas" width={dims.w} height={dims.h} />
 
         {playing && (
           <div className="gm-hud" aria-live="polite">
@@ -933,7 +989,6 @@ export default function GameMode() {
             )}
             <div className="gm-mid">
               <div className="gm-score">{hud.score}</div>
-              {versus && opp && <div className="gm-opp">{opp.name} <b>{opp.score}</b>{opp.done ? ' ✓' : ''}</div>}
             </div>
             <div className="gm-side">
               <div className={`gm-combo${hud.combo >= 5 ? ' hot' : ''}`}>{hud.combo >= 2 ? `คอมโบ ${hud.combo}` : ''}</div>
@@ -949,13 +1004,6 @@ export default function GameMode() {
             {SPEEDS.map((sp, i) => (
               <button key={sp.v} type="button" className={i === speedIdx ? 'on' : ''} aria-pressed={i === speedIdx} onClick={() => changeSpeed(i)}>×{sp.v}</button>
             ))}
-          </div>
-        )}
-
-        {setup.mode === 'real' && (playing || status === 'waitend') && (
-          <div className={`gm-pip${status === 'waitend' ? ' big' : ''}`} aria-label={`มุมมองการเล่นของ ${opp?.name || 'เพื่อน'}`}>
-            <canvas ref={pipRef} />
-            <span>{opp?.name || 'เพื่อน'} · {opp?.score ?? 0}{opp?.done ? ' ✓ จบแล้ว' : ''}</span>
           </div>
         )}
 
@@ -1152,6 +1200,36 @@ export default function GameMode() {
         )}
       </div>
 
+      {split && (
+        <div className="gm-stage gm-friend">
+          {setup.mode === 'real' ? (
+            <>
+              <canvas ref={pipRef} className="gm-canvas" />
+              <div className="gm-fhud">
+                <div className="gm-fname">{opp?.name || 'เพื่อน'}</div>
+                <div className="gm-fscore">{opp?.score ?? 0}</div>
+                <div className="gm-fstate">{friendState}</div>
+              </div>
+            </>
+          ) : (
+            <div className="gm-botcard">
+              <span className="gm-bot-ico">🤖</span>
+              <b>{BOTS[setup.botLvl].name}</b>
+              <div className="gm-fscore">{opp?.score ?? 0}</div>
+              {!game.time && (
+                <div className="gm-hearts" aria-label={`พลังชีวิตบอท ${opp?.lives ?? MAX_LIVES}`}>
+                  {Array.from({ length: MAX_LIVES }, (_, i) => (
+                    <span key={i} className={i < (opp?.lives ?? MAX_LIVES) ? '' : 'lost'}>❤</span>
+                  ))}
+                </div>
+              )}
+              <div className="gm-fstate">{opp?.done ? 'จบแล้ว ✓' : status === 'playing' ? 'กำลังเล่น...' : 'พร้อมแล้ว'}</div>
+            </div>
+          )}
+        </div>
+      )}
+      </div>
+
       <style>{css}</style>
     </div>
   );
@@ -1159,8 +1237,11 @@ export default function GameMode() {
 
 const css = `
 @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Anuphan:wght@400;500;600&display=swap');
-.gm-page { min-height:100vh; padding:18px 16px 32px; display:flex; flex-direction:column; align-items:center; gap:14px; background:radial-gradient(circle at 70% 0%,rgba(50,255,100,.07),transparent 40%),#020609; color:#eef6f1; font-family:'Anuphan',sans-serif; }
-.gm-top { width:min(960px,100%); display:flex; align-items:center; gap:14px; }
+.gm-page { position:fixed; inset:0; height:100dvh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); display:flex; flex-direction:column; overflow:hidden; background:radial-gradient(circle at 70% 0%,rgba(50,255,100,.07),transparent 40%),#020609; color:#eef6f1; font-family:'Anuphan',sans-serif; }
+.gm-top { display:flex; align-items:center; gap:12px; padding:10px 16px; }
+.gm-wrap { flex:1; min-height:0; display:flex; flex-direction:row; gap:6px; padding:0 10px 10px; }
+.gm-wrap.imm { padding:0; gap:3px; }
+@media (orientation:portrait) { .gm-wrap { flex-direction:column; } }
 .gm-back { min-height:44px; padding:0 16px; border:1px solid #2a5360; border-radius:10px; background:transparent; color:inherit; font-size:14px; cursor:pointer; transition:border-color .2s, color .2s, transform .15s; }
 .gm-back:hover { border-color:#7cff31; color:#7cff31; }
 .gm-back:active { transform:scale(.96); }
@@ -1169,14 +1250,15 @@ const css = `
 .gm-title p { margin:2px 0 0; font-size:13px; color:#9fb4b8; }
 .gm-best { font-size:13px; color:#9fb4b8; white-space:nowrap; }
 .gm-best b { margin-left:4px; font:600 20px 'Kanit',sans-serif; color:#c6ff38; }
-.gm-stage { position:relative; width:min(960px,100%); width:min(960px,100%,calc((100vh - 112px) * var(--ar,1.3333))); width:min(960px,100%,calc((100dvh - 112px) * var(--ar,1.3333))); min-width:min(280px,100%); aspect-ratio:4/3; overflow:hidden; border:1px solid #1f6d6a; border-radius:16px; background:linear-gradient(160deg,#07161a,#030b0e); user-select:none; box-shadow:0 0 28px rgba(80,255,120,.08); }
+.gm-stage { position:relative; flex:1 1 0; min-width:0; min-height:0; overflow:hidden; border:1px solid #1f6d6a; border-radius:16px; background:linear-gradient(160deg,#07161a,#030b0e); user-select:none; box-shadow:0 0 28px rgba(80,255,120,.08); }
+.gm-wrap.imm .gm-stage { border-radius:0; border-width:0; }
 .gm-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); opacity:0; }
 .gm-video.on { opacity:.9; }
 .gm-canvas { position:absolute; inset:0; width:100%; height:100%; }
 .gm-hud { position:absolute; inset:0 0 auto 0; padding:14px 18px; display:grid; grid-template-columns:1fr auto 1fr; align-items:start; pointer-events:none; }
-.gm-hearts { display:flex; gap:6px; font-size:32px; line-height:1; color:#ff476d; text-shadow:0 0 12px rgba(255,71,109,.6); }
+.gm-hearts { display:flex; gap:4px; font-size:clamp(18px,5vmin,32px); line-height:1; color:#ff476d; text-shadow:0 0 12px rgba(255,71,109,.6); }
 .gm-hearts .lost { color:#3a4a50; text-shadow:none; }
-.gm-score { font:700 46px/1 'Kanit',sans-serif; color:#fff; text-shadow:0 2px 12px rgba(0,0,0,.7); }
+.gm-score { font:700 clamp(26px,7vmin,46px)/1 'Kanit',sans-serif; color:#fff; text-shadow:0 2px 12px rgba(0,0,0,.7); }
 .gm-side { justify-self:end; display:flex; flex-direction:column; align-items:flex-end; gap:4px; }
 .gm-combo { font:600 20px 'Kanit',sans-serif; color:#e9ffb0; text-shadow:0 2px 10px rgba(0,0,0,.7); min-height:1em; }
 .gm-combo.hot { color:#ffd24a; }
@@ -1205,7 +1287,7 @@ const css = `
 .gm-btn.primary { border-color:transparent; background:linear-gradient(90deg,#72ed2e,#baff3e); color:#071005; font-weight:700; }
 .gm-btn.primary:hover { box-shadow:0 0 18px rgba(125,255,45,.45); }
 .gm-btn:focus-visible, .gm-back:focus-visible, .gm-end:focus-visible { outline:2px solid #c6ff38; outline-offset:2px; }
-.gm-count { font:700 140px/1 'Kanit',sans-serif; color:#c6ff38; text-shadow:0 0 30px rgba(110,255,50,.5); animation:gm-pop .8s ease-out both; }
+.gm-count { font:700 clamp(72px,22vmin,140px)/1 'Kanit',sans-serif; color:#c6ff38; text-shadow:0 0 30px rgba(110,255,50,.5); animation:gm-pop .8s ease-out both; }
 @keyframes gm-pop { from { transform:scale(1.6); opacity:0; } 35% { opacity:1; } to { transform:scale(.9); opacity:.9; } }
 .gm-final { font:700 80px/1 'Kanit',sans-serif; color:#c6ff38; }
 .gm-sub { color:#9fb4b8; font-size:14px; max-width:460px; }
@@ -1214,12 +1296,17 @@ const css = `
 .gm-stats b { font:600 24px 'Kanit',sans-serif; }
 .gm-stats span { font-size:11.5px; color:#9fb4b8; }
 .gm-btn:disabled { opacity:.4; cursor:not-allowed; }
+.gm-friend { background:radial-gradient(circle at 50% 0%,rgba(124,255,49,.06),transparent 60%),#030b0e; }
+.gm-fhud { position:absolute; left:0; right:0; top:0; padding:12px 16px; display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:none; text-shadow:0 2px 10px rgba(0,0,0,.8); }
+.gm-fname { font-size:clamp(11px,2.4vmin,15px); color:#dff1ec; }
+.gm-fscore { font:700 clamp(26px,7vmin,46px)/1 'Kanit',sans-serif; color:#ffd24a; }
+.gm-fstate { font-size:clamp(10px,2.2vmin,13px); color:#9fb4b8; }
+.gm-botcard { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center; }
+.gm-bot-ico { font-size:clamp(48px,14vmin,96px); line-height:1; }
+.gm-botcard b { font:600 clamp(16px,3.5vmin,24px) 'Kanit',sans-serif; }
+.gm-wrap.split .gm-speed span, .gm-wrap.split .gm-lr { display:none; }
 .gm-btn.small { min-height:38px; padding:0 14px; font-size:13px; }
 .gm-pick { display:flex; flex-direction:column; align-items:center; gap:8px; font-size:13px; color:#9fb4b8; }
-.gm-pip { position:absolute; right:12px; top:120px; z-index:6; width:min(30%,230px); border:1px solid #1f6d6a; border-radius:12px; overflow:hidden; background:#030b0e; box-shadow:0 0 16px rgba(0,0,0,.5); pointer-events:none; }
-.gm-pip canvas { display:block; width:100%; height:auto; }
-.gm-pip span { display:block; padding:4px 8px; font-size:12px; color:#dff1ec; background:rgba(2,8,10,.85); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.gm-pip.big { top:auto; bottom:12px; width:min(46%,360px); }
 .gm-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; width:min(620px,100%); }
 .gm-card { display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 14px; border:1px solid #2a5360; border-radius:14px; background:rgba(8,28,34,.7); color:inherit; font-family:inherit; text-align:center; cursor:pointer; transition:border-color .2s, transform .15s, box-shadow .2s; }
 .gm-card:hover { border-color:#7cff31; box-shadow:0 0 16px rgba(125,255,45,.2); }
@@ -1247,7 +1334,6 @@ const css = `
 .gm-vs.win { color:#c6ff38; } .gm-vs.lose { color:#ff8da1; } .gm-vs.draw { color:#ffd24a; }
 @media (max-width:640px) {
   .gm-speed span { display:none; }
-  .gm-pip { top:96px; width:34%; }
   .gm-code { font-size:52px; }
   .gm-timer { font-size:24px; }
   .gm-kcal { font-size:11px; }
