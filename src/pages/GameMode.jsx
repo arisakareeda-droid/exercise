@@ -1523,4 +1523,4 @@ const css = `
   .gm-check h2 { font-size:18px; }
 }
 @media (prefers-reduced-motion: reduce) { .gm-count { animation:none; } .gm-btn, .gm-back, .gm-end, .gm-bar i, .gm-chip { transition:none; } }
-`;ห
+`;
