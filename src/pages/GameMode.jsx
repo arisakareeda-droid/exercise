@@ -15,7 +15,7 @@ let W = 960; // ขนาดแคนวาส: แนวนอน 960x720 / แ
 let H = 720;
 const setSize = (portrait) => { W = portrait ? 720 : 960; H = portrait ? 960 : 720; };
 const MAX_LIVES = 3;
-const FRUIT_R = 44;
+const FRUIT_R = 50;
 const FIST_R = 38;
 
 // ---- รายการเกม: เพิ่มเกมใหม่ได้ที่นี่ (time = จำกัดเวลาเป็นวินาที, lives = จำนวนหัวใจ) ----
@@ -24,7 +24,8 @@ const GAMES = {
   time: { id: 'time', emoji: '⏱', name: 'ชกจับเวลา 60 วินาที', desc: 'ทำคะแนนให้มากที่สุดใน 60 วินาที ไม่มีหัวใจ แต่โดนระเบิดหักคะแนน 20', lives: 0, time: 60 },
 };
 // ตัวเร่งความเร็วผลไม้ที่ตก (v = ตัวคูณความเร็ว และเป็นตัวคูณคะแนนด้วย ยิ่งเร็วยิ่งได้แต้มเยอะ)
-const SPEEDS = [{ v: 0.75 }, { v: 1 }, { v: 1.5 }, { v: 2 }];
+const SPEEDS = [{ v: 0.75, label: 'ช้า' }, { v: 1, label: 'ปกติ' }, { v: 1.5, label: 'เร็ว' }, { v: 2, label: 'เร็วมาก' }];
+const LIVE_MS = 330; // ส่งภาพการเล่นของเราให้เพื่อนทุกกี่ ms
 // บอทคู่แข่ง: rate = จำนวนครั้งที่ชกต่อวินาที, acc = โอกาสชกโดนผลไม้, bomb = โอกาสพลาดไปโดนระเบิด
 const BOTS = {
   easy: { label: 'ง่าย', name: 'บอทมือใหม่', rate: 0.6, acc: 0.6, bomb: 0.08 },
@@ -45,11 +46,12 @@ const roomDoc = (code) => doc(getFirestore(auth.app), ROOMS, code);
 const myName = () => auth.currentUser?.displayName || auth.currentUser?.email?.split('@')[0] || 'ผู้เล่น';
 
 // ---- ค่าตรวจจับหมัด (ปรับได้ถ้าต่อยโดนยากหรือง่ายเกินไป) ----
-const PUNCH_EXT = 130;      // มุมข้อศอก (องศา) ที่ถือว่าเหยียดแขนพอ ลดเลขถ้าต่อยไม่ติด (เพิ่มถ้าอยากให้เข้มขึ้น)
-const PUNCH_RISE = 25;      // แขนต้องเหยียดเพิ่มอย่างน้อยกี่องศาภายใน 0.6 วินาที — คือต้อง "งอแล้วชกออก" จริง ๆ (กันการปัดมือ/ยืนเหยียดแขนค้าง)
-const PUNCH_WINDOW = 500;   // ms หลังชก ที่หมัดนั้นทำให้ผลไม้แตกได้
-const PUNCH_COOLDOWN = 250; // ms ระยะห่างขั้นต่ำระหว่างหมัดแต่ละครั้งของแขนเดียวกัน
-const HIT_REACH = 1.5;      // ขยายโซนชนรอบกำปั้น (เท่าของ FIST_R) ยิ่งมากยิ่งโดนง่าย
+const PUNCH_EXT = 110;      // มุมข้อศอก (องศา) ที่ถือว่าเหยียดแขนพอ (เดิม 130) ลดอีกถ้ายังต่อยไม่ติด
+const PUNCH_RISE = 12;      // แขนต้องเหยียดเพิ่มอย่างน้อยกี่องศาภายใน 0.6 วินาที (เดิม 25)
+const PUNCH_WINDOW = 800;   // ms หลังชก ที่หมัดนั้นทำให้ผลไม้แตกได้ (เดิม 500)
+const PUNCH_COOLDOWN = 200; // ms ระยะห่างขั้นต่ำระหว่างหมัดแต่ละครั้งของแขนเดียวกัน
+const FAST_V = 1.5;         // มือที่เคลื่อนเร็วกว่านี้ (เท่าของความกว้างไหล่/วินาที) ก็ทำให้ผลไม้แตกได้ แม้ระบบยังไม่ยืนยันว่าเป็นหมัด ตั้งเป็น 99 ถ้าอยากปิด
+const HIT_REACH = 2.0;      // ขยายโซนชนรอบกำปั้น (เท่าของ FIST_R) ยิ่งมากยิ่งโดนง่าย (เดิม 1.5)
 const LOST_MS = 1200;       // มองไม่เห็นตัวนานเท่านี้ เกมจะหยุดชั่วคราว
 const READY_MS = 1000;      // ต้องยืนอยู่ในตำแหน่งที่ถูกต้องนิ่ง ๆ นานเท่านี้ก่อนเริ่มนับถอยหลัง
 
@@ -61,6 +63,86 @@ const JOINTS = [11, 12, 13, 14, 15, 16, 23, 24]; // ไหล่ ศอก ข�
 const BONES = [[11, 12, null], [11, 13, 0], [13, 15, 0], [12, 14, 1], [14, 16, 1], [11, 23, null], [12, 24, null], [23, 24, null]];
 const HUD0 = { score: 0, lives: MAX_LIVES, combo: 0, l: 0, r: 0, kcal: 0, t: 0 };
 const CHK0 = { sh: false, el: false, wr: false, dist: 'none', progress: 0 };
+
+const r3 = (n) => Math.round(n * 1000) / 1000;
+const JI = Object.fromEntries(JOINTS.map((id, i) => [id, i]));
+const newView = () => ({ tgt: null, curJ: null, curF: null, recvAt: 0, last: 0 });
+const liveDoc = (code, uid) => doc(getFirestore(auth.app), ROOMS, `${code}-live-${uid}`);
+
+// แพ็กภาพการเล่น (โครงร่าง กำปั้น ผลไม้) เป็นอาร์เรย์ตัวเลขแบน ๆ — Firestore ไม่รองรับอาร์เรย์ซ้อนอาร์เรย์
+function packLive(s) {
+  const j = [];
+  JOINTS.forEach((i) => { const p = s.joints[i]; j.push(p ? r3(p.x / W) : -1, p ? r3(p.y / H) : -1); });
+  const f = [];
+  s.fists.forEach((ft) => f.push(ft.ok ? r3(ft.x / W) : -1, ft.ok ? r3(ft.y / H) : -1, ft.active ? 1 : 0));
+  const o = [];
+  s.objs.slice(0, 12).forEach((ob) => o.push(ob.bomb ? -1 : FRUITS.findIndex((fr) => fr[0] === ob.emoji), r3(ob.x / W), r3(ob.y / H), r3((ob.vy * s.speed) / H)));
+  return { j, f, o, ar: r3(W / H), sc: s.score };
+}
+
+function easeArr(cur, tgt, a, stride) {
+  if (!cur || cur.length !== tgt.length) return tgt.slice();
+  for (let i = 0; i < tgt.length; i += 1) {
+    if (stride === 3 && i % 3 === 2) cur[i] = tgt[i];
+    else if (tgt[i] < 0 || cur[i] < 0) cur[i] = tgt[i];
+    else cur[i] += (tgt[i] - cur[i]) * a;
+  }
+  return cur;
+}
+
+// วาดมุมมองของเพื่อนลงแคนวาสเล็ก (เลื่อนตำแหน่งให้นุ่ม และคาดเดาผลไม้ที่กำลังตกระหว่างรอข้อมูลใหม่)
+function renderOpp(canvas, v, now, done) {
+  if (!canvas) return;
+  const d = v.tgt;
+  const portrait = !!d && d.ar < 1;
+  const cw = portrait ? 240 : 320;
+  const ch = portrait ? 320 : 240;
+  if (canvas.width !== cw) { canvas.width = cw; canvas.height = ch; }
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#030b0e';
+  ctx.fillRect(0, 0, cw, ch);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (!d) {
+    ctx.fillStyle = '#9fb4b8';
+    ctx.font = '14px Anuphan, sans-serif';
+    ctx.fillText('รอภาพจากเพื่อน...', cw / 2, ch / 2);
+    return;
+  }
+  const dt = Math.min(0.1, (now - (v.last || now)) / 1000);
+  v.last = now;
+  const a = Math.min(1, dt * 12);
+  v.curJ = easeArr(v.curJ, d.j, a, 2);
+  v.curF = easeArr(v.curF, d.f, a, 3);
+  ctx.lineCap = 'round';
+  BONES.forEach(([p, q]) => {
+    const i = JI[p] * 2;
+    const k = JI[q] * 2;
+    if (v.curJ[i] < 0 || v.curJ[k] < 0) return;
+    ctx.beginPath();
+    ctx.moveTo(v.curJ[i] * cw, v.curJ[i + 1] * ch);
+    ctx.lineTo(v.curJ[k] * cw, v.curJ[k + 1] * ch);
+    ctx.strokeStyle = 'rgba(124,255,49,.7)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+  });
+  if (!done) {
+    const el = Math.min(0.6, (now - v.recvAt) / 1000);
+    ctx.font = '26px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+    for (let i = 0; i + 3 < d.o.length; i += 4) {
+      const y = d.o[i + 2] + d.o[i + 3] * el;
+      if (y <= 1.1) ctx.fillText(d.o[i] < 0 ? '💣' : (FRUITS[d.o[i]]?.[0] || '🍎'), d.o[i + 1] * cw, y * ch);
+    }
+  }
+  for (let i = 0; i < 6; i += 3) {
+    if (v.curF[i] < 0) continue;
+    ctx.beginPath();
+    ctx.arc(v.curF[i] * cw, v.curF[i + 1] * ch, 10, 0, Math.PI * 2);
+    ctx.lineWidth = v.curF[i + 2] ? 4 : 2;
+    ctx.strokeStyle = v.curF[i + 2] ? '#e9ffb0' : '#7cff31';
+    ctx.stroke();
+  }
+}
 
 const readBest = (game) => {
   try {
@@ -85,7 +167,7 @@ const newGame = (o = {}) => ({
   cfg: GAMES[o.game] || GAMES.fruit, mode: o.mode || 'solo',
   rng: mulberry(o.seed ?? newSeed()), speed: o.speed || 1,
   weight: o.weight || 60, kcal: 0,
-  bot: o.mode === 'bot' ? newBot(o.botLvl) : null, syncAt: 0, sent: '',
+  bot: o.mode === 'bot' ? newBot(o.botLvl) : null, syncAt: 0, sent: '', liveAt: 0,
 });
 
 // แปลงพิกัดจากวิดีโอ (object-fit: cover + กลับซ้ายขวา) ไปเป็นพิกัดแคนวาส
@@ -249,7 +331,7 @@ function step(s, dt, now) {
     if (!f.ok) return;
     const i = s.objs.findIndex((o) => Math.hypot(o.x - f.x, o.y - f.y) < FRUIT_R + FIST_R * HIT_REACH);
     if (i < 0) return;
-    if (!f.active) {
+    if (!f.active && f.v <= FAST_V) {
       // มือไปแตะผลไม้ แต่ไม่ใช่หมัดจริง (ไม่ได้งอแล้วชกออก) → ไม่แตก และบอกให้ชกออกไป
       if (f.v > 0.5 && now - s.lastHint > 1600) {
         s.lastHint = now;
@@ -398,6 +480,10 @@ export default function GameMode() {
   const mine = useRef(null); // สถานะของเราที่เขียนลงห้อง
   const finalRef = useRef(null);
   const finishedRef = useRef(false);
+  const pipRef = useRef(null); // แคนวาสมุมมองของเพื่อน
+  const oppView = useRef(newView());
+  const liveUnsub = useRef(null);
+  const liveFor = useRef(null);
 
   // menu → idle(กติกา) → loading → check → [waiting] → countdown → playing → [waitend] → over
   const [status, setStatus] = useState('menu');
@@ -474,7 +560,11 @@ export default function GameMode() {
   const leaveRoom = () => {
     unsubRef.current?.();
     unsubRef.current = null;
+    liveUnsub.current?.();
+    liveUnsub.current = null;
+    liveFor.current = null;
     const m = roomMeta.current;
+    if (m) deleteDoc(liveDoc(m.code, m.uid)).catch(() => {});
     roomMeta.current = null; roomData.current = null; oppRef.current = null; mine.current = null;
     setRoom(null);
     if (!m) return;
@@ -507,6 +597,15 @@ export default function GameMode() {
       const o = oppUid ? { name: oppName, score: p?.score || 0, done: !!p?.done, ready: !!p?.ready } : null;
       oppRef.current = o;
       setOpp(o);
+      if (oppUid && liveFor.current !== oppUid) { // ฟังภาพการเล่นของเพื่อน
+        liveUnsub.current?.();
+        liveFor.current = oppUid;
+        liveUnsub.current = onSnapshot(liveDoc(code, oppUid), (sn) => {
+          if (!sn.exists()) return;
+          oppView.current.tgt = sn.data();
+          oppView.current.recvAt = performance.now();
+        }, () => {});
+      }
       if (!isHost && d.game !== setupRef.current.game) setSetup((s) => ({ ...s, game: d.game }));
       if (isHost && oppUid && statusRef.current === 'menu') setStatus('idle'); // เพื่อนเข้าห้องแล้ว
       if (statusRef.current === 'waiting' && d.p?.[uid]?.ready && p?.ready) startCountdown(); // ทั้งคู่พร้อม
@@ -667,6 +766,7 @@ export default function GameMode() {
       clearInterval(timerRef.current);
       g.current = mk({ seed: setupRef.current.mode === 'real' ? roomData.current?.seed : undefined });
       finishedRef.current = false;
+      oppView.current = newView();
       setHud(HUD0);
       setLost(false);
       if (setupRef.current.mode !== 'real') setOpp(null);
@@ -716,7 +816,7 @@ export default function GameMode() {
   const skipWait = () => { setResult({ ...finalRef.current, opp: null }); setStatus('over'); };
 
   useEffect(() => {
-    if (!['check', 'waiting', 'countdown', 'playing'].includes(status)) return undefined;
+    if (!['check', 'waiting', 'countdown', 'playing', 'waitend'].includes(status)) return undefined;
     let raf;
     let shown = HUD0;
     let shownChk = '';
@@ -724,6 +824,11 @@ export default function GameMode() {
     let shownBot = '';
     const ctx = canvasRef.current.getContext('2d');
     const loop = (now) => {
+      if (status === 'waitend') { // เล่นจบแล้ว ยังดูเพื่อนเล่นต่อได้
+        renderOpp(pipRef.current, oppView.current, now, oppRef.current?.done);
+        raf = requestAnimationFrame(loop);
+        return;
+      }
       const s = g.current;
       const dt = Math.min(0.05, (now - (s.last || now)) / 1000);
       s.last = now;
@@ -760,6 +865,13 @@ export default function GameMode() {
         if (s.bot) {
           const k = `${s.bot.score}${s.bot.done}`;
           if (k !== shownBot) { shownBot = k; setOpp({ name: s.bot.p.name, score: s.bot.score, done: s.bot.done }); }
+        }
+        if (s.mode === 'real') {
+          renderOpp(pipRef.current, oppView.current, now, oppRef.current?.done);
+          if (roomMeta.current && now - s.liveAt > LIVE_MS) {
+            s.liveAt = now;
+            setDoc(liveDoc(roomMeta.current.code, roomMeta.current.uid), packLive(s)).catch(() => {});
+          }
         }
         if (s.mode === 'real' && now - s.syncAt > 700) {
           s.syncAt = now;
@@ -837,6 +949,13 @@ export default function GameMode() {
             {SPEEDS.map((sp, i) => (
               <button key={sp.v} type="button" className={i === speedIdx ? 'on' : ''} aria-pressed={i === speedIdx} onClick={() => changeSpeed(i)}>×{sp.v}</button>
             ))}
+          </div>
+        )}
+
+        {setup.mode === 'real' && (playing || status === 'waitend') && (
+          <div className={`gm-pip${status === 'waitend' ? ' big' : ''}`} aria-label={`มุมมองการเล่นของ ${opp?.name || 'เพื่อน'}`}>
+            <canvas ref={pipRef} />
+            <span>{opp?.name || 'เพื่อน'} · {opp?.score ?? 0}{opp?.done ? ' ✓ จบแล้ว' : ''}</span>
           </div>
         )}
 
@@ -935,6 +1054,14 @@ export default function GameMode() {
           <div className="gm-overlay">
             <h2>พร้อมออกกำลังกายหรือยัง?</h2>
             <p className="gm-sub">{game.emoji} {game.name} · {modeLabel}</p>
+            <div className="gm-pick" role="group" aria-label="ระดับความเร็วผลไม้">
+              <span>เลือกความเร็วผลไม้ก่อนเริ่ม (ยิ่งเร็ว คะแนนคูณตามความเร็ว)</span>
+              <div className="gm-row">
+                {SPEEDS.map((sp, i) => (
+                  <button key={sp.v} type="button" aria-pressed={i === speedIdx} className={`gm-btn small${i === speedIdx ? ' primary' : ''}`} onClick={() => changeSpeed(i)}>{sp.label} ×{sp.v}</button>
+                ))}
+              </div>
+            </div>
             <ul className="gm-rules">
               <li>ยืนห่างกล้องประมาณ 1.5–2 เมตร ให้เห็นตั้งแต่ศีรษะถึงเอว และเห็นแขนทั้งสองข้าง</li>
               <li>ต้องชกหมัดจริง งอแขนแล้วชกออกไปให้เหยียดตรง ผลไม้ถึงจะแตก (แค่เอามือไปโดนหรือปัดมือไม่แตก) ได้ 10 คะแนน ต่อเนื่องจะได้คะแนนคูณ</li>
@@ -946,7 +1073,7 @@ export default function GameMode() {
               {versus && <li>แข่งกับ{setup.mode === 'bot' ? 'บอท' : 'เพื่อน'}: ใครได้คะแนนรวมมากกว่าชนะ{setup.mode === 'real' ? ' ผลไม้และระเบิดเรียงเหมือนกันทั้งสองฝั่ง' : ''}</li>}
               <li>ก้าวเท้าซ้าย-ขวาตามตำแหน่งผลไม้ และสลับแขนให้สมดุลกัน</li>
               <li>วอร์มไหล่และแขนก่อนเล่น หากรู้สึกเจ็บหรือเวียนศีรษะให้หยุดพักทันที</li>
-              <li>ภาพจากกล้องถูกประมวลผลบนเครื่องของคุณเท่านั้น (ส่งเฉพาะคะแนนให้เพื่อน)</li>
+              <li>ภาพจากกล้องถูกประมวลผลบนเครื่องของคุณเท่านั้น{setup.mode === 'real' ? ' เพื่อนจะเห็นแค่คะแนนและโครงร่างท่าทางของคุณ ไม่เห็นภาพวิดีโอ' : ''}</li>
             </ul>
             {message && <p className="gm-msg" role="alert">{message}</p>}
             <div className="gm-actions">
@@ -1087,6 +1214,12 @@ const css = `
 .gm-stats b { font:600 24px 'Kanit',sans-serif; }
 .gm-stats span { font-size:11.5px; color:#9fb4b8; }
 .gm-btn:disabled { opacity:.4; cursor:not-allowed; }
+.gm-btn.small { min-height:38px; padding:0 14px; font-size:13px; }
+.gm-pick { display:flex; flex-direction:column; align-items:center; gap:8px; font-size:13px; color:#9fb4b8; }
+.gm-pip { position:absolute; right:12px; top:120px; z-index:6; width:min(30%,230px); border:1px solid #1f6d6a; border-radius:12px; overflow:hidden; background:#030b0e; box-shadow:0 0 16px rgba(0,0,0,.5); pointer-events:none; }
+.gm-pip canvas { display:block; width:100%; height:auto; }
+.gm-pip span { display:block; padding:4px 8px; font-size:12px; color:#dff1ec; background:rgba(2,8,10,.85); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gm-pip.big { top:auto; bottom:12px; width:min(46%,360px); }
 .gm-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; width:min(620px,100%); }
 .gm-card { display:flex; flex-direction:column; align-items:center; gap:6px; padding:16px 14px; border:1px solid #2a5360; border-radius:14px; background:rgba(8,28,34,.7); color:inherit; font-family:inherit; text-align:center; cursor:pointer; transition:border-color .2s, transform .15s, box-shadow .2s; }
 .gm-card:hover { border-color:#7cff31; box-shadow:0 0 16px rgba(125,255,45,.2); }
@@ -1114,6 +1247,7 @@ const css = `
 .gm-vs.win { color:#c6ff38; } .gm-vs.lose { color:#ff8da1; } .gm-vs.draw { color:#ffd24a; }
 @media (max-width:640px) {
   .gm-speed span { display:none; }
+  .gm-pip { top:96px; width:34%; }
   .gm-code { font-size:52px; }
   .gm-timer { font-size:24px; }
   .gm-kcal { font-size:11px; }
