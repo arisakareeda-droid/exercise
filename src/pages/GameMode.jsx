@@ -51,7 +51,7 @@ const PUNCH_RISE = 12;      // แขนต้องเหยียดเพิ�
 const PUNCH_WINDOW = 800;   // ms หลังชก ที่หมัดนั้นทำให้ผลไม้แตกได้ (เดิม 500)
 const PUNCH_COOLDOWN = 200; // ms ระยะห่างขั้นต่ำระหว่างหมัดแต่ละครั้งของแขนเดียวกัน
 const FAST_V = 1.5;         // มือที่เคลื่อนเร็วกว่านี้ (เท่าของความกว้างไหล่/วินาที) ก็ทำให้ผลไม้แตกได้ แม้ระบบยังไม่ยืนยันว่าเป็นหมัด ตั้งเป็น 99 ถ้าอยากปิด
-const HIT_REACH = 2.0;      // ขยายโซนชนรอบกำปั้น (เท่าของ FIST_R) ยิ่งมากยิ่งโดนง่าย (เดิม 1.5)
+const HIT_DIST = FRUIT_R * 0.8 + FIST_R; // ระยะที่ถือว่า 'มือแตะผลไม้' (ประมาณขอบวงกำปั้นแตะขอบผลไม้ที่เห็นบนจอ) เพิ่มตัวเลขถ้าอยากให้โดนง่ายขึ้น
 const LOST_MS = 1200;       // มองไม่เห็นตัวนานเท่านี้ เกมจะหยุดชั่วคราว
 const READY_MS = 1000;      // ต้องยืนอยู่ในตำแหน่งที่ถูกต้องนิ่ง ๆ นานเท่านี้ก่อนเริ่มนับถอยหลัง
 
@@ -83,18 +83,24 @@ const waitIce = (pc) => new Promise((resolve) => { // รอเก็บเส�
   });
 });
 let liveErr = ''; // ข้อผิดพลาดล่าสุดตอนส่ง/รับภาพการเล่น (ไว้บอกผู้เล่น)
-const newView = () => ({ tgt: null, curJ: null, curF: null, recvAt: 0, last: 0, since: performance.now() });
+const newView = () => ({ tgt: null, curJ: null, curF: null, recvAt: 0, last: 0, since: performance.now(), parts: [], floats: [], rings: [], flash: 0, seen: 0, init: false });
 const liveDoc = (code, uid) => doc(getFirestore(auth.app), ROOMS, `${code}-live-${uid}`);
 
-// แพ็กภาพการเล่น (โครงร่าง กำปั้น ผลไม้) เป็นอาร์เรย์ตัวเลขแบน ๆ — Firestore ไม่รองรับอาร์เรย์ซ้อนอาร์เรย์
+// แพ็กภาพการเล่น (โครงร่าง กำปั้น ผลไม้ เหตุการณ์ และค่าสถานะ) เป็นอาร์เรย์ตัวเลขแบน ๆ — Firestore ไม่รองรับอาร์เรย์ซ้อนอาร์เรย์
 function packLive(s) {
   const j = [];
   JOINTS.forEach((i) => { const p = s.joints[i]; j.push(p ? r3(p.x / W) : -1, p ? r3(p.y / H) : -1); });
   const f = [];
   s.fists.forEach((ft) => f.push(ft.ok ? r3(ft.x / W) : -1, ft.ok ? r3(ft.y / H) : -1, ft.active ? 1 : 0));
-  const o = [];
-  s.objs.slice(0, 12).forEach((ob) => o.push(ob.bomb ? -1 : FRUITS.findIndex((fr) => fr[0] === ob.emoji), r3(ob.x / W), r3(ob.y / H), r3((ob.vy * s.speed) / H)));
-  return { j, f, o, ar: r3(W / H), sc: s.score };
+  const o = []; // ผลไม้/ระเบิด ลูกละ 5 ค่า: ชนิด(-1=ระเบิด), x, y, ความเร็วตก, มุมหมุน
+  s.objs.slice(0, 12).forEach((ob) => o.push(ob.bomb ? -1 : FRUITS.findIndex((fr) => fr[0] === ob.emoji), r3(ob.x / W), r3(ob.y / H), r3((ob.vy * s.speed) / H), r3(ob.rot)));
+  const e = []; // เหตุการณ์ผลไม้แตก/โดนระเบิด เหตุการณ์ละ 6 ค่า: id, ชนิด(0=ผลไม้ 1=ระเบิด), x, y, คะแนน, ชนิดผลไม้
+  s.evq.forEach((ev) => e.push(ev.id, ev.k, r3(ev.x / W), r3(ev.y / H), ev.v, ev.f));
+  return {
+    j, f, o, e, ar: r3(W / H), sc: s.score, lv: s.lives, cb: s.combo, kc: Math.round(s.kcal * 10) / 10,
+    sp: s.speed, l: s.punches[0], r: s.punches[1], tm: s.cfg.time ? 1 : 0,
+    t: s.cfg.time ? Math.max(0, Math.ceil(s.cfg.time - s.activeMs / 1000)) : 0,
+  };
 }
 
 function easeArr(cur, tgt, a, stride) {
@@ -107,7 +113,16 @@ function easeArr(cur, tgt, a, stride) {
   return cur;
 }
 
-// วาดฝั่งเพื่อน: ภาพกล้องของเพื่อน (ถ้าเชื่อมได้) + โครงร่าง กำปั้น ผลไม้ ที่เพื่อนกำลังเล่น วางตามสัดส่วนจอของเพื่อนเพื่อให้ตำแหน่งตรงกัน
+// เอฟเฟกต์ระเบิดฝั่งเพื่อน (สร้างซ้ำจากเหตุการณ์ที่เพื่อนส่งมา) ขนาดสเกลตามแคนวาส (u)
+function oppSplash(v, x, y, color, n, u) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const sp = 120 + Math.random() * 320;
+    v.parts.push({ x, y, vx: Math.cos(a) * sp * u, vy: (Math.sin(a) * sp - 120) * u, r: Math.max(1.5, (3 + Math.random() * 6) * u), life: 0.6 + Math.random() * 0.4, color });
+  }
+}
+
+// วาดฝั่งเพื่อน: ภาพกล้องของเพื่อน (ถ้าเชื่อมได้) + โครงร่าง กำปั้น ผลไม้ ระเบิด และเอฟเฟกต์แตก/คะแนน เหมือนที่เพื่อนเห็นบนจอตัวเอง
 function renderOpp(canvas, v, now, done, rv, conn) {
   if (!canvas) return;
   const bw = canvas.clientWidth || 320;
@@ -163,38 +178,121 @@ function renderOpp(canvas, v, now, done, rv, conn) {
   const a = Math.min(1, dt * 12);
   v.curJ = easeArr(v.curJ, d.j, a, 2);
   v.curF = easeArr(v.curF, d.f, a, 3);
+
+  // เหตุการณ์ใหม่จากเพื่อน (ผลไม้แตก / โดนระเบิด) → ทำเอฟเฟกต์เหมือนฝั่งเพื่อน
+  const ev = d.e || [];
+  if (!v.init) { // ข้อมูลชุดแรกของรอบนี้: จำ id ล่าสุดไว้ ไม่เล่นเหตุการณ์เก่าซ้ำ
+    v.init = true;
+    for (let i = 0; i + 5 < ev.length; i += 6) v.seen = Math.max(v.seen, ev[i]);
+  } else {
+    for (let i = 0; i + 5 < ev.length; i += 6) {
+      if (ev[i] <= v.seen) continue;
+      v.seen = ev[i];
+      const ex = ox + ev[i + 2] * rw;
+      const ey = oy + ev[i + 3] * rh;
+      if (ev[i + 1] === 1) {
+        oppSplash(v, ex, ey, '#ffb02e', 18, u); oppSplash(v, ex, ey, '#ff4a2e', 10, u);
+        v.rings.push({ x: ex, y: ey, r: 14 * u, life: 0.5 });
+        v.floats.push({ x: ex, y: ey, text: d.tm ? '-20' : '-1 ❤', color: '#ff6b81', life: 1 });
+        v.flash = 1;
+      } else {
+        oppSplash(v, ex, ey, FRUITS[ev[i + 5]]?.[1] || '#c6ff38', 14, u);
+        v.floats.push({ x: ex, y: ey, text: `+${ev[i + 4]}`, color: '#c6ff38', life: 0.8 });
+      }
+    }
+  }
+  v.parts.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 900 * u * dt; p.life -= dt; });
+  v.parts = v.parts.filter((p) => p.life > 0);
+  v.floats.forEach((f) => { f.y -= 70 * u * dt; f.life -= dt; });
+  v.floats = v.floats.filter((f) => f.life > 0);
+  v.rings.forEach((r) => { r.r += 520 * u * dt; r.life -= dt; });
+  v.rings = v.rings.filter((r) => r.life > 0);
+  v.flash = Math.max(0, v.flash - dt * 2.5);
+
   ctx.save();
   ctx.beginPath();
   ctx.rect(ox, oy, rw, rh);
   ctx.clip();
   ctx.lineCap = 'round';
-  BONES.forEach(([p, q]) => {
+  BONES.forEach(([p, q, side]) => {
     const i = JI[p] * 2;
     const j = JI[q] * 2;
     if (v.curJ[i] < 0 || v.curJ[j] < 0) return;
+    const hot = side != null && v.curF[side * 3 + 2] > 0.5; // แขนข้างที่เพิ่งชกเรืองสว่างเหมือนฝั่งเพื่อน
     ctx.beginPath();
     ctx.moveTo(ox + v.curJ[i] * rw, oy + v.curJ[i + 1] * rh);
     ctx.lineTo(ox + v.curJ[j] * rw, oy + v.curJ[j + 1] * rh);
-    ctx.strokeStyle = 'rgba(124,255,49,.65)';
-    ctx.lineWidth = Math.max(3, 6 * u);
+    ctx.strokeStyle = hot ? 'rgba(233,255,176,.95)' : 'rgba(124,255,49,.6)';
+    ctx.lineWidth = Math.max(3, (hot ? 9 : 5) * u);
     ctx.stroke();
   });
-  if (!done) {
+  for (let i = 0; i < v.curJ.length; i += 2) {
+    if (v.curJ[i] < 0) continue;
+    ctx.beginPath();
+    ctx.arc(ox + v.curJ[i] * rw, oy + v.curJ[i + 1] * rh, Math.max(2, 6 * u), 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.fill();
+  }
+  if (!done) { // ผลไม้และระเบิดที่กำลังตกฝั่งเพื่อน
     const el = Math.min(0.6, (now - v.recvAt) / 1000);
     const o = d.o || [];
-    ctx.font = `${Math.round(76 * u)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-    for (let i = 0; i + 3 < o.length; i += 4) {
+    ctx.font = `${Math.max(30, Math.round(76 * u))}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    for (let i = 0; i + 4 < o.length; i += 5) {
       const y = o[i + 2] + o[i + 3] * el;
-      if (y <= 1.1) ctx.fillText(o[i] < 0 ? '💣' : (FRUITS[o[i]]?.[0] || '🍎'), ox + o[i + 1] * rw, oy + y * rh);
+      if (y > 1.1) continue;
+      const px = ox + o[i + 1] * rw;
+      const py = oy + y * rh;
+      if (o[i] < 0) {
+        const pulse = 0.5 + 0.5 * Math.sin(now / 130);
+        ctx.beginPath();
+        ctx.arc(px, py, (FRUIT_R + 6 + pulse * 6) * u, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255,71,109,${0.45 + pulse * 0.4})`;
+        ctx.lineWidth = Math.max(2, 4 * u);
+        ctx.stroke();
+      }
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(o[i + 4] || 0);
+      ctx.fillText(o[i] < 0 ? '💣' : (FRUITS[o[i]]?.[0] || '🍎'), 0, 4 * u);
+      ctx.restore();
     }
   }
+  v.rings.forEach((r) => {
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,190,70,${Math.max(0, r.life * 1.6)})`;
+    ctx.lineWidth = Math.max(3, 8 * u);
+    ctx.stroke();
+  });
+  v.parts.forEach((p) => {
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life * 1.6));
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+  ctx.font = `700 ${Math.max(14, Math.round(40 * u))}px Kanit, sans-serif`;
+  v.floats.forEach((f) => {
+    ctx.globalAlpha = Math.min(1, f.life * 1.5);
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, f.x, f.y - 50 * u);
+  });
+  ctx.globalAlpha = 1;
   for (let i = 0; i < 6; i += 3) {
     if (v.curF[i] < 0) continue;
     ctx.beginPath();
     ctx.arc(ox + v.curF[i] * rw, oy + v.curF[i + 1] * rh, FIST_R * u, 0, Math.PI * 2);
     ctx.lineWidth = Math.max(2, (v.curF[i + 2] ? 8 : 4) * u);
     ctx.strokeStyle = v.curF[i + 2] ? '#e9ffb0' : '#7cff31';
+    ctx.shadowColor = '#7cff31';
+    ctx.shadowBlur = 12 * Math.max(0.5, u);
     ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+  if (v.flash > 0) {
+    ctx.fillStyle = `rgba(255,40,70,${v.flash * 0.38})`;
+    ctx.fillRect(ox, oy, rw, rh);
   }
   ctx.restore();
 }
@@ -213,7 +311,7 @@ const newBot = (lvl) => ({ p: BOTS[lvl] || BOTS.mid, score: 0, lives: MAX_LIVES,
 const newGame = (o = {}) => ({
   objs: [], parts: [], floats: [], rings: [],
   score: 0, lives: GAMES[o.game]?.lives || MAX_LIVES, combo: 0, maxCombo: 0, hits: 0, bombs: 0,
-  spawned: 0, bombStreak: 0, spawnIn: 700, flash: 0, shake: 0,
+  spawned: 0, bombStreak: 0, spawnIn: 700, flash: 0, shake: 0, evId: 0, evq: [],
   last: 0, activeMs: 0, pausedMs: 0, lostMs: 0, readyMs: 0, lastHint: 0,
   lastVideoTime: -1, pose: null, world: null, joints: {}, bodyOk: false,
   view: { sh: false, el: false, wr: false, dist: 'none' },
@@ -329,6 +427,14 @@ function trackFists(s, video, landmarker, now) {
   });
 }
 
+const segDist = (px, py, ax, ay, bx, by) => { // ระยะจากจุด (px,py) ถึงเส้นตรง a→b
+  const dx = bx - ax;
+  const dy = by - ay;
+  const l2 = dx * dx + dy * dy;
+  const t = l2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2)) : 0;
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+};
+
 function splash(s, o, color, n) {
   for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2;
@@ -386,7 +492,16 @@ function step(s, dt, now) {
 
   s.fists.forEach((f) => {
     if (!f.ok) return;
-    const i = s.objs.findIndex((o) => Math.hypot(o.x - f.x, o.y - f.y) < FRUIT_R + FIST_R * HIT_REACH);
+    // เฉพาะผลไม้ที่มือข้างนี้แตะจริงเท่านั้น (นับรวมเส้นทางที่มือเพิ่งเคลื่อนผ่านในเฟรมนี้ กันมือเร็วทะลุผลไม้) และเลือกลูกที่ใกล้ที่สุด
+    const pv = f.trail.length > 1 ? f.trail[f.trail.length - 2] : null;
+    const ax = pv && Math.hypot(f.x - pv.x, f.y - pv.y) < 260 ? pv.x : f.x;
+    const ay = pv && Math.hypot(f.x - pv.x, f.y - pv.y) < 260 ? pv.y : f.y;
+    let i = -1;
+    let bestD = HIT_DIST;
+    s.objs.forEach((o, k) => {
+      const d = segDist(o.x, o.y, ax, ay, f.x, f.y);
+      if (d < bestD) { bestD = d; i = k; }
+    });
     if (i < 0) return;
     if (!f.active && f.v <= FAST_V) {
       // มือไปแตะผลไม้ แต่ไม่ใช่หมัดจริง (ไม่ได้งอแล้วชกออก) → ไม่แตก และบอกให้ชกออกไป
@@ -409,6 +524,7 @@ function step(s, dt, now) {
         s.lives -= 1;
         s.floats.push({ x: o.x, y: o.y, text: '-1 ❤', color: '#ff6b81', life: 1 });
       }
+      s.evId += 1; s.evq.push({ id: s.evId, k: 1, x: o.x, y: o.y, v: 0, f: -1 }); if (s.evq.length > 6) s.evq.shift();
       try { navigator.vibrate?.(180); } catch { /* ไม่รองรับก็ข้าม */ }
     } else {
       s.combo += 1; s.maxCombo = Math.max(s.maxCombo, s.combo); s.hits += 1;
@@ -417,6 +533,7 @@ function step(s, dt, now) {
       s.score += pts;
       splash(s, o, o.color, 18);
       s.floats.push({ x: o.x, y: o.y, text: `+${pts}`, color: '#c6ff38', life: 0.8 });
+      s.evId += 1; s.evq.push({ id: s.evId, k: 0, x: o.x, y: o.y, v: pts, f: FRUITS.findIndex((fr) => fr[0] === o.emoji) }); if (s.evq.length > 6) s.evq.shift();
     }
   });
 
@@ -550,6 +667,7 @@ export default function GameMode() {
   const oppView = useRef(newView());
   const liveUnsub = useRef(null);
   const liveFor = useRef(null);
+  const hadOpp = useRef(false); // เคยมีเพื่อนในห้องแล้ว (ใช้ตรวจว่าเพื่อนออกจากห้อง)
 
   // menu → idle(กติกา) → loading → check → [waiting] → countdown → playing → [waitend] → over
   const [status, setStatus] = useState('menu');
@@ -559,6 +677,7 @@ export default function GameMode() {
   const [bests, setBests] = useState(() => ({ fruit: readBest('fruit'), time: readBest('time') }));
   const [room, setRoom] = useState(null);
   const [opp, setOpp] = useState(null);
+  const [oppLive, setOppLive] = useState(null); // ค่าสถานะสดของเพื่อน (หัวใจ คอมโบ แคลอรี่ ความเร็ว ฯลฯ) ไว้โชว์เหมือนจอเรา
   const [joinCode, setJoinCode] = useState('');
   const [count, setCount] = useState(3);
   const [message, setMessage] = useState('');
@@ -600,11 +719,16 @@ export default function GameMode() {
     return () => unsubscribe();
   }, [navigate]);
 
-  useEffect(() => () => {
-    clearInterval(timerRef.current);
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    try { landmarkerRef.current?.close(); } catch { /* ปิดไม่ได้ก็ข้าม */ }
-    leaveRoom();
+  useEffect(() => {
+    const bye = () => { try { leaveRoom(); } catch { /* ออกไม่ได้ก็ข้าม */ } };
+    window.addEventListener('pagehide', bye); // ปิดแท็บ/รีเฟรช ให้เพื่อนรู้ว่าออกจากห้องแล้ว (ทำได้เท่าที่เบราว์เซอร์ให้เวลา)
+    return () => {
+      window.removeEventListener('pagehide', bye);
+      clearInterval(timerRef.current);
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      try { landmarkerRef.current?.close(); } catch { /* ปิดไม่ได้ก็ข้าม */ }
+      leaveRoom();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -727,6 +851,7 @@ export default function GameMode() {
     if (m) deleteDoc(liveDoc(m.code, m.uid)).catch(() => {});
     if (m?.isHost) deleteDoc(rtcDoc(m.code)).catch(() => {});
     roomMeta.current = null; roomData.current = null; oppRef.current = null; mine.current = null;
+    hadOpp.current = false;
     setRoom(null);
     if (!m) return;
     if (m.isHost) deleteDoc(roomDoc(m.code)).catch(() => {});
@@ -738,13 +863,27 @@ export default function GameMode() {
     stopCamera();
     leaveRoom();
     g.current = null;
-    setOpp(null); setResult(null); setMessage(msg);
+    setOpp(null); setOppLive(null); setResult(null); setMessage(msg);
+    setJoinCode(''); // ไม่ค้างรหัสห้องเดิม
     setMenuStep('game'); setStatus('menu');
+  };
+
+  // เพื่อนออกจากห้อง: ปกติเด้งกลับเมนูทั้งคู่ แต่ถ้าอยู่หน้าสรุปผลอยู่ จะเก็บหน้าผลไว้ให้ดู แล้วออกจากห้องให้เงียบ ๆ
+  const peerGone = (msg) => {
+    const st = statusRef.current;
+    if (st === 'over' || st === 'waitend') {
+      leaveRoom();
+      if (st === 'waitend' && finalRef.current) setResult({ ...finalRef.current, opp: null });
+      setOpp(null); setOppLive(null); setJoinCode(''); setMessage(msg);
+      statusRef.current = 'over';
+      setStatus('over');
+    } else toMenu(msg);
   };
 
   const listen = (code, isHost) => {
     unsubRef.current?.();
     const uid = auth.currentUser.uid;
+    hadOpp.current = false;
     roomMeta.current = { code, isHost, uid };
     mine.current = { ready: false, score: 0, lives: 0, kcal: 0, done: false, out: false };
     rtcUnsub.current?.();
@@ -763,10 +902,12 @@ export default function GameMode() {
       }
     }, (e) => { liveErr = e?.code || 'rtc'; console.warn('rtc listen', e); });
     unsubRef.current = onSnapshot(roomDoc(code), (snap) => {
-      if (!snap.exists()) { toMenu('เพื่อนออกจากห้องแล้ว'); return; }
+      if (!snap.exists()) { peerGone('เพื่อนออกจากห้องแล้ว'); return; }
       const d = snap.data();
       roomData.current = d;
       const oppUid = isHost ? d.guest : d.host;
+      if (oppUid) hadOpp.current = true;
+      else if (hadOpp.current) { peerGone('เพื่อนออกจากห้องแล้ว'); return; } // เพื่อนกดออก → เราเด้งออกด้วย
       const oppName = (isHost ? d.guestName : d.hostName) || 'เพื่อน';
       const p = oppUid ? d.p?.[oppUid] : null;
       setRoom({ code, isHost, joined: !!oppUid, oppName });
@@ -944,6 +1085,7 @@ export default function GameMode() {
       g.current = mk({ seed: setupRef.current.mode === 'real' ? roomData.current?.seed : undefined });
       finishedRef.current = false;
       oppView.current = newView();
+      setOppLive(null);
       setHud(HUD0);
       setLost(false);
       if (setupRef.current.mode !== 'real') setOpp(null);
@@ -1009,9 +1151,22 @@ export default function GameMode() {
     let shownChk = '';
     let shownLost = false;
     let shownBot = '';
+    let oppKey = '';
+    let oppAt = 0;
+    const mirror = (now) => { // คัดค่าสถานะสดของเพื่อนขึ้นจอ (ไม่ถี่เกินไป)
+      if (now - oppAt < 150) return;
+      oppAt = now;
+      const t = oppView.current.tgt;
+      if (!t) return;
+      const key = `${t.sc}|${t.lv}|${t.cb}|${t.kc}|${t.sp}|${t.l}|${t.r}|${t.t}`;
+      if (key === oppKey) return;
+      oppKey = key;
+      setOppLive({ sc: t.sc, lives: t.lv, combo: t.cb, kcal: t.kc, speed: t.sp, l: t.l, r: t.r, t: t.t, tm: t.tm });
+    };
     const ctx = canvasRef.current.getContext('2d');
     const loop = (now) => {
       if (status === 'waitend') { // เล่นจบแล้ว ยังดูเพื่อนเล่นต่อได้
+        mirror(now);
         renderOpp(pipRef.current, oppView.current, now, oppRef.current?.done, remoteRef.current, pcRef.current?.connectionState);
         raf = requestAnimationFrame(loop);
         return;
@@ -1019,7 +1174,7 @@ export default function GameMode() {
       const s = g.current;
       const dt = Math.min(0.05, (now - (s.last || now)) / 1000);
       s.last = now;
-      if (s.mode === 'real') renderOpp(pipRef.current, oppView.current, now, oppRef.current?.done, remoteRef.current, pcRef.current?.connectionState);
+      if (s.mode === 'real') { mirror(now); renderOpp(pipRef.current, oppView.current, now, oppRef.current?.done, remoteRef.current, pcRef.current?.connectionState); }
       trackFists(s, videoRef.current, landmarkerRef.current, now);
 
       if (status === 'check') {
@@ -1229,7 +1384,7 @@ export default function GameMode() {
                   <input className="gm-input" inputMode="numeric" maxLength={4} placeholder="รหัส 4 หลัก" aria-label="รหัสห้อง" value={joinCode} onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, ''))} />
                   <button type="button" className="gm-btn" onClick={joinRoom}>เข้าห้อง</button>
                 </div>
-                <button type="button" className="gm-btn" onClick={() => setMenuStep('opp')}>‹ ย้อนกลับ</button>
+                <button type="button" className="gm-btn" onClick={() => { setJoinCode(''); setMessage(''); setMenuStep('opp'); }}>‹ ย้อนกลับ</button>
               </>
             )}
 
@@ -1238,7 +1393,7 @@ export default function GameMode() {
                 <h2>รอเพื่อนเข้าห้อง</h2>
                 <p className="gm-sub">บอกรหัสนี้ให้เพื่อน แล้วให้เพื่อนเลือก “เพื่อนตัวจริง → เข้าห้อง”</p>
                 <div className="gm-code">{room?.code || '····'}</div>
-                <button type="button" className="gm-btn" onClick={() => { leaveRoom(); setMenuStep('room'); }}>ยกเลิกห้อง</button>
+                <button type="button" className="gm-btn" onClick={() => { leaveRoom(); setJoinCode(''); setMenuStep('room'); }}>ยกเลิกห้อง</button>
               </>
             )}
 
@@ -1345,6 +1500,7 @@ export default function GameMode() {
               </div>
               <p className="gm-note">แคลอรี่เป็นค่าประมาณจากน้ำหนัก {result.weight} กก. เวลาที่เล่น และความถี่ของหมัด ไม่ใช่ค่าที่วัดได้จริง</p>
               {weaker && <p className="gm-tipbox">💡 รอบนี้ใช้แขน{weaker}น้อยกว่าอย่างชัดเจน รอบหน้าลองสลับแขนให้สมดุลขึ้น</p>}
+              {message && <p className="gm-msg" role="alert">{message}</p>}
               <div className="gm-actions">
                 <button type="button" className="gm-btn primary" onClick={begin} disabled={setup.mode === 'real' && !room?.joined}>เล่นอีกครั้ง</button>
                 <button type="button" className="gm-btn" onClick={() => toMenu()}>เปลี่ยนเกม/โหมด</button>
@@ -1362,9 +1518,25 @@ export default function GameMode() {
               <canvas ref={pipRef} className="gm-canvas" />
               <div className="gm-fhud">
                 <div className="gm-fname">{opp?.name || 'เพื่อน'}</div>
-                <div className="gm-fscore">{opp?.score ?? 0}</div>
+                <div className="gm-fscore">{opp?.done ? opp.score : (oppLive?.sc ?? opp?.score ?? 0)}</div>
+                {!game.time && (
+                  <div className="gm-hearts" aria-label={`พลังชีวิตเพื่อน ${opp?.out ? 0 : (oppLive?.lives ?? MAX_LIVES)}`}>
+                    {Array.from({ length: MAX_LIVES }, (_, i) => (
+                      <span key={i} className={i < (opp?.out ? 0 : (oppLive?.lives ?? MAX_LIVES)) ? '' : 'lost'}>❤</span>
+                    ))}
+                  </div>
+                )}
+                {game.time > 0 && oppLive && <div className="gm-ftimer">⏱ {oppLive.t}s</div>}
                 <div className="gm-fstate">{friendState}</div>
               </div>
+              {oppLive && (
+                <div className="gm-fside">
+                  {oppLive.combo >= 2 && <div className={`combo${oppLive.combo >= 5 ? ' hot' : ''}`}>คอมโบ {oppLive.combo}</div>}
+                  <div className="kcal">🔥 {Number(oppLive.kcal || 0).toFixed(1)} kcal</div>
+                  <div className="lr">หมัดซ้าย {oppLive.l} · ขวา {oppLive.r}</div>
+                </div>
+              )}
+              {oppLive && <div className="gm-fspeed">ความเร็ว ×{oppLive.speed}</div>}
             </>
           ) : (
             <div className="gm-botcard">
@@ -1482,6 +1654,15 @@ const css = `
 .gm-note { max-width:460px; font-size:12px; line-height:1.5; color:#a9bdc2; }
 .gm-code { font:700 72px/1 'Kanit',sans-serif; letter-spacing:.12em; color:#c6ff38; text-shadow:0 0 24px rgba(110,255,50,.4); }
 .gm-mid { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.gm-fhud .gm-hearts { padding:2px 8px; background:transparent; font-size:clamp(14px,3.6vmin,22px); }
+.gm-ftimer { font:700 clamp(16px,3.6vmin,24px)/1 'Kanit',sans-serif; color:#ffd24a; }
+.gm-fside { position:absolute; right:10px; top:10px; display:flex; flex-direction:column; align-items:flex-end; gap:4px; pointer-events:none; }
+.gm-fside > div { padding:2px 10px; border-radius:99px; background:rgba(2,8,10,.7); font-size:clamp(10px,2.2vmin,13px); color:#f0faf6; text-shadow:0 1px 6px rgba(0,0,0,.9); }
+.gm-fside .combo { font:600 clamp(13px,3vmin,18px) 'Kanit',sans-serif; color:#e9ffb0; }
+.gm-fside .combo.hot { color:#ffd24a; }
+.gm-fside .kcal { color:#ffc58a; }
+.gm-wrap.split .gm-fside .lr { display:none; }
+.gm-fspeed { position:absolute; left:10px; bottom:10px; padding:3px 10px; border-radius:99px; background:rgba(2,8,10,.7); font-size:clamp(10px,2.2vmin,12px); color:#f0faf6; pointer-events:none; }
 .gm-opp { padding:3px 12px; border-radius:99px; background:rgba(2,8,10,.7); font-size:13px; color:#f0faf6; white-space:nowrap; }
 .gm-opp b { margin-left:4px; font:600 16px 'Kanit',sans-serif; color:#ffd24a; }
 .gm-timer { width:max-content; padding:6px 14px; border-radius:14px; background:rgba(2,8,10,.6); font:700 30px/1 'Kanit',sans-serif; color:#ffd24a; text-shadow:0 2px 10px rgba(0,0,0,.9); }
