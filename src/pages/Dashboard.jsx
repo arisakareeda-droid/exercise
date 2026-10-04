@@ -34,6 +34,21 @@ const getSavedDailyCalories = () => {
   }
 };
 
+// ---------- รายการอาหารที่กินในแต่ละวัน (ไว้โชว์ลิสต์ และลบรายการที่กดผิดได้) ----------
+const FOODLOG_PREFIX = "fittrack-foodlog-";
+const readFoodLog = (dayKey) => {
+  try {
+    const raw = localStorage.getItem(FOODLOG_PREFIX + dayKey);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? list.filter((e) => e && e.id && Number.isFinite(Number(e.kcal))) : [];
+  } catch {
+    return [];
+  }
+};
+const writeFoodLog = (dayKey, list) => {
+  try { localStorage.setItem(FOODLOG_PREFIX + dayKey, JSON.stringify(list)); } catch { /* storage optional */ }
+};
+
 // ---------- จำผลคำนวณ BMI / TDEE ไว้ ตราบที่ยังล็อกอินอยู่ (รีเฟรชหรือเปลี่ยนหน้าแล้วไม่หาย) ----------
 const HEALTH_CACHE_KEY = "fittrack-health-result";
 const readHealthCache = () => {
@@ -103,6 +118,9 @@ export default function Dashboard() {
   const [itemNote, setItemNote] = useState("");
   // true เมื่อผู้ใช้กดยืนยันแล้วว่ากินอาหารนี้จริง (บันทึกเข้า "พลังงานที่ได้รับวันนี้")
   const [itemAdded, setItemAdded] = useState(false);
+  const [itemEntryId, setItemEntryId] = useState(null);
+  const [foodLog, setFoodLog] = useState(() => readFoodLog(getLocalDateKey()));
+  const [logOpen, setLogOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [dailyConsumedCalories, setDailyConsumedCalories] = useState(getSavedDailyCalories);
@@ -181,6 +199,7 @@ export default function Dashboard() {
     } catch {
       setDailyConsumedCalories(0);
     }
+    setFoodLog(readFoodLog(todayKey));
   }, [todayKey]);
 
   const dateLabel = new Intl.DateTimeFormat("th-TH", {
@@ -285,6 +304,7 @@ export default function Dashboard() {
     setItemConfidence(null);
     setItemNote("");
     setItemAdded(false);
+    setItemEntryId(null);
     setItemImage(URL.createObjectURL(file));
     setIsAnalyzing(true);
 
@@ -323,6 +343,7 @@ export default function Dashboard() {
       setItemConfidence(Number.isFinite(confidence) ? confidence : null);
       setItemNote(note);
       setItemAdded(false);
+      setItemEntryId(null);
       showToast(`วิเคราะห์อาหารเรียบร้อยแล้ว ${Math.round(calories).toLocaleString()} kcal · ยังไม่ได้บันทึกเป็นพลังงานที่ได้รับ`);
     } catch (error) {
       console.error("Food analysis error:", error);
@@ -335,15 +356,48 @@ export default function Dashboard() {
     }
   };
 
+  // บันทึกอาหาร 1 รายการ: เข้าลิสต์ + บวกยอดรวมของวันนี้
+  const recordFood = (name, kcal) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const dayKey = getLocalDateKey();
+    setFoodLog((prev) => {
+      const next = [...prev, { id, name, kcal, t: Date.now() }];
+      writeFoodLog(dayKey, next);
+      return next;
+    });
+    setDailyConsumedCalories((prev) => {
+      const nextTotal = prev + kcal;
+      try { localStorage.setItem(`fittrack-calories-${dayKey}`, String(nextTotal)); } catch { /* storage optional */ }
+      return nextTotal;
+    });
+    return id;
+  };
+
+  // ลบรายการที่เผลอเพิ่ม: ตัดออกจากลิสต์ + หักแคลอรี่คืน
+  const removeFoodEntry = (entry) => {
+    const dayKey = getLocalDateKey();
+    const kcal = Math.max(0, Math.round(Number(entry.kcal) || 0));
+    if (!entry.legacy) {
+      setFoodLog((prev) => {
+        const next = prev.filter((e) => e.id !== entry.id);
+        writeFoodLog(dayKey, next);
+        return next;
+      });
+    }
+    setDailyConsumedCalories((prev) => {
+      const nextTotal = Math.max(0, prev - kcal);
+      try { localStorage.setItem(`fittrack-calories-${dayKey}`, String(nextTotal)); } catch { /* storage optional */ }
+      return nextTotal;
+    });
+    if (entry.id === itemEntryId) { setItemAdded(false); setItemEntryId(null); }
+    showToast(`ลบ ${entry.name} แล้ว −${kcal.toLocaleString()} kcal`);
+  };
+
   // กดยืนยันว่ากินอาหารที่สแกนไว้จริง → ค่อยบวกเข้า "พลังงานที่ได้รับวันนี้"
   const addItemToDaily = () => {
     const calories = Math.max(0, Math.round(Number(itemCalories) || 0));
     if (itemAdded || calories <= 0) return;
-    setDailyConsumedCalories((prev) => {
-      const nextTotal = prev + calories;
-      try { localStorage.setItem(`fittrack-calories-${getLocalDateKey()}`, String(nextTotal)); } catch { /* storage optional */ }
-      return nextTotal;
-    });
+    setItemEntryId(recordFood(itemName, calories));
     setItemAdded(true);
     showToast(`เพิ่ม ${itemName} แล้ว +${calories.toLocaleString()} kcal ในพลังงานที่ได้รับวันนี้`);
   };
@@ -361,16 +415,7 @@ export default function Dashboard() {
     setItemConfidence(null);
     setItemNote("พลังงานโดยประมาณต่อหนึ่งมื้อ ปริมาณจริงอาจแตกต่างตามวัตถุดิบและขนาดเสิร์ฟ");
     setItemAdded(true);
-
-    setDailyConsumedCalories((prev) => {
-      const nextTotal = prev + calories;
-      try {
-        localStorage.setItem(`fittrack-calories-${getLocalDateKey()}`, String(nextTotal));
-      } catch {
-        /* storage optional */
-      }
-      return nextTotal;
-    });
+    setItemEntryId(recordFood(meal.name, calories));
     showToast(`เพิ่ม ${meal.name} แล้ว +${calories.toLocaleString()} kcal`);
   };
 
@@ -383,6 +428,13 @@ export default function Dashboard() {
     (sum, w) => (getLocalDateKey(new Date(w.t)) === todayKey ? sum + w.kcal : sum), 0
   );
   const burnedKcal = gameBurned + workoutBurned;
+  // รายการที่โชว์: ใหม่สุดอยู่บน + แถวสำหรับยอดเก่าที่บันทึกไว้ก่อนมีลิสต์ (ถ้ามี)
+  const loggedSum = foodLog.reduce((s, e) => s + (Number(e.kcal) || 0), 0);
+  const legacyKcal = Math.max(0, Math.round(dailyConsumedCalories - loggedSum));
+  const loggedItems = [
+    ...[...foodLog].reverse(),
+    ...(legacyKcal > 0 ? [{ id: "legacy", legacy: true, name: "รายการที่บันทึกไว้ก่อนหน้า", kcal: legacyKcal }] : []),
+  ];
   const netCalories = Math.max(0, Math.round(dailyConsumedCalories - burnedKcal));
   const remainingCalories = noTarget ? 0 : dailyTarget - netCalories;
   const overCalories = noTarget ? 0 : Math.max(0, -remainingCalories);
@@ -630,9 +682,7 @@ export default function Dashboard() {
               <div className="food-result-box">
                 {isAnalyzing ? <div className="food-loading">กำลังวิเคราะห์ภาพอาหารด้วย AI...</div> : itemName && itemCalories > 0 ? <>
                   <div className={`food-result-top ${itemImage ? "" : "food-result-text-only"}`}>
-                      {itemImage ? (
-                        <img src={itemImage} alt="ภาพอาหาร" />
-                      ) : (
+                      {itemImage ? null : (
                         <span className="food-result-no-image" aria-hidden="true">
                           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                             <circle cx="24" cy="24" r="17" />
@@ -646,7 +696,7 @@ export default function Dashboard() {
                         <h3>{itemName}</h3>
                         <span className="food-chip">{itemCategory || "อาหารหลัก"}</span>
                         {itemConfidence ? (
-                          <span className="food-chip muted">{`${Math.round(itemConfidence * 100)}% มั่นใจ`}</span>
+                          <span className="food-chip muted">{`${Math.min(100, Math.round(itemConfidence > 1 ? itemConfidence : itemConfidence * 100))}% มั่นใจ`}</span>
                         ) : !itemImage ? (
                           <span className="food-chip muted">เมนูแนะนำ · พลังงานโดยประมาณ</span>
                         ) : (
@@ -673,6 +723,22 @@ export default function Dashboard() {
                 <div className="progress-title">พลังงานที่ได้รับวันนี้</div>
                 <div className="progress-track"><span style={{ width: `${progress}%` }}></span></div>
                 <div className="calorie-stats" key={`${dailyConsumedCalories}-${Math.round(burnedKcal)}`}><div>ได้รับสุทธิ<strong>{netCalories.toLocaleString()} <small>kcal</small></strong><small>กิน {dailyConsumedCalories.toLocaleString()} − เผาผลาญ {Math.round(burnedKcal).toLocaleString()} kcal</small></div><div>เหลืออีก<strong>{Math.max(0, remainingCalories).toLocaleString()} <small>kcal</small></strong><small>จากเป้าหมาย {dailyTarget.toLocaleString()} kcal</small></div></div>
+                <button type="button" className={`food-log-toggle${logOpen ? " open" : ""}`} onClick={() => setLogOpen((o) => !o)} aria-expanded={logOpen}>
+                  <span>รายการอาหารวันนี้ <b>{loggedItems.length}</b></span><i aria-hidden="true">▾</i>
+                </button>
+                {logOpen && (
+                  <ul className="food-log-list">
+                    {loggedItems.length === 0 ? <li className="food-log-empty">ยังไม่มีรายการที่บันทึกไว้</li> : loggedItems.map((entry) => (
+                      <li className="food-log-item" key={entry.id}>
+                        <div className="food-log-info">
+                          <strong>{entry.name}</strong>
+                          <small>{entry.t ? new Date(entry.t).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false }) + " น. · " : ""}{Math.round(entry.kcal).toLocaleString()} kcal</small>
+                        </div>
+                        <button type="button" className="food-log-del" aria-label={`ลบ ${entry.name}`} onClick={() => removeFoodEntry(entry)}>ลบ</button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
               <div className={`warning-card ${overCalories > 0 ? "danger" : "safe"}`}>
                 <strong>{overCalories > 0 ? "⚠️ คุณได้รับพลังงานเกินเป้าหมาย!" : noTarget ? "ℹ️ ยังไม่ได้คำนวณเป้าหมายพลังงาน" : "✓ พลังงานวันนี้อยู่ในเป้าหมาย"}</strong>
@@ -2063,6 +2129,31 @@ html[data-theme="light"] .food-add-btn:disabled, html[data-theme="light"] .food-
   .quick-grid .feature-card { min-height: 190px; padding: 16px 20px; }
   .quick-grid .feature-art { top: 16px; }
 }
+
+/* ===== รายการอาหารวันนี้ (เด้งขึ้นมาใต้การ์ด "พลังงานที่ได้รับวันนี้") + ปุ่มลบ ===== */
+.food-log-toggle { width:100%; margin-top:10px; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid #3d6a2c; border-radius:10px; background:rgba(110,255,45,.07); color:#d6f5c0; font-size:12px; font-weight:600; cursor:pointer; transition:background .2s ease, border-color .2s ease; }
+.food-log-toggle:hover { background:rgba(110,255,45,.14); border-color:#7cff31; }
+.food-log-toggle b { display:inline-grid; place-items:center; min-width:20px; height:20px; padding:0 6px; margin-left:6px; border-radius:10px; background:#7cff31; color:#071005; font-size:11px; }
+.food-log-toggle i { font-style:normal; transition:transform .25s ease; }
+.food-log-toggle.open i { transform:rotate(180deg); }
+.food-log-list { list-style:none; margin:8px 0 0; padding:0 3px 0 0; display:flex; flex-direction:column; gap:6px; max-height:230px; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; transform-origin:top center; animation:ft-log-pop .42s cubic-bezier(.2,.8,.2,1) both; }
+.food-log-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid #2d4952; border-radius:10px; background:rgba(2,10,13,.45); animation:ft-log-pop .35s cubic-bezier(.2,.8,.2,1) both; }
+.food-log-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.food-log-info strong { font-size:12px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; }
+.food-log-info small { font-size:10px; color:#9fb0b3; }
+.food-log-del { flex:none; height:28px; padding:0 12px; border:1px solid #b73858; border-radius:8px; background:transparent; color:#ff7590; font-size:11px; font-weight:600; cursor:pointer; transition:background .15s ease, transform .15s ease; }
+.food-log-del:hover { background:rgba(255,71,109,.14); }
+.food-log-del:active { transform:scale(.94); }
+.food-log-empty { padding:10px; text-align:center; font-size:11px; color:#9fb0b3; }
+@keyframes ft-log-pop { 0% { opacity:0; transform:translateY(-10px) scale(.96); } 60% { opacity:1; transform:translateY(2px) scale(1.01); } 100% { opacity:1; transform:none; } }
+html[data-theme="light"] .food-log-toggle { background:#eef9e8; border-color:#8ac96d; color:#1f4a16; }
+html[data-theme="light"] .food-log-toggle:hover { background:#e1f4d8; }
+html[data-theme="light"] .food-log-item { background:#fff; border-color:#d4e4d2; }
+html[data-theme="light"] .food-log-info small, html[data-theme="light"] .food-log-empty { color:#5b6f66; }
+html[data-theme="light"] .food-log-del { color:#b4264a; border-color:#d9788f; }
+html[data-theme="light"] .food-log-del:hover { background:#fff0f3; }
+html[data-anim="off"] .food-log-list, html[data-anim="off"] .food-log-item { animation:none !important; }
+@media (prefers-reduced-motion: reduce) { .food-log-list, .food-log-item { animation:none !important; } }
 
 `;
 
