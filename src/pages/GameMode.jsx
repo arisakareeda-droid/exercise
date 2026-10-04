@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth } from '../firebase';
+import { notifyBrowser, readBurn, readEnergy, requestNotify, subscribeEnergy, writeBurn } from '../calorieSync';
 
 // ติดตั้งก่อนใช้: npm i @mediapipe/tasks-vision@0.10.14  (ใช้เวอร์ชันเดียวกับ WASM ด้านล่าง)
 const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
@@ -322,6 +323,13 @@ const readBest = (game) => {
 };
 const readWeight = () => {
   try { return Number(localStorage.getItem(WEIGHT_KEY)) || 60; } catch { return 60; }
+};
+
+// ส่งยอดเผาผลาญของรอบนี้ไปหน้า Dashboard แบบเรียลไทม์
+// ยอดวันนี้ของเกมนั้น = ยอดก่อนเริ่มรอบ + แคลของรอบนี้ (เป็นค่าสะสม เรียกซ้ำกี่ครั้งก็ไม่นับซ้อน)
+const syncBurn = (s) => {
+  if (s.burnBase === undefined) s.burnBase = readBurn().games[s.cfg.id] || 0;
+  writeBurn(s.cfg.id, s.burnBase + s.kcal);
 };
 
 const newFist = () => ({ ok: false, x: 0, y: 0, v: 0, t: 0, trail: [], ext: null, hist: [], punchAt: -1e9, active: false });
@@ -697,6 +705,9 @@ export default function GameMode() {
   const [opp, setOpp] = useState(null);
   const [oppLive, setOppLive] = useState(null); // ค่าสถานะสดของเพื่อน (หัวใจ คอมโบ แคลอรี่ ความเร็ว ฯลฯ) ไว้โชว์เหมือนจอเรา
   const [joinCode, setJoinCode] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [energy, setEnergy] = useState(() => readEnergy()); // เป้าหมาย/กิน/เผาผลาญของวันนี้ (อัปเดตสด)
+  const [toast, setToast] = useState(null); // แจ้งเตือนในหน้า
   const [count, setCount] = useState(3);
   const [message, setMessage] = useState('');
   const [hud, setHud] = useState(HUD0);
@@ -706,6 +717,14 @@ export default function GameMode() {
   const [dims, setDims] = useState({ w: 960, h: 720 });
 
   const statusRef = useRef(status); statusRef.current = status;
+
+  // รับค่าพลังงานของวันนี้แบบเรียลไทม์ (เป้าหมาย/แคลที่กินจาก Dashboard + ยอดที่เราเผาผลาญ)
+  useEffect(() => subscribeEnergy(setEnergy), []);
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
   const setupRef = useRef(setup); setupRef.current = setup;
   const speedRef = useRef(1); speedRef.current = SPEEDS[speedIdx].v;
 
@@ -977,6 +996,8 @@ export default function GameMode() {
     const code = joinCode.trim();
     const user = auth.currentUser;
     if (!/^\d{4}$/.test(code)) { setMessage('ใส่รหัสห้อง 4 หลักของเพื่อน'); return; }
+    if (joining) return;
+    setJoining(true);
     try {
       await runTransaction(getFirestore(auth.app), async (tx) => {
         const snap = await tx.get(roomDoc(code));
@@ -987,12 +1008,15 @@ export default function GameMode() {
         tx.update(roomDoc(code), { guest: user.uid, guestName: myName() });
       });
       listen(code, false);
+      setSetup((st) => ({ ...st, mode: 'real' })); // เข้าห้องจากหน้าเลือกเกมได้เลย ไม่ต้องผ่านขั้นเลือกโหมด
       setStatus('idle');
     } catch (e) {
       setMessage(e.message === 'NOROOM' ? 'ไม่พบห้องนี้ ตรวจรหัสอีกครั้ง'
         : e.message === 'FULL' ? 'ห้องนี้มีผู้เล่นครบแล้ว'
           : e.message === 'SELF' ? 'นี่คือห้องที่คุณสร้างเอง ให้เพื่อนเป็นคนใส่รหัส'
             : 'เข้าห้องไม่สำเร็จ ลองใหม่อีกครั้ง');
+    } finally {
+      setJoining(false);
     }
   };
 
@@ -1123,6 +1147,15 @@ export default function GameMode() {
     if (finishedRef.current) return;
     finishedRef.current = true;
     const id = s.cfg.id;
+    syncBurn(s); // ส่งยอดสุดท้ายของรอบนี้ไป Dashboard
+    const en = readEnergy();
+    setEnergy(en);
+    if (s.kcal >= 0.1) {
+      const left = en.over > 0 ? `ยังเกินเป้าหมายอยู่ ${en.over.toLocaleString()} kcal` : `เหลือพลังงานที่ควรได้รับอีก ${en.remaining.toLocaleString()} kcal`;
+      const text = `🔥 ${s.cfg.name} เผาผลาญ ${s.kcal.toFixed(1)} kcal · วันนี้ลดไปรวม ${en.burned.toFixed(1)} kcal · ${left}`;
+      setToast({ text, id: Date.now() });
+      notifyBrowser('FitTrack · เล่นเกมเสร็จแล้ว', text, `fittrack-game-${en.day}`);
+    }
     const top = Math.max(readBest(id), s.score);
     try { localStorage.setItem(`${BEST_KEY}-${id}`, String(top)); } catch { /* storage optional */ }
     setBests((b) => ({ ...b, [id]: top }));
@@ -1217,6 +1250,7 @@ export default function GameMode() {
         render(ctx, s, now);
         const t = s.cfg.time ? Math.max(0, Math.ceil(s.cfg.time - s.activeMs / 1000)) : 0;
         const kcal = Math.round(s.kcal * 10) / 10;
+        if (kcal !== shown.kcal) syncBurn(s); // ส่งแคลที่ลดไปให้ Dashboard ทันทีที่ค่าเปลี่ยน
         if (s.score !== shown.score || s.lives !== shown.lives || s.combo !== shown.combo
           || s.punches[0] !== shown.l || s.punches[1] !== shown.r || kcal !== shown.kcal || t !== shown.t) {
           shown = { score: s.score, lives: s.lives, combo: s.combo, l: s.punches[0], r: s.punches[1], kcal, t };
@@ -1263,7 +1297,17 @@ export default function GameMode() {
       else document.documentElement.requestFullscreen?.();
     } catch { /* เบราว์เซอร์ไม่รองรับก็ข้าม */ }
   };
-  const best = bests[setup.game] || 0;
+  const enableNotify = async () => {
+    const p = await requestNotify();
+    setToast({
+      id: Date.now(),
+      text: p === 'granted' ? '🔔 เปิดการแจ้งเตือนของเบราว์เซอร์แล้ว จะแจ้งทุกครั้งที่เล่นจบและหักแคลอรี่'
+        : p === 'unsupported' ? 'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน (ยังเห็นข้อความแจ้งในหน้านี้ตามปกติ)'
+          : 'ยังไม่ได้อนุญาตการแจ้งเตือน เปิดได้ที่ไอคอนแม่กุญแจข้างช่องที่อยู่เว็บ (ยังเห็นข้อความแจ้งในหน้านี้ตามปกติ)',
+    });
+  };
+  const leftText = energy.over > 0 ? `เกินเป้าหมาย ${energy.over.toLocaleString()}` : `เหลือ ${energy.remaining.toLocaleString()}`;
+  const burnTitle = `${Object.values(GAMES).map((gm) => `${gm.emoji} ${gm.name} ${(energy.games[gm.id] || 0).toFixed(1)}`).join(' · ')} kcal | เป้าหมาย ${energy.target.toLocaleString()} · ${leftText} kcal`;
   const diff = result ? Math.abs(result.left - result.right) : 0;
   const total = result ? result.left + result.right : 0;
   const weaker = result && total >= 10 && diff / total > 0.3 ? (result.left > result.right ? 'ขวา' : 'ซ้าย') : null;
@@ -1279,6 +1323,7 @@ export default function GameMode() {
 
   return (
     <div className="gm-page">
+      {toast && <div className="gm-toast" role="status" aria-live="polite" key={toast.id} onClick={() => setToast(null)}>{toast.text}</div>}
       {!immersive && (
       <header className="gm-top">
         <button type="button" className="gm-back" onClick={() => navigate('/dashboard')}>‹ หน้าหลัก</button>
@@ -1287,7 +1332,11 @@ export default function GameMode() {
           <p>ออกกำลังกายด้วยท่าต่อยหมัด ระบบตรวจจับท่าทางจากกล้อง</p>
         </div>
         <button type="button" className="gm-back" onClick={toggleFull} aria-label="เต็มจอ">⛶</button>
-        <div className="gm-best">สถิติสูงสุด <b>{best}</b></div>
+        <div className="gm-burn" title={burnTitle} aria-live="polite">
+          <span className="gm-burn-ico" aria-hidden="true">🔥</span>
+          <div><small>ลดไปวันนี้</small><b>{energy.burned.toFixed(1)}</b><span className="unit">kcal</span></div>
+        </div>
+        <button type="button" className="gm-back" onClick={enableNotify} aria-label="เปิดการแจ้งเตือน" title="เปิดการแจ้งเตือนของเบราว์เซอร์">🔔</button>
       </header>
       )}
 
@@ -1313,7 +1362,7 @@ export default function GameMode() {
             <div className="gm-side">
               <div className={`gm-combo${hud.combo >= 5 ? ' hot' : ''}`}>{hud.combo >= 2 ? `คอมโบ ${hud.combo}` : ''}</div>
               <div className="gm-kcal">🔥 {hud.kcal.toFixed(1)} kcal</div>
-              <div className="gm-lr">หมัดซ้าย {hud.l} · ขวา {hud.r}</div>
+              <div className="gm-day">วันนี้ลดไปรวม {energy.burned.toFixed(1)} kcal</div>
             </div>
           </div>
         )}
@@ -1349,10 +1398,38 @@ export default function GameMode() {
                       <span className="gm-card-ico">{gm.emoji}</span>
                       <b>{gm.name}</b>
                       <small>{gm.desc}</small>
-                      <small className="gm-card-best">สถิติสูงสุด {bests[gm.id]}</small>
+                      <small className="gm-card-best">สถิติสูงสุด {bests[gm.id]} · ลดไปวันนี้ {(energy.games[gm.id] || 0).toFixed(1)} kcal</small>
                     </button>
                   ))}
                 </div>
+
+                <div className="gm-quick">
+                  <span className="gm-quick-label">🔑 เพื่อนสร้างห้องไว้แล้ว? ใส่รหัสเข้าเกมได้เลย</span>
+                  <div className="gm-quick-row">
+                    <input
+                      className="gm-input gm-code-input"
+                      inputMode="numeric"
+                      maxLength={4}
+                      placeholder="0000"
+                      aria-label="รหัสห้อง 4 หลักของเพื่อน"
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, ''))}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && joinCode.length === 4) joinRoom(); }}
+                    />
+                    <button type="button" className="gm-btn primary" onClick={joinRoom} disabled={joining || joinCode.length !== 4}>
+                      {joining ? 'กำลังเข้าห้อง...' : 'เข้าห้องเลย'}
+                    </button>
+                  </div>
+                  <small>ไม่ต้องเลือกเกมหรือโหมดก่อน ระบบจะใช้เกมเดียวกับที่เพื่อนเลือกไว้</small>
+                </div>
+
+                <div className="gm-energy" role="group" aria-label="สรุปพลังงานวันนี้">
+                  <div><small>เป้าหมายต่อวัน</small><b>{energy.target.toLocaleString()}</b></div>
+                  <div><small>กินไปแล้ว</small><b>{energy.consumed.toLocaleString()}</b></div>
+                  <div className="burn"><small>ลดไปจากเกม</small><b>−{energy.burned.toFixed(1)}</b></div>
+                  <div className={energy.over > 0 ? 'over' : 'left'}><small>{energy.over > 0 ? 'เกินเป้าหมาย' : 'เหลืออีก'}</small><b>{(energy.over > 0 ? energy.over : energy.remaining).toLocaleString()}</b></div>
+                </div>
+                <p className="gm-note">หน่วย kcal · ดึงเป้าหมายและแคลอรี่ที่กินจากหน้าหลัก และส่งยอดที่เล่นกลับไปให้อัตโนมัติ</p>
               </>
             )}
 
@@ -1399,7 +1476,7 @@ export default function GameMode() {
                 <p className="gm-sub">หรือใส่รหัสห้องที่เพื่อนสร้างไว้</p>
                 <div className="gm-row">
                   <input className="gm-input" inputMode="numeric" maxLength={4} placeholder="รหัส 4 หลัก" aria-label="รหัสห้อง" value={joinCode} onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, ''))} />
-                  <button type="button" className="gm-btn" onClick={joinRoom}>เข้าห้อง</button>
+                  <button type="button" className="gm-btn" onClick={joinRoom} disabled={joining}>{joining ? 'กำลังเข้าห้อง...' : 'เข้าห้อง'}</button>
                 </div>
                 <button type="button" className="gm-btn" onClick={() => { setJoinCode(''); setMessage(''); setMenuStep('opp'); }}>‹ ย้อนกลับ</button>
               </>
@@ -1515,6 +1592,7 @@ export default function GameMode() {
                 <div><b>{result.bombs}</b><span>โดนระเบิด</span></div>
                 <div><b>{result.secs}</b><span>วินาทีที่ออกกำลัง</span></div>
               </div>
+              {result.kcal > 0 && <p className="gm-note">✓ ส่งเข้าหน้าหลักแล้ว · วันนี้ลดไปรวม {energy.burned.toFixed(1)} kcal · {energy.over > 0 ? `ยังเกินเป้าหมาย ${energy.over.toLocaleString()}` : `เหลือพลังงานอีก ${energy.remaining.toLocaleString()}`} kcal</p>}
               <p className="gm-note">แคลอรี่เป็นค่าประมาณจากน้ำหนัก {result.weight} กก. เวลาที่เล่น และความถี่ของหมัด ไม่ใช่ค่าที่วัดได้จริง</p>
               {weaker && <p className="gm-tipbox">💡 รอบนี้ใช้แขน{weaker}น้อยกว่าอย่างชัดเจน รอบหน้าลองสลับแขนให้สมดุลขึ้น</p>}
               {message && <p className="gm-msg" role="alert">{message}</p>}
@@ -1593,8 +1671,24 @@ const css = `
 .gm-title { flex:1; min-width:0; }
 .gm-title h1 { margin:0; font:600 26px/1.2 'Kanit',sans-serif; }
 .gm-title p { margin:2px 0 0; font-size:13px; color:#c4d6da; }
-.gm-best { font-size:13px; color:#c4d6da; white-space:nowrap; }
-.gm-best b { margin-left:4px; font:600 20px 'Kanit',sans-serif; color:#c6ff38; }
+.gm-burn { display:flex; align-items:center; gap:8px; padding:5px 12px; border:1px solid rgba(255,197,138,.45); border-radius:12px; background:rgba(255,160,60,.08); white-space:nowrap; }
+.gm-burn-ico { font-size:20px; line-height:1; }
+.gm-burn small { display:block; font-size:11px; line-height:1.1; color:#c4d6da; }
+.gm-burn b { font:600 20px/1.15 'Kanit',sans-serif; color:#ffc58a; }
+.gm-burn .unit { margin-left:4px; font-size:12px; color:#ffc58a; }
+.gm-day { padding:2px 10px; border-radius:99px; background:rgba(2,8,10,.6); font-size:12px; color:#c4d6da; text-shadow:0 1px 6px rgba(0,0,0,.9); }
+.gm-quick { width:min(460px,100%); display:flex; flex-direction:column; align-items:center; gap:8px; padding:14px; border:1px dashed rgba(124,255,49,.55); border-radius:14px; background:rgba(124,255,49,.05); }
+.gm-quick-label { font-size:14.5px; font-weight:600; color:#e9ffb0; }
+.gm-quick small { font-size:12px; color:#c4d6da; }
+.gm-quick-row { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; }
+.gm-code-input { width:150px; font:600 22px 'Kanit',sans-serif; letter-spacing:.35em; text-indent:.35em; }
+.gm-energy { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; width:min(620px,100%); }
+.gm-energy > div { display:flex; flex-direction:column; gap:2px; padding:8px 6px; border:1px solid #2c5560; border-radius:12px; background:rgba(8,28,34,.7); }
+.gm-energy small { font-size:11.5px; color:#c4d6da; }
+.gm-energy b { font:600 18px 'Kanit',sans-serif; color:#fff; }
+.gm-energy .burn b { color:#ffc58a; } .gm-energy .left b { color:#c6ff38; } .gm-energy .over b { color:#ffa3b3; }
+.gm-toast { position:fixed; top:calc(env(safe-area-inset-top) + 12px); left:50%; transform:translateX(-50%); z-index:60; max-width:min(560px,92vw); padding:12px 18px; border:1px solid rgba(255,197,138,.6); border-radius:14px; background:rgba(8,20,24,.96); color:#fff3e2; font-size:14px; line-height:1.5; text-align:center; box-shadow:0 10px 36px rgba(0,0,0,.55); cursor:pointer; animation:gm-toast-in .3s ease; }
+@keyframes gm-toast-in { from { opacity:0; transform:translate(-50%,-10px); } to { opacity:1; transform:translate(-50%,0); } }
 .gm-stage { position:relative; flex:1 1 0; min-width:0; min-height:0; overflow:hidden; border:1px solid #1f6d6a; border-radius:16px; background:linear-gradient(160deg,#07161a,#030b0e); user-select:none; box-shadow:0 0 28px rgba(80,255,120,.08); }
 .gm-wrap.imm .gm-stage { border-radius:0; border-width:0; }
 .gm-video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); opacity:0; }
@@ -1708,7 +1802,12 @@ const css = `
   .gm-kcal { font-size:11px; }
   .gm-opp { font-size:11px; }
   .gm-title h1 { font-size:20px; }
-  .gm-title p, .gm-best { display:none; }
+  .gm-title p { display:none; }
+  .gm-burn { padding:4px 8px; gap:5px; }
+  .gm-burn small { display:none; }
+  .gm-burn b { font-size:16px; }
+  .gm-energy { grid-template-columns:repeat(2,1fr); }
+  .gm-day { font-size:11px; }
   .gm-score { font-size:34px; }
   .gm-hearts { font-size:24px; }
   .gm-lr { font-size:11px; }
@@ -1720,5 +1819,5 @@ const css = `
   .gm-check { padding:20px 12px 12px; gap:8px; }
   .gm-check h2 { font-size:18px; }
 }
-@media (prefers-reduced-motion: reduce) { .gm-count { animation:none; } .gm-btn, .gm-back, .gm-end, .gm-bar i, .gm-chip { transition:none; } }
+@media (prefers-reduced-motion: reduce) { .gm-count, .gm-toast { animation:none; } .gm-btn, .gm-back, .gm-end, .gm-bar i, .gm-chip { transition:none; } }
 `;

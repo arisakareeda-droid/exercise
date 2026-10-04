@@ -1,8 +1,9 @@
-import React, { useEffect, useLayoutEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import { readEnergy, readTdee, subscribeEnergy, writeTarget, writeTdee } from "../calorieSync";
 
 // แคชชื่อผู้ใช้ไว้ เพื่อให้เปลี่ยนหน้าแล้วชื่อขึ้นทันที ไม่กระพริบเป็นชื่ออื่น
 const NAME_CACHE_KEY = "fittrack-user-name";
@@ -41,7 +42,7 @@ export default function Dashboard() {
   const [height, setHeight] = useState("");
   const [age, setAge] = useState("");
   const [bmiResult, setBmiResult] = useState(null);
-  const [tdeeResult, setTdeeResult] = useState(null);
+  const [tdeeResult, setTdeeResult] = useState(readTdee);
 
   const [itemImage, setItemImage] = useState(null);
   const [itemCalories, setItemCalories] = useState(0);
@@ -52,6 +53,8 @@ export default function Dashboard() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [dailyConsumedCalories, setDailyConsumedCalories] = useState(getSavedDailyCalories);
+  // ยอดเผาผลาญจากโหมดเกม (หน้าเกมส่งมาเรียลไทม์ผ่าน calorieSync)
+  const [energy, setEnergy] = useState(() => readEnergy());
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [goalWeight, setGoalWeight] = useState("");
@@ -272,15 +275,44 @@ export default function Dashboard() {
   };
 
   const dailyTarget = Number(tdeeResult || 1650);
-  const remainingCalories = dailyTarget - dailyConsumedCalories;
+  // ได้รับสุทธิ = กินเข้าไป − เผาผลาญจากโหมดเกม  |  เหลือ = เป้าหมาย − ได้รับสุทธิ
+  const burnedKcal = energy.burned;
+  const netCalories = Math.max(0, Math.round(dailyConsumedCalories - burnedKcal));
+  const remainingCalories = dailyTarget - netCalories;
   const overCalories = Math.max(0, -remainingCalories);
-  const progress = Math.min((dailyConsumedCalories / dailyTarget) * 100, 100);
+  const progress = Math.min((netCalories / dailyTarget) * 100, 100);
+
+  // แชร์เป้าหมายพลังงานให้หน้าโหมดเกมดึงไปใช้ และจำค่า TDEE ที่คำนวณไว้ (รีเฟรชแล้วไม่หาย)
+  useEffect(() => { writeTarget(dailyTarget); }, [dailyTarget]);
+  useEffect(() => { if (tdeeResult) writeTdee(tdeeResult); }, [tdeeResult]);
+  // รับยอดเผาผลาญจากหน้าเกมแบบเรียลไทม์ (แท็บอื่น/ตอนกลับมาหน้านี้)
+  useEffect(() => subscribeEnergy(setEnergy), []);
+
+  // แจ้งเตือนเมื่อมีการเผาผลาญเพิ่มจากเกม (รวบเป็นก้อนละ ≥ 1 kcal ไม่ให้เด้งถี่ตอนกำลังเล่น)
+  const lastBurnToast = useRef(null);
+  useEffect(() => {
+    if (lastBurnToast.current === null) { lastBurnToast.current = energy.burned; return; }
+    const diff = energy.burned - lastBurnToast.current;
+    if (diff >= 1) {
+      lastBurnToast.current = energy.burned;
+      showToast(`เผาผลาญจากโหมดเกม +${diff.toFixed(1)} kcal · วันนี้ลดไปแล้ว ${Math.round(energy.burned).toLocaleString()} kcal`);
+    } else if (diff < 0) lastBurnToast.current = energy.burned;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [energy.burned]);
 
   const calorieNotice = dailyConsumedCalories === 0
     ? "วันนี้ยังไม่มีข้อมูลอาหารที่บันทึกไว้"
     : overCalories > 0
       ? `วันนี้ได้รับพลังงานเกินเป้าหมาย ${overCalories.toLocaleString()} kcal`
       : `วันนี้ยังได้รับพลังงานต่ำกว่าเป้าหมาย ${Math.max(0, remainingCalories).toLocaleString()} kcal`;
+  const gameLabels = { fruit: "ชกผลไม้", time: "ชกจับเวลา" };
+  const burnDetail = Object.entries(energy.games)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => `${gameLabels[k] || k} ${v.toLocaleString()} kcal`)
+    .join(" · ");
+  const burnNotice = burnedKcal > 0
+    ? `เล่นโหมดเกมเผาผลาญไปแล้ว ${burnedKcal.toLocaleString()} kcal (หักออกจากพลังงานที่ได้รับ)`
+    : "วันนี้ยังไม่ได้เล่นโหมดเกม";
   const goalNotice = goalWeight && Number(weight) > 0
     ? `น้ำหนักปัจจุบัน ${Number(weight).toLocaleString()} กก. · เป้าหมาย ${Number(goalWeight).toLocaleString()} กก.`
     : "เพิ่มน้ำหนักปัจจุบันและน้ำหนักเป้าหมายในโปรไฟล์ เพื่อดูความคืบหน้าสู่เป้าหมาย";
@@ -294,7 +326,7 @@ export default function Dashboard() {
         if (permission === "default") permission = await window.Notification.requestPermission();
         if (permission === "granted") {
           new window.Notification("FitTrack · สรุปสุขภาพวันนี้", {
-            body: `${calorieNotice}. ${goalNotice}`,
+            body: `${calorieNotice}. ${burnNotice}. ${goalNotice}`,
             tag: `fittrack-daily-${todayKey}`,
           });
         }
@@ -383,7 +415,8 @@ export default function Dashboard() {
               <button className="icon-button notification-bell" title="การแจ้งเตือน" aria-label="เปิดการแจ้งเตือน" aria-expanded={notificationsOpen} onClick={handleNotifications}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><i></i></button>
               {notificationsOpen && <div className="notification-panel" role="status">
                 <div className="notification-panel-title"><span>การแจ้งเตือน <small>วันนี้</small></span><button type="button" aria-label="ปิดการแจ้งเตือน" onClick={() => setNotificationsOpen(false)}>×</button></div>
-                <div className="notification-item"><span className="notification-avatar dumbbell-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9v6M3.5 10v4M8.5 7v10M15.5 7v10M20.5 10v4M18 9v6M8.5 12h7" /></svg></span><div className="notification-message"><strong>FitTrack <small>· ตอนนี้</small></strong><span>{calorieNotice}</span><small>พลังงานที่บันทึก {dailyConsumedCalories.toLocaleString()} / {dailyTarget.toLocaleString()} kcal</small></div><i className="notification-unread" /></div>
+                <div className="notification-item"><span className="notification-avatar dumbbell-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9v6M3.5 10v4M8.5 7v10M15.5 7v10M20.5 10v4M18 9v6M8.5 12h7" /></svg></span><div className="notification-message"><strong>FitTrack <small>· ตอนนี้</small></strong><span>{calorieNotice}</span><small>ได้รับสุทธิ {netCalories.toLocaleString()} / {dailyTarget.toLocaleString()} kcal</small></div><i className="notification-unread" /></div>
+                <div className="notification-item"><span className="notification-avatar dumbbell-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9v6M3.5 10v4M8.5 7v10M15.5 7v10M20.5 10v4M18 9v6M8.5 12h7" /></svg></span><div className="notification-message"><strong>FitTrack <small>· โหมดเกม</small></strong><span>{burnNotice}</span><small>{burnDetail || "เล่นเกมชกผลไม้เพื่อเผาผลาญแคลอรี่"}</small></div><i className="notification-unread" /></div>
                 <div className="notification-item"><span className="notification-avatar dumbbell-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9v6M3.5 10v4M8.5 7v10M15.5 7v10M20.5 10v4M18 9v6M8.5 12h7" /></svg></span><div className="notification-message"><strong>FitTrack <small>· วันนี้</small></strong><span>{goalNotice}</span><small>ติดตามความคืบหน้าของคุณได้ที่หน้าโปรไฟล์</small></div><i className="notification-unread" /></div>
                 <small className="notification-hint">แตะกระดิ่งเพื่อเปิดหรือปิดการแจ้งเตือน</small>
               </div>}
@@ -543,7 +576,7 @@ export default function Dashboard() {
               <div className="calorie-progress-card">
                 <div className="progress-title">พลังงานที่ได้รับวันนี้</div>
                 <div className="progress-track"><span style={{ width: `${progress}%` }}></span></div>
-                <div className="calorie-stats" key={dailyConsumedCalories}><div>ได้รับแล้ว<strong>{dailyConsumedCalories.toLocaleString()} <small>kcal</small></strong></div><div>เหลืออีก<strong>{Math.max(0, remainingCalories).toLocaleString()} <small>kcal</small></strong><small>จากเป้าหมาย {dailyTarget.toLocaleString()} kcal</small></div></div>
+                <div className="calorie-stats" key={`${dailyConsumedCalories}-${Math.round(burnedKcal)}`}><div>ได้รับสุทธิ<strong>{netCalories.toLocaleString()} <small>kcal</small></strong><small>กิน {dailyConsumedCalories.toLocaleString()} − เผาผลาญจากเกม {Math.round(burnedKcal).toLocaleString()} kcal</small></div><div>เหลืออีก<strong>{Math.max(0, remainingCalories).toLocaleString()} <small>kcal</small></strong><small>จากเป้าหมาย {dailyTarget.toLocaleString()} kcal</small></div></div>
               </div>
               <div className={`warning-card ${overCalories ? "danger" : "safe"}`}>
                 <strong>{overCalories ? "⚠️ คุณได้รับพลังงานเกินเป้าหมาย!" : "✓ พลังงานวันนี้อยู่ในเป้าหมาย"}</strong>
