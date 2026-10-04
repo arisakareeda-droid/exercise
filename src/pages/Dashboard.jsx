@@ -120,7 +120,6 @@ export default function Dashboard() {
   const [itemAdded, setItemAdded] = useState(false);
   const [itemEntryId, setItemEntryId] = useState(null);
   const [foodLog, setFoodLog] = useState(() => readFoodLog(getLocalDateKey()));
-  const [logOpen, setLogOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisError, setAnalysisError] = useState("");
   const [dailyConsumedCalories, setDailyConsumedCalories] = useState(getSavedDailyCalories);
@@ -681,7 +680,8 @@ export default function Dashboard() {
 
               <div className="food-result-box">
                 {isAnalyzing ? <div className="food-loading">กำลังวิเคราะห์ภาพอาหารด้วย AI...</div> : itemName && itemCalories > 0 ? <>
-                  <div className={`food-result-top ${itemImage ? "" : "food-result-text-only"}`}>
+                  <div className="food-detail">
+                    <div className="food-detail-head">
                       {itemImage ? null : (
                         <span className="food-result-no-image" aria-hidden="true">
                           <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -692,27 +692,28 @@ export default function Dashboard() {
                           </svg>
                         </span>
                       )}
-                      <div>
+                      <div className="food-detail-title">
                         <h3>{itemName}</h3>
                         <span className="food-chip">{itemCategory || "อาหารหลัก"}</span>
                         {itemConfidence ? (
                           <span className="food-chip muted">{`${Math.min(100, Math.round(itemConfidence > 1 ? itemConfidence : itemConfidence * 100))}% มั่นใจ`}</span>
                         ) : !itemImage ? (
                           <span className="food-chip muted">เมนูแนะนำ · พลังงานโดยประมาณ</span>
-                        ) : (
-                          <span className="food-chip muted">โปรตีนสูง</span>
-                        )}
+                        ) : null}
                       </div>
                     </div>
-                  <div className="food-kcal-row">
-                    <div className="food-kcal"><small>พลังงานทั้งหมด</small><strong>{itemCalories}</strong><em> kcal</em></div>
-                    <button type="button" className={`food-add-btn${itemAdded ? " added" : ""}`} onClick={addItemToDaily} disabled={itemAdded}>
-                      {itemAdded ? "✓ เพิ่มในพลังงานวันนี้แล้ว" : "＋ เพิ่มไปยังพลังงานที่ได้รับวันนี้"}
-                    </button>
+                    <div className="food-kcal-row">
+                      <div className="food-kcal"><small>พลังงานทั้งหมด</small><strong>{itemCalories}</strong><em> kcal</em></div>
+                      <div className="food-add-wrap">
+                        <button type="button" className={`food-add-btn${itemAdded ? " added" : ""}`} onClick={addItemToDaily} disabled={itemAdded}>
+                          {itemAdded ? "✓ เพิ่มในพลังงานวันนี้แล้ว" : "＋ เพิ่มไปยังพลังงานที่ได้รับวันนี้"}
+                        </button>
+                        {!itemAdded && <span className="food-add-hint">ดูแคลอรี่เฉยๆ ได้ ระบบบันทึกเมื่อกดเพิ่มเท่านั้น</span>}
+                      </div>
+                    </div>
+                    {itemNote && <p className="food-note-box" title={itemNote}><span aria-hidden="true">ℹ</span>{itemNote}</p>}
+                    <div className="macro-row"><span>โปรตีน<br /><b>35 g</b></span><span>คาร์โบไฮเดรต<br /><b>45 g</b></span><span>ไขมัน<br /><b>8 g</b></span></div>
                   </div>
-                  {!itemAdded && <p className="food-note food-add-hint">แค่ดูแคลอรี่ได้เลย ระบบจะบันทึกก็ต่อเมื่อกดปุ่มเพิ่มเท่านั้น</p>}
-                  {itemNote && <p className="food-note">{itemNote}</p>}
-                  <div className="macro-row"><span>โปรตีน<br /><b>35 g</b></span><span>คาร์โบไฮเดรต<br /><b>45 g</b></span><span>ไขมัน<br /><b>8 g</b></span></div>
                 </> : <div className="food-placeholder"><strong>เพิ่มภาพอาหารเพื่อเริ่มการวิเคราะห์</strong><span>AI จะช่วยประเมินประเภทอาหาร พลังงาน และข้อมูลโภชนาการ</span></div>}
               </div>
             </div>
@@ -723,27 +724,28 @@ export default function Dashboard() {
                 <div className="progress-title">พลังงานที่ได้รับวันนี้</div>
                 <div className="progress-track"><span style={{ width: `${progress}%` }}></span></div>
                 <div className="calorie-stats" key={`${dailyConsumedCalories}-${Math.round(burnedKcal)}`}><div>ได้รับสุทธิ<strong>{netCalories.toLocaleString()} <small>kcal</small></strong><small>กิน {dailyConsumedCalories.toLocaleString()} − เผาผลาญ {Math.round(burnedKcal).toLocaleString()} kcal</small></div><div>เหลืออีก<strong>{Math.max(0, remainingCalories).toLocaleString()} <small>kcal</small></strong><small>จากเป้าหมาย {dailyTarget.toLocaleString()} kcal</small></div></div>
-                <button type="button" className={`food-log-toggle${logOpen ? " open" : ""}`} onClick={() => setLogOpen((o) => !o)} aria-expanded={logOpen}>
-                  <span>รายการอาหารวันนี้ <b>{loggedItems.length}</b></span><i aria-hidden="true">▾</i>
-                </button>
-                {logOpen && (
-                  <ul className="food-log-list">
-                    {loggedItems.length === 0 ? <li className="food-log-empty">ยังไม่มีรายการที่บันทึกไว้</li> : loggedItems.map((entry) => (
-                      <li className="food-log-item" key={entry.id}>
-                        <div className="food-log-info">
-                          <strong>{entry.name}</strong>
-                          <small>{entry.t ? new Date(entry.t).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false }) + " น. · " : ""}{Math.round(entry.kcal).toLocaleString()} kcal</small>
-                        </div>
-                        <button type="button" className="food-log-del" aria-label={`ลบ ${entry.name}`} onClick={() => removeFoodEntry(entry)}>ลบ</button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
               </div>
-              <div className={`warning-card ${overCalories > 0 ? "danger" : "safe"}`}>
-                <strong>{overCalories > 0 ? "⚠️ คุณได้รับพลังงานเกินเป้าหมาย!" : noTarget ? "ℹ️ ยังไม่ได้คำนวณเป้าหมายพลังงาน" : "✓ พลังงานวันนี้อยู่ในเป้าหมาย"}</strong>
-                <p>{overCalories > 0 ? "แนะนำให้ลดอาหารที่มีแคลอรี่สูง และออกกำลังกายเพิ่มประมาณ 30 นาที" : noTarget ? "กรอกน้ำหนัก ส่วนสูง อายุ แล้วกดคำนวณ เพื่อดูพลังงานที่ควรได้รับต่อวัน" : "รักษาสมดุลอาหารและออกกำลังกายอย่างสม่ำเสมอ"}</p>
-                {overCalories > 0 && <button onClick={() => navigate("/exercises")}>ดูโปรแกรมออกกำลังกายเพิ่มเติม</button>}
+              <div className={`warning-card today-log ${overCalories > 0 ? "danger" : "safe"}`}>
+                <div className="today-log-head">
+                  <strong>{overCalories > 0 ? "⚠️ คุณได้รับพลังงานเกินเป้าหมาย!" : noTarget ? "ℹ️ ยังไม่ได้คำนวณเป้าหมายพลังงาน" : "✓ พลังงานวันนี้อยู่ในเป้าหมาย"}</strong>
+                  <span className="today-log-count">{loggedItems.length} รายการ</span>
+                </div>
+                <p className="today-log-sub">{overCalories > 0 ? "แนะนำให้ลดอาหารที่มีแคลอรี่สูง และออกกำลังกายเพิ่มประมาณ 30 นาที" : noTarget ? "กรอกน้ำหนัก ส่วนสูง อายุ แล้วกดคำนวณ เพื่อดูพลังงานที่ควรได้รับต่อวัน" : "รักษาสมดุลอาหารและออกกำลังกายอย่างสม่ำเสมอ"}</p>
+                {overCalories > 0 && <button type="button" className="today-log-link" onClick={() => navigate("/exercises")}>ดูโปรแกรมออกกำลังกายเพิ่มเติม</button>}
+                <div className="today-log-title">🍽 รายการอาหารวันนี้ <small>กด “ลบ” หากเพิ่มผิด</small></div>
+                <ul className="food-log-list">
+                  {loggedItems.length === 0 ? (
+                    <li className="food-log-empty">ยังไม่มีรายการอาหาร<br /><small>สแกนอาหารหรือกด “เพิ่ม” จากเมนูแนะนำ แล้วรายการจะมาอยู่ที่นี่</small></li>
+                  ) : loggedItems.map((entry) => (
+                    <li className="food-log-item" key={entry.id}>
+                      <div className="food-log-info">
+                        <strong>{entry.name}</strong>
+                        <small>{entry.t ? new Date(entry.t).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false }) + " น. · " : ""}{Math.round(entry.kcal).toLocaleString()} kcal</small>
+                      </div>
+                      <button type="button" className="food-log-del" aria-label={`ลบ ${entry.name}`} onClick={() => removeFoodEntry(entry)}>ลบ</button>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           </section>
@@ -2130,28 +2132,60 @@ html[data-theme="light"] .food-add-btn:disabled, html[data-theme="light"] .food-
   .quick-grid .feature-art { top: 16px; }
 }
 
-/* ===== รายการอาหารวันนี้ (เด้งขึ้นมาใต้การ์ด "พลังงานที่ได้รับวันนี้") + ปุ่มลบ ===== */
-.food-log-toggle { width:100%; margin-top:10px; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid #3d6a2c; border-radius:10px; background:rgba(110,255,45,.07); color:#d6f5c0; font-size:12px; font-weight:600; cursor:pointer; transition:background .2s ease, border-color .2s ease; }
-.food-log-toggle:hover { background:rgba(110,255,45,.14); border-color:#7cff31; }
-.food-log-toggle b { display:inline-grid; place-items:center; min-width:20px; height:20px; padding:0 6px; margin-left:6px; border-radius:10px; background:#7cff31; color:#071005; font-size:11px; }
-.food-log-toggle i { font-style:normal; transition:transform .25s ease; }
-.food-log-toggle.open i { transform:rotate(180deg); }
-.food-log-list { list-style:none; margin:8px 0 0; padding:0 3px 0 0; display:flex; flex-direction:column; gap:6px; max-height:230px; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; transform-origin:top center; animation:ft-log-pop .42s cubic-bezier(.2,.8,.2,1) both; }
-.food-log-item { display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid #2d4952; border-radius:10px; background:rgba(2,10,13,.45); animation:ft-log-pop .35s cubic-bezier(.2,.8,.2,1) both; }
+/* ===== กล่องรายละเอียดอาหาร: จัดให้พอดีกล่อง ไม่ล้น ไม่มีช่องว่างแปลกๆ ===== */
+.food-detail { display:flex; flex-direction:column; justify-content:space-between; gap:9px; min-height:100%; }
+.food-detail-head { display:flex; align-items:center; gap:10px; min-width:0; }
+.food-detail-head .food-result-no-image { width:46px; height:46px; flex:0 0 46px; border-radius:12px; }
+.food-detail-head .food-result-no-image svg { width:28px; height:28px; }
+.food-detail-title { min-width:0; display:flex; flex-wrap:wrap; align-items:center; gap:5px 8px; }
+.food-detail-title h3 { margin:0; font-family:'Kanit'; font-size:19px; font-weight:500; line-height:1.3; overflow-wrap:anywhere; }
+.food-detail-title .food-chip { margin:0; padding:3px 10px; font-size:10px; }
+.food-detail .food-kcal-row { margin-top:0; align-items:center; }
+.food-detail .food-kcal { margin-top:0; }
+.food-detail .food-kcal strong { font-size:34px; line-height:1.1; }
+.food-add-wrap { display:flex; flex-direction:column; gap:4px; width:min(100%,330px); }
+.food-add-wrap .food-add-btn { width:100%; }
+.food-add-hint { text-align:center; font-size:10px; line-height:1.4; color:#8f9a9d; }
+.food-note-box { margin:0; display:flex; align-items:flex-start; gap:8px; padding:7px 10px; border:1px solid #263f47; border-radius:9px; background:rgba(10,25,29,.55); color:#b5c0c2; font-size:10.5px; line-height:1.5; }
+.food-note-box > span { flex:none; width:16px; height:16px; display:grid; place-items:center; margin-top:1px; border-radius:50%; background:rgba(145,255,62,.14); color:#9cff43; font-size:10px; font-weight:700; }
+.food-note-box { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; position:relative; padding-left:34px; }
+.food-note-box > span { position:absolute; left:10px; top:8px; }
+.food-detail .macro-row { margin-top:0; padding-top:0; border-top:0; gap:8px; }
+.food-detail .macro-row span { padding:6px 4px; border:1px solid #263d44; border-radius:10px; background:rgba(2,10,13,.4); line-height:1.35; }
+html[data-theme="light"] .food-add-hint { color:#60736a; }
+html[data-theme="light"] .food-note-box { background:#f1f7f4; border-color:#d2dfd9; color:#4b6057; }
+html[data-theme="light"] .food-note-box > span { background:#dff3d3; color:#2a7a16; }
+html[data-theme="light"] .food-detail .macro-row span { background:#fff; border-color:#d2dfd9; }
+@media (max-width: 760px) { .food-add-wrap { width:100%; } }
+
+/* ===== การ์ดขวา: สถานะพลังงาน + รายการอาหารวันนี้ (ลบรายการที่เผลอเพิ่มได้) ===== */
+.warning-card.today-log { display:flex; flex-direction:column; gap:6px; min-height:0; padding:12px 13px; }
+.today-log-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.warning-card.today-log .today-log-head strong { font-size:13px; }
+.today-log-count { flex:none; padding:2px 10px; border:1px solid #4f8f2e; border-radius:12px; color:#9cff43; font-size:10px; font-weight:600; }
+.warning-card.today-log p.today-log-sub { margin:0; font-size:10px; line-height:1.45; color:#b7bfc1; }
+.warning-card.today-log button.today-log-link { align-self:flex-start; height:26px; font-size:10px; }
+.today-log-title { margin-top:4px; padding-top:8px; border-top:1px dashed rgba(120,160,140,.35); font-size:11px; font-weight:600; color:#d6f5c0; }
+.today-log-title small { margin-left:6px; font-size:9px; font-weight:400; color:#8f9a9d; }
+.food-log-list { flex:1 1 auto; min-height:70px; max-height:150px; list-style:none; margin:0; padding:0 3px 0 0; display:flex; flex-direction:column; gap:6px; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; animation:ft-log-pop .42s cubic-bezier(.2,.8,.2,1) both; }
+.food-log-item { flex:none; display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid #2d4952; border-radius:10px; background:rgba(2,10,13,.45); animation:ft-log-pop .35s cubic-bezier(.2,.8,.2,1) both; }
 .food-log-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .food-log-info strong { font-size:12px; font-weight:600; line-height:1.35; overflow-wrap:anywhere; }
 .food-log-info small { font-size:10px; color:#9fb0b3; }
-.food-log-del { flex:none; height:28px; padding:0 12px; border:1px solid #b73858; border-radius:8px; background:transparent; color:#ff7590; font-size:11px; font-weight:600; cursor:pointer; transition:background .15s ease, transform .15s ease; }
-.food-log-del:hover { background:rgba(255,71,109,.14); }
-.food-log-del:active { transform:scale(.94); }
-.food-log-empty { padding:10px; text-align:center; font-size:11px; color:#9fb0b3; }
+.warning-card.today-log .food-log-del { flex:none; height:28px; padding:0 12px; border:1px solid #b73858; border-radius:8px; background:transparent; color:#ff7590; font-size:11px; font-weight:600; cursor:pointer; transition:background .15s ease, transform .15s ease; }
+.warning-card.today-log .food-log-del:hover { background:rgba(255,71,109,.14); }
+.warning-card.today-log .food-log-del:active { transform:scale(.94); }
+.food-log-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:12px 10px; border:1px dashed #3d5a52; border-radius:10px; text-align:center; font-size:12px; color:#c3cfcf; }
+.food-log-empty small { font-size:10px; color:#8f9a9d; line-height:1.45; }
 @keyframes ft-log-pop { 0% { opacity:0; transform:translateY(-10px) scale(.96); } 60% { opacity:1; transform:translateY(2px) scale(1.01); } 100% { opacity:1; transform:none; } }
-html[data-theme="light"] .food-log-toggle { background:#eef9e8; border-color:#8ac96d; color:#1f4a16; }
-html[data-theme="light"] .food-log-toggle:hover { background:#e1f4d8; }
+html[data-theme="light"] .today-log-count { border-color:#6cc943; color:#2a7a16; background:#f1faec; }
+html[data-theme="light"] .warning-card.today-log p.today-log-sub { color:#4b6057; }
+html[data-theme="light"] .today-log-title { color:#1f4a16; border-top-color:#c3d9ce; }
+html[data-theme="light"] .today-log-title small, html[data-theme="light"] .food-log-info small, html[data-theme="light"] .food-log-empty small { color:#5b6f66; }
 html[data-theme="light"] .food-log-item { background:#fff; border-color:#d4e4d2; }
-html[data-theme="light"] .food-log-info small, html[data-theme="light"] .food-log-empty { color:#5b6f66; }
-html[data-theme="light"] .food-log-del { color:#b4264a; border-color:#d9788f; }
-html[data-theme="light"] .food-log-del:hover { background:#fff0f3; }
+html[data-theme="light"] .food-log-empty { border-color:#b6d3a5; color:#36503f; }
+html[data-theme="light"] .warning-card.today-log .food-log-del { color:#b4264a; border-color:#d9788f; background:#fff8f9; }
+html[data-theme="light"] .warning-card.today-log .food-log-del:hover { background:#fff0f3; }
 html[data-anim="off"] .food-log-list, html[data-anim="off"] .food-log-item { animation:none !important; }
 @media (prefers-reduced-motion: reduce) { .food-log-list, .food-log-item { animation:none !important; } }
 
