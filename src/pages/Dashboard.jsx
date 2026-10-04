@@ -56,6 +56,13 @@ export default function Dashboard() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [goalWeight, setGoalWeight] = useState("");
   const [mealTab, setMealTab] = useState("เช้า");
+  const [toast, setToast] = useState(null);
+  const showToast = (text, type = "success") => setToast({ text, type, id: Date.now() });
+  useEffect(() => {
+    if (!toast) return undefined;
+    const t = setTimeout(() => setToast(null), 3200);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   // ธีม: "dark" (ค่าเริ่มต้น) | "light" — จำค่าที่เลือกไว้ในเบราว์เซอร์
   const [theme, setTheme] = useState(() => {
@@ -77,6 +84,18 @@ export default function Dashboard() {
 
   // ออกจากหน้านี้แล้วคืนค่า ไม่ให้ธีมไปกระทบหน้าอื่น
   useEffect(() => () => document.documentElement.removeAttribute("data-theme"), []);
+
+  // ใช้ค่า Animation จากหน้าตั้งค่า (ปิดแล้วอนิเมชันการ์ดในหน้านี้จะหยุด)
+  useEffect(() => {
+    const root = document.documentElement;
+    try {
+      const saved = JSON.parse(localStorage.getItem("fittrack_user_settings") || "{}");
+      root.setAttribute("data-anim", saved?.display?.animation === false ? "off" : "on");
+    } catch {
+      root.setAttribute("data-anim", "on");
+    }
+    return () => root.removeAttribute("data-anim");
+  }, []);
 
   // อัปเดตวันที่/เวลาจริง และเริ่มวันใหม่ด้วยยอดแคลอรี่ของวันนั้น
   useEffect(() => {
@@ -147,6 +166,7 @@ export default function Dashboard() {
     else if (bmi >= 30) status = "อ้วนระดับ 2";
 
     setBmiResult({ value: bmi, status });
+    showToast(`คำนวณ BMI เรียบร้อยแล้ว: ${bmi} (${status})`);
 
     if (a > 0) {
       const bmr = 10 * w + 6.25 * h - 5 * a + 5;
@@ -214,6 +234,7 @@ export default function Dashboard() {
         try { localStorage.setItem(`fittrack-calories-${getLocalDateKey()}`, String(nextTotal)); } catch { /* storage optional */ }
         return nextTotal;
       });
+      showToast(`วิเคราะห์อาหารเรียบร้อยแล้ว +${Math.round(calories).toLocaleString()} kcal`);
     } catch (error) {
       console.error("Food analysis error:", error);
       setItemName("");
@@ -247,6 +268,7 @@ export default function Dashboard() {
       }
       return nextTotal;
     });
+    showToast(`เพิ่ม ${meal.name} แล้ว +${calories.toLocaleString()} kcal`);
   };
 
   const dailyTarget = Number(tdeeResult || 1650);
@@ -327,10 +349,10 @@ export default function Dashboard() {
         </div>
 
         <nav className="side-menu">
-          <button className="side-link active" onClick={() => navigate("/")}><span className="side-icon">⌂</span>หน้าหลัก</button>
+          <button className="side-link active" onClick={() => navigate("/dashboard")}><span className="side-icon">⌂</span>หน้าหลัก</button>
           <button className="side-link" onClick={() => navigate("/exercises")}><span className="side-icon side-icon-dumbbell" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 18v12M14 14v20M34 14v20M40 18v12M14 24h20M8 24h6M34 24h6" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 18v12M11 14v20M37 14v20M43 18v12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg></span>ออกกำลังกาย</button>
           <button className="side-link" onClick={() => navigate("/history")}><span className="side-icon">◷</span>ประวัติการออกกำลังกาย</button>
-          <button className="side-link" onClick={() => navigate("/settings")}><span className="side-icon">⚙</span>ตั้งค่า</button>
+          <button className="side-link" onClick={() => navigate("/profile")}><span className="side-icon">⚙</span>ตั้งค่า</button>
         </nav>
 
         <div className="sidebar-quote">
@@ -409,7 +431,7 @@ export default function Dashboard() {
 
             <div className="bmi-result">
               <div className="result-label">ค่า BMI <span>{bmiResult?.status || "ปกติ"}</span></div>
-              <div className="bmi-number">{bmiResult?.value ?? "21.48"}</div>
+              <div className="bmi-number" key={bmiResult?.value ?? "init"}>{bmiResult?.value ?? "21.48"}</div>
               <div className="bmi-bar"><i style={{ left: `${bmiPosition}%` }}></i></div>
               <div className="bmi-scale-labels">
                 <span>&lt; 18.5<br />ผอม</span><span>18.5 - 22.9<br /><b>ปกติ</b></span><span>23 - 24.9<br />น้ำหนักเกิน</span><span>25 - 29.9<br />อ้วนระดับ 1</span><span>&gt; 30<br />อ้วนระดับ 2</span>
@@ -520,7 +542,7 @@ export default function Dashboard() {
               <div className="calorie-progress-card">
                 <div className="progress-title">พลังงานที่ได้รับวันนี้</div>
                 <div className="progress-track"><span style={{ width: `${progress}%` }}></span></div>
-                <div className="calorie-stats"><div>ได้รับแล้ว<strong>{dailyConsumedCalories.toLocaleString()} <small>kcal</small></strong></div><div>เหลืออีก<strong>{Math.max(0, remainingCalories).toLocaleString()} <small>kcal</small></strong><small>จากเป้าหมาย {dailyTarget.toLocaleString()} kcal</small></div></div>
+                <div className="calorie-stats" key={dailyConsumedCalories}><div>ได้รับแล้ว<strong>{dailyConsumedCalories.toLocaleString()} <small>kcal</small></strong></div><div>เหลืออีก<strong>{Math.max(0, remainingCalories).toLocaleString()} <small>kcal</small></strong><small>จากเป้าหมาย {dailyTarget.toLocaleString()} kcal</small></div></div>
               </div>
               <div className={`warning-card ${overCalories ? "danger" : "safe"}`}>
                 <strong>{overCalories ? "⚠️ คุณได้รับพลังงานเกินเป้าหมาย!" : "✓ พลังงานวันนี้อยู่ในเป้าหมาย"}</strong>
@@ -534,7 +556,7 @@ export default function Dashboard() {
           <section className="recommend-card dark-card">
             <div className="section-title"><span className="title-icon yellow recommend-food-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="4.5"/><path d="M3 4v6M1.8 6.5h2.4M5 4v6M20.5 4v7M20.5 11v9M18.8 4v4"/></svg></span><h2>เมนูแนะนำ <small>(ตัวเลือกอาหารสมดุล)</small></h2></div>
             <div className="meal-tabs">{Object.keys(meals).map((tab) => <button key={tab} className={mealTab === tab ? "active" : ""} onClick={() => setMealTab(tab)}>{tab}</button>)}</div>
-            <div className="meal-list">{meals[mealTab].map((meal, index) => <div className="meal-row" key={meal.name}><span className="meal-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span><div className="meal-info"><strong>{meal.name}</strong><span className="meal-kcal">พลังงานโดยประมาณ <b>{meal.kcal} kcal</b></span></div><button type="button" aria-label={`เพิ่มเมนู ${meal.name} ไปยังบันทึกพลังงาน`} onClick={() => handleRecommendedMeal(meal)}>เพิ่ม</button></div>)}</div>
+            <div className="meal-list" key={mealTab}>{meals[mealTab].map((meal, index) => <div className="meal-row" key={meal.name}><span className="meal-index" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span><div className="meal-info"><strong>{meal.name}</strong><span className="meal-kcal">พลังงานโดยประมาณ <b>{meal.kcal} kcal</b></span></div><button type="button" aria-label={`เพิ่มเมนู ${meal.name} ไปยังบันทึกพลังงาน`} onClick={() => handleRecommendedMeal(meal)}>เพิ่ม</button></div>)}</div>
             <div className="tips-box"><h3><span aria-hidden="true">💡</span> เคล็ดลับเพิ่มเติม</h3><div className="tips-copy"><p>ลดอาหารหวาน มัน เค็ม</p><p>ดื่มน้ำให้เพียงพอ อย่างน้อย 2–3 ลิตร/วัน</p><p>ออกกำลังกายสม่ำเสมออย่างน้อย 3–5 วัน/สัปดาห์</p></div></div>
           </section>
         </div>
@@ -545,6 +567,12 @@ export default function Dashboard() {
           <span className="footer-copyright">ดูแลสุขภาพของคุณในทุกวัน</span>
         </footer>
       </main>
+
+      {toast && (
+        <div key={toast.id} className={`ft-toast ${toast.type}`} role="status" aria-live="polite">
+          <span>{toast.type === "error" ? "!" : "✓"}</span>{toast.text}
+        </div>
+      )}
     </div>
   );
 }
@@ -1722,6 +1750,72 @@ html[data-theme="light"] .sidebar-logo {
   mix-blend-mode: multiply;
   animation-name: fittrack-logo-glow-light !important;
 }
+/* ===================== MOTION (เหมือนหน้าตั้งค่า) ===================== */
+@keyframes ft-rise { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
+@keyframes ft-pop { 0% { opacity:0; transform:scale(.85); } 60% { transform:scale(1.06); } 100% { opacity:1; transform:none; } }
+@keyframes ft-slide { from { opacity:0; transform:translateX(-14px); } to { opacity:1; transform:none; } }
+@keyframes ft-grow { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+
+/* การ์ดหลักไหลขึ้นทีละใบ */
+.content-grid > .hero-card { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) both; }
+.content-grid > .bmi-card { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .08s both; }
+.content-grid > .quick-grid { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .16s both; }
+.content-grid > .food-card { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .24s both; }
+.content-grid > .recommend-card { animation:ft-rise .55s cubic-bezier(.2,.8,.2,1) .32s both; }
+
+/* ชี้แล้วเรืองแสง/ยกขึ้นเล็กน้อย */
+.content-grid > .dark-card { transition:border-color .25s ease, box-shadow .25s ease, transform .25s ease; }
+.content-grid > .dark-card:hover { border-color:#2f7a52; box-shadow:inset 0 0 25px rgba(0,0,0,.25), 0 8px 28px rgba(80,255,120,.10); transform:translateY(-2px); }
+.hero-card { transition:box-shadow .3s ease, border-color .3s ease; }
+.hero-card:hover { border-color:#3fbf8f; box-shadow:0 0 30px rgba(80,255,120,.14); }
+.hero-feature-icon { transition:color .2s ease, transform .2s ease; }
+.hero-feature-icon:hover { color:var(--green); transform:translateY(-2px); }
+
+/* BMI / พลังงาน */
+.bmi-bar i { transition:left .6s cubic-bezier(.2,.8,.2,1); }
+.bmi-number { animation:ft-pop .45s cubic-bezier(.2,.8,.2,1) both; }
+.progress-track span { transform-origin:left center; animation:ft-grow .9s cubic-bezier(.2,.8,.2,1) .4s both; transition:width .6s cubic-bezier(.2,.8,.2,1); }
+.calorie-stats strong { animation:ft-pop .45s cubic-bezier(.2,.8,.2,1) both; }
+.warning-card { animation:ft-rise .5s ease .55s both; }
+
+/* เมนูแนะนำ: แถวเลื่อนเข้าทีละแถวเมื่อเปลี่ยนแท็บ */
+.meal-tabs button { transition:background .2s ease, border-color .2s ease, color .2s ease, transform .15s ease; }
+.meal-tabs button:hover:not(.active) { border-color:#7cff31; color:var(--green); }
+.meal-tabs button:active { transform:scale(.96); }
+.meal-row { animation:ft-slide .4s cubic-bezier(.2,.8,.2,1) both; transition:border-color .2s ease, background .2s ease, transform .2s ease; }
+.meal-row:nth-child(2) { animation-delay:.06s; }
+.meal-row:nth-child(3) { animation-delay:.12s; }
+.meal-row:nth-child(4) { animation-delay:.18s; }
+.meal-row:nth-child(5) { animation-delay:.24s; }
+.meal-row:hover { border-color:#3fbf8f; transform:translateX(3px); }
+.meal-row button { transition:transform .15s ease, box-shadow .2s ease; }
+.meal-row button:hover { box-shadow:0 0 18px rgba(125,255,45,.4); }
+.meal-row button:active { transform:scale(.94); }
+.tips-box { animation:ft-rise .5s ease .3s both; }
+
+html[data-theme="light"] .content-grid > .dark-card:hover { border-color:#6cc943; box-shadow:0 8px 22px rgba(29,76,56,.10); }
+html[data-theme="light"] .hero-card:hover { box-shadow:0 6px 22px rgba(29,76,56,.14); }
+
+/* ปิดอนิเมชันตามค่าที่ตั้งไว้ หรือตามระบบ */
+html[data-anim="off"] .content-grid > *, html[data-anim="off"] .bmi-number, html[data-anim="off"] .progress-track span,
+html[data-anim="off"] .calorie-stats strong, html[data-anim="off"] .warning-card, html[data-anim="off"] .meal-row, html[data-anim="off"] .tips-box { animation:none !important; }
+html[data-anim="off"] .content-grid > .dark-card:hover, html[data-anim="off"] .meal-row:hover { transform:none; }
+@media (prefers-reduced-motion: reduce) {
+  .content-grid > *, .bmi-number, .progress-track span, .calorie-stats strong, .warning-card, .meal-row, .tips-box { animation:none !important; }
+  .content-grid > .dark-card:hover, .meal-row:hover { transform:none; }
+}
+
+/* ===== Toast เด้งขึ้นมาเมื่อกดปุ่ม (เหมือนหน้าตั้งค่า) ===== */
+.ft-toast { position:fixed; left:50%; bottom:26px; z-index:400; transform:translateX(-50%); display:flex; align-items:center; gap:10px; max-width:calc(100vw - 28px); padding:12px 20px; border:1px solid #7cff31; border-radius:12px; background:#071a10; color:#e9ffe0; font-size:14px; box-shadow:0 0 22px rgba(110,255,50,.3); animation:ft-toast-in .5s cubic-bezier(.2,.8,.2,1) both; }
+.ft-toast span { width:22px; height:22px; flex:none; display:grid; place-items:center; border-radius:50%; background:#7cff31; color:#071005; font-weight:700; font-size:13px; }
+.ft-toast.error { border-color:#ff476d; background:#1f0a10; color:#ffd5db; box-shadow:0 0 22px rgba(255,71,109,.3); }
+.ft-toast.error span { background:#ff476d; color:#fff; }
+@keyframes ft-toast-in { 0% { opacity:0; transform:translate(-50%,28px) scale(.9); } 60% { opacity:1; transform:translate(-50%,-8px) scale(1.04); } 100% { opacity:1; transform:translate(-50%,0) scale(1); } }
+html[data-theme="light"] .ft-toast { background:#f1faec; color:#12201c; box-shadow:0 4px 14px rgba(0,0,0,.12); }
+html[data-theme="light"] .ft-toast.error { background:#fff0f3; color:#8a2438; }
+html[data-anim="off"] .ft-toast { animation:none !important; }
+@media (prefers-reduced-motion: reduce) { .ft-toast { animation:none !important; } }
+
 `;
 
 if (typeof document !== "undefined" && !document.getElementById("fittrack-final-styles")) {

@@ -356,6 +356,34 @@ export default function Profile() {
     document.getElementById(`st-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
+  // ความครบถ้วนของข้อมูล (แสดงในเมนูซ้าย)
+  const profileChecks = [
+    ['รูปโปรไฟล์', !!photo, 'profile'],
+    ['เบอร์โทรศัพท์', !!settings.phone, 'account'],
+    ['เพศ', !!settings.gender, 'health'],
+    ['อายุ', settings.age !== '', 'health'],
+    ['น้ำหนัก', settings.weight !== '', 'health'],
+    ['ส่วนสูง', settings.height !== '', 'health'],
+    ['เป้าหมาย', !!settings.goal, 'health'],
+    ['ระดับกิจกรรม', !!settings.activity, 'health'],
+  ];
+  const completePct = Math.round((profileChecks.filter((c) => c[1]).length / profileChecks.length) * 100);
+  const nextMissing = profileChecks.find((c) => !c[1]);
+
+  // ไฮไลต์เมนูตามตำแหน่งที่เลื่อนอยู่
+  useEffect(() => {
+    if (loading || typeof IntersectionObserver === 'undefined') return undefined;
+    const ids = ['profile', 'account', 'health', 'goals', 'notifications', 'security', 'display'];
+    const els = ids.map((id) => document.getElementById(`st-${id}`)).filter(Boolean);
+    const io = new IntersectionObserver((entries) => {
+      const hit = entries.filter((e) => e.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (hit) setActiveSection(hit.target.id.replace('st-', ''));
+    }, { rootMargin: '-10% 0px -65% 0px' });
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [loading]);
+
   // ---------- บัญชี: แก้ไขชื่อ / อีเมล / เบอร์ ----------
   const [acc, setAcc] = useState(null); // null = โหมดดู
   const openAccountEdit = () => {
@@ -571,10 +599,10 @@ export default function Profile() {
         </div>
 
         <nav className="side-menu">
-          <button className="side-link" type="button" onClick={() => navigate('/')}><span className="side-icon">⌂</span>หน้าหลัก</button>
+          <button className="side-link" type="button" onClick={() => navigate('/dashboard')}><span className="side-icon">⌂</span>หน้าหลัก</button>
           <button className="side-link" type="button" onClick={() => navigate('/exercises')}><span className="side-icon side-icon-dumbbell" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 18v12M14 14v20M34 14v20M40 18v12M14 24h20M8 24h6M34 24h6" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 18v12M11 14v20M37 14v20M43 18v12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg></span>ออกกำลังกาย</button>
           <button className="side-link" type="button" onClick={() => navigate('/history')}><span className="side-icon">◷</span>ประวัติการออกกำลังกาย</button>
-          <button className="side-link active" type="button" onClick={() => navigate('/settings')}><span className="side-icon">⚙</span>ตั้งค่า</button>
+          <button className="side-link active" type="button" onClick={() => navigate('/profile')}><span className="side-icon">⚙</span>ตั้งค่า</button>
         </nav>
 
         <div className="sidebar-quote">
@@ -625,7 +653,7 @@ export default function Profile() {
             <header className="st-head">
               <span className="st-head-icon"><Ico d={IC.settings} size={34} /></span>
               <div className="st-head-copy">
-                <h1>ตั้งค่า</h1>
+                <h1>ตั้งค่าข้อมูลส่วนตัว</h1>
                 <p>จัดการบัญชีและข้อมูลของคุณ</p>
               </div>
               <div className="st-head-ai">
@@ -640,6 +668,10 @@ export default function Profile() {
               <div className="st-layout">
                 {/* ===== เมนูตั้งค่า ===== */}
                 <nav className="st-card st-menu" aria-label="เมนูตั้งค่า">
+                  <div className="st-menu-sum">
+                    <span className="st-menu-ava">{photo ? <img src={photo} alt="" /> : (name || email || '?').charAt(0).toUpperCase()}</span>
+                    <div><strong>{name || '-'}</strong><small>{email}</small></div>
+                  </div>
                   <h2 className="st-menu-title">เมนูตั้งค่า</h2>
                   <div className="st-menu-list">
                     {MENU.map((m) => (
@@ -648,11 +680,20 @@ export default function Profile() {
                       </button>
                     ))}
                   </div>
+                  <div className="st-menu-meter">
+                    <div className="st-ring" style={{ '--p': completePct }}><b>{completePct}%</b></div>
+                    <div>
+                      <strong>ความครบถ้วนของข้อมูล</strong>
+                      {nextMissing
+                        ? <button type="button" onClick={() => goSection(nextMissing[2])}>เพิ่ม{nextMissing[0]} </button>
+                        : <small>ครบถ้วนแล้ว</small>}
+                    </div>
+                  </div>
                 </nav>
 
                 <div className="st-main">
                   <div className="st-grid">
-                    {/* ===== โปรไฟล์ ===== */}
+                    <div className="st-col">
                     <section className="st-card" id="st-profile">
                       <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.user} size={18} /></span>โปรไฟล์ของฉัน</h2>
                       <div className="st-profile">
@@ -668,36 +709,6 @@ export default function Profile() {
                       </div>
                     </section>
 
-                    {/* ===== ข้อมูลบัญชี ===== */}
-                    <section className="st-card" id="st-account">
-                      <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.card} size={18} /></span>ข้อมูลบัญชี</h2>
-                      {acc ? (
-                        <div className="st-form">
-                          <label>ชื่อผู้ใช้<input className="st-input" value={acc.name} autoFocus onChange={(e) => setAcc({ ...acc, name: e.target.value })} /></label>
-                          <label>Email<input className="st-input" type="email" value={acc.email} onChange={(e) => setAcc({ ...acc, email: e.target.value })} /></label>
-                          <label>เบอร์โทรศัพท์<input className="st-input" type="tel" inputMode="tel" placeholder="08x-xxx-xxxx" value={acc.phone} onChange={(e) => setAcc({ ...acc, phone: e.target.value })} /></label>
-                          {acc.email.trim() !== email && (
-                            <label>รหัสผ่านปัจจุบัน (ยืนยันการเปลี่ยนอีเมล)<input className="st-input" type="password" autoComplete="current-password" value={acc.password} onChange={(e) => setAcc({ ...acc, password: e.target.value })} /></label>
-                          )}
-                          {acc.error && <p className="st-error" role="alert">{acc.error}</p>}
-                          <div className="st-row">
-                            <button type="button" className="st-btn ghost" disabled={acc.busy} onClick={() => setAcc(null)}>ยกเลิก</button>
-                            <button type="button" className="st-btn primary" disabled={acc.busy} onClick={saveAccount}>{acc.busy ? 'กำลังบันทึก...' : 'บันทึก'}</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <dl className="st-kv">
-                            <div><dt>ชื่อผู้ใช้</dt><dd>{name || 'ยังไม่มีข้อมูล'}</dd></div>
-                            <div><dt>Email</dt><dd>{email || 'ยังไม่มีข้อมูล'}</dd></div>
-                            <div><dt>เบอร์โทรศัพท์</dt><dd>{settings.phone || 'ยังไม่มีข้อมูล'}</dd></div>
-                          </dl>
-                          <button type="button" className="st-btn primary full" onClick={openAccountEdit}>แก้ไขข้อมูล</button>
-                        </>
-                      )}
-                    </section>
-
-                    {/* ===== ข้อมูลสุขภาพ (ฟอร์ม) ===== */}
                     <section className="st-card" id="st-health">
                       <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.heart} size={18} /></span>ข้อมูลสุขภาพ</h2>
                       <div className="st-fields">
@@ -731,33 +742,6 @@ export default function Profile() {
                       </div>
                     </section>
 
-                    {/* ===== BMI + แคลอรี่ ===== */}
-                    <section className="st-card st-bmi">
-                      <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.flame} size={18} /></span>ข้อมูลสุขภาพของฉัน</h2>
-                      <div className="st-stats">
-                        <div><small>น้ำหนัก</small><b>{settings.weight !== '' ? <>{settings.weight} <i>kg</i></> : '-'}</b></div>
-                        <div><small>ส่วนสูง</small><b>{settings.height !== '' ? <>{settings.height} <i>cm</i></> : '-'}</b></div>
-                        <div><small>BMI</small><b className="hl">{bmiText}</b></div>
-                        <div><small>สถานะ</small><b className={`status ${bmi === null ? '' : status === 'ปกติ' ? 'ok' : 'warn'}`}>{status}</b></div>
-                      </div>
-                      <div className="st-bmi-bar" aria-label="ตัวชี้วัด BMI">
-                        <div className="st-bmi-track">
-                          {bmi !== null && <span className="st-bmi-pin" style={{ left: `${bmiPosition(bmi)}%` }} />}
-                        </div>
-                        <div className="st-bmi-labels"><span>ผอม</span><span>ปกติ</span><span>น้ำหนักเกิน</span><span>อ้วน</span></div>
-                      </div>
-                      <div className="st-kcal">
-                        <small>พลังงานที่แนะนำต่อวัน</small>
-                        {recommendedKcal ? (
-                          <strong><Ico d={IC.flame} size={26} /> {recommendedKcal.toLocaleString()} <i>kcal</i></strong>
-                        ) : (
-                          <strong className="empty">ยังไม่มีข้อมูล</strong>
-                        )}
-                        <span>{recommendedKcal ? 'คำนวณจากเพศ อายุ น้ำหนัก ส่วนสูง ระดับกิจกรรม และเป้าหมายของคุณ' : 'กรอกอายุ น้ำหนัก และส่วนสูงเพื่อดูค่าที่แนะนำ'}</span>
-                      </div>
-                    </section>
-
-                    {/* ===== เป้าหมายการออกกำลังกาย ===== */}
                     <section className="st-card" id="st-goals">
                       <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.target} size={18} /></span>เป้าหมายการออกกำลังกาย</h2>
                       <div className="st-form">
@@ -786,7 +770,78 @@ export default function Profile() {
                       </div>
                     </section>
 
-                    {/* ===== การแจ้งเตือน ===== */}
+                    <section className="st-card" id="st-security">
+                      <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.shield} size={18} /></span>ความปลอดภัยและบัญชี</h2>
+                      <ul className="st-actions">
+                        <li>
+                          <div><strong>เปลี่ยนรหัสผ่าน</strong><small>{hasPasswordProvider ? 'ตั้งรหัสผ่านใหม่เพื่อความปลอดภัยของบัญชี' : 'บัญชีนี้ไม่ได้เข้าสู่ระบบด้วยรหัสผ่าน'}</small></div>
+                          <button type="button" className="st-btn primary" disabled={!hasPasswordProvider} onClick={() => setPw({ current: '', next: '', confirm: '', error: '', busy: false })}>เปลี่ยนรหัสผ่าน</button>
+                        </li>
+                        <li>
+                          <div><strong>ออกจากระบบ</strong><small>สิ้นสุดการใช้งานในอุปกรณ์นี้</small></div>
+                          <button type="button" className="st-btn danger-soft" onClick={() => setLogoutOpen(true)}>ออกจากระบบ</button>
+                        </li>
+                        <li>
+                          <div><strong>ลบบัญชี</strong><small>ลบบัญชีและประวัติการออกกำลังกายถาวร</small></div>
+                          <button type="button" className="st-btn danger" onClick={() => setDel({ password: '', error: '', busy: false })}>ลบบัญชี</button>
+                        </li>
+                      </ul>
+                    </section>
+                    </div>
+                    <div className="st-col">
+                    <section className="st-card" id="st-account">
+                      <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.card} size={18} /></span>ข้อมูลบัญชี</h2>
+                      {acc ? (
+                        <div className="st-form">
+                          <label>ชื่อผู้ใช้<input className="st-input" value={acc.name} autoFocus onChange={(e) => setAcc({ ...acc, name: e.target.value })} /></label>
+                          <label>Email<input className="st-input" type="email" value={acc.email} onChange={(e) => setAcc({ ...acc, email: e.target.value })} /></label>
+                          <label>เบอร์โทรศัพท์<input className="st-input" type="tel" inputMode="tel" placeholder="08x-xxx-xxxx" value={acc.phone} onChange={(e) => setAcc({ ...acc, phone: e.target.value })} /></label>
+                          {acc.email.trim() !== email && (
+                            <label>รหัสผ่านปัจจุบัน (ยืนยันการเปลี่ยนอีเมล)<input className="st-input" type="password" autoComplete="current-password" value={acc.password} onChange={(e) => setAcc({ ...acc, password: e.target.value })} /></label>
+                          )}
+                          {acc.error && <p className="st-error" role="alert">{acc.error}</p>}
+                          <div className="st-row">
+                            <button type="button" className="st-btn ghost" disabled={acc.busy} onClick={() => setAcc(null)}>ยกเลิก</button>
+                            <button type="button" className="st-btn primary" disabled={acc.busy} onClick={saveAccount}>{acc.busy ? 'กำลังบันทึก...' : 'บันทึก'}</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <dl className="st-kv">
+                            <div><dt>ชื่อผู้ใช้</dt><dd>{name || 'ยังไม่มีข้อมูล'}</dd></div>
+                            <div><dt>Email</dt><dd>{email || 'ยังไม่มีข้อมูล'}</dd></div>
+                            <div><dt>เบอร์โทรศัพท์</dt><dd>{settings.phone || 'ยังไม่มีข้อมูล'}</dd></div>
+                          </dl>
+                          <button type="button" className="st-btn primary full" onClick={openAccountEdit}>แก้ไขข้อมูล</button>
+                        </>
+                      )}
+                    </section>
+
+                    <section className="st-card st-bmi">
+                      <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.flame} size={18} /></span>ข้อมูลสุขภาพของฉัน</h2>
+                      <div className="st-stats">
+                        <div><small>น้ำหนัก</small><b>{settings.weight !== '' ? <>{settings.weight} <i>kg</i></> : '-'}</b></div>
+                        <div><small>ส่วนสูง</small><b>{settings.height !== '' ? <>{settings.height} <i>cm</i></> : '-'}</b></div>
+                        <div><small>BMI</small><b className="hl">{bmiText}</b></div>
+                        <div><small>สถานะ</small><b className={`status ${bmi === null ? '' : status === 'ปกติ' ? 'ok' : 'warn'}`}>{status}</b></div>
+                      </div>
+                      <div className="st-bmi-bar" aria-label="ตัวชี้วัด BMI">
+                        <div className="st-bmi-track">
+                          {bmi !== null && <span className="st-bmi-pin" style={{ left: `${bmiPosition(bmi)}%` }} />}
+                        </div>
+                        <div className="st-bmi-labels"><span>ผอม</span><span>ปกติ</span><span>น้ำหนักเกิน</span><span>อ้วน</span></div>
+                      </div>
+                      <div className="st-kcal">
+                        <small>พลังงานที่แนะนำต่อวัน</small>
+                        {recommendedKcal ? (
+                          <strong><Ico d={IC.flame} size={26} /> {recommendedKcal.toLocaleString()} <i>kcal</i></strong>
+                        ) : (
+                          <strong className="empty">ยังไม่มีข้อมูล</strong>
+                        )}
+                        <span>{recommendedKcal ? 'คำนวณจากเพศ อายุ น้ำหนัก ส่วนสูง ระดับกิจกรรม และเป้าหมายของคุณ' : 'กรอกอายุ น้ำหนัก และส่วนสูงเพื่อดูค่าที่แนะนำ'}</span>
+                      </div>
+                    </section>
+
                     <section className="st-card" id="st-notifications">
                       <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.bell} size={18} /></span>การแจ้งเตือน</h2>
                       <ul className="st-toggles">
@@ -820,7 +875,6 @@ export default function Profile() {
                       )}
                     </section>
 
-                    {/* ===== รูปแบบการแสดงผล ===== */}
                     <section className="st-card" id="st-display">
                       <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.palette} size={18} /></span>รูปแบบการแสดงผล</h2>
                       <div className="st-field-label">ธีม</div>
@@ -834,32 +888,7 @@ export default function Profile() {
                         <li><span>Neon Glow</span><Toggle on={settings.display.neon} onChange={(v) => patchDisplay('neon', v)} label="Neon Glow" /></li>
                       </ul>
                     </section>
-
-                    {/* ===== ความปลอดภัย ===== */}
-                    <section className="st-card" id="st-security">
-                      <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.shield} size={18} /></span>ความปลอดภัย</h2>
-                      <ul className="st-actions">
-                        <li>
-                          <div><strong>เปลี่ยนรหัสผ่าน</strong><small>{hasPasswordProvider ? 'ตั้งรหัสผ่านใหม่เพื่อความปลอดภัยของบัญชี' : 'บัญชีนี้ไม่ได้เข้าสู่ระบบด้วยรหัสผ่าน'}</small></div>
-                          <button type="button" className="st-btn primary" disabled={!hasPasswordProvider} onClick={() => setPw({ current: '', next: '', confirm: '', error: '', busy: false })}>เปลี่ยนรหัสผ่าน</button>
-                        </li>
-                        <li>
-                          <div><strong>ลบบัญชี</strong><small>ลบบัญชีและประวัติการออกกำลังกายถาวร</small></div>
-                          <button type="button" className="st-btn danger" onClick={() => setDel({ password: '', error: '', busy: false })}>ลบบัญชี</button>
-                        </li>
-                      </ul>
-                    </section>
-
-                    {/* ===== บัญชีและการเข้าสู่ระบบ ===== */}
-                    <section className="st-card st-full">
-                      <h2 className="st-card-title"><span className="st-mini"><Ico d={IC.logout} size={18} /></span>บัญชีและการเข้าสู่ระบบ</h2>
-                      <ul className="st-actions">
-                        <li>
-                          <div><strong>ออกจากระบบ</strong><small>สิ้นสุดการใช้งานในอุปกรณ์นี้</small></div>
-                          <button type="button" className="st-btn danger-soft" onClick={() => setLogoutOpen(true)}>ออกจากระบบ</button>
-                        </li>
-                      </ul>
-                    </section>
+                    </div>
                   </div>
 
                   <button type="button" className="st-save" disabled={saving} onClick={saveAll}>
@@ -940,8 +969,23 @@ html,
 body,
 #root { margin:0;min-height:100%;background:var(--bg) }
 body { font-family:'Anuphan',sans-serif;color:var(--text);overflow-x:hidden }
+/* ช่องกรอก/ตัวเลือกทุกชนิดใช้ฟอนต์เดียวกับทั้งหน้า (เดิม select/option ใช้ฟอนต์ระบบของเบราว์เซอร์) */
 button,
-input { font:inherit }
+input,
+select,
+option,
+optgroup,
+textarea { font:inherit }
+
+/* ใช้ฟอนต์ตัวเดียวทั้งหน้า: เปลี่ยนฟอนต์ได้ที่ตัวแปรนี้ที่เดียว (เช่น 'Kanit') */
+:root { --font-main:'Kanit',sans-serif; }
+body,
+body *,
+body *::before,
+body *::after,
+select,
+option,
+optgroup { font-family:var(--font-main) !important; }
 .fittrack-app { min-height:100vh;background:radial-gradient(circle at 75% 8%,rgba(50,255,100,.06),transparent 22%),radial-gradient(circle at 92% 65%,rgba(177,52,255,.045),transparent 22%),#020609 }
 .sidebar { position:fixed;left:0;top:0;bottom:0;width:220px;background:linear-gradient(180deg,#020707 0%,#03090b 100%);border-right:1px solid #18343b;z-index:20;padding:22px 11px 18px;display:flex;flex-direction:column }
 .sidebar:after { display:none }
@@ -1281,13 +1325,40 @@ html[data-theme="light"] .footer-brand { color:#20382d }
 
 .st-layout { display:grid; grid-template-columns:250px minmax(0,1fr); gap:16px; align-items:start; }
 .st-main { display:grid; gap:16px; min-width:0; }
-.st-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start; }
-.st-full { grid-column:1 / -1; }
+/* 2 คอลัมน์อิสระ ไม่มีช่องว่างระหว่างการ์ด การ์ดสุดท้ายของคอลัมน์ที่สั้นกว่าจะยืดให้ชนขอบล่างเท่ากัน */
+.st-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:stretch; }
+.st-col { display:flex; flex-direction:column; gap:14px; min-width:0; }
+.st-col > .st-card:last-child { flex:1 1 auto; display:flex; flex-direction:column; }
+.st-col > .st-card:last-child .st-actions { flex:1; grid-auto-rows:1fr; }
+.st-col > .st-card:last-child .st-toggles { flex:1; align-content:space-around; }
 .st-card { min-width:0; padding:16px; border:1px solid #1f4f55; border-radius:14px; background:rgba(255,255,255,.015); box-shadow:inset 0 0 22px rgba(0,0,0,.18), 0 0 12px rgba(24,216,255,.04); scroll-margin-top:12px; }
+.st-card { transition:border-color .25s ease, box-shadow .25s ease; animation:st-rise .5s cubic-bezier(.2,.8,.2,1) both; }
+.st-col > .st-card:nth-child(2) { animation-delay:.07s; }
+.st-col > .st-card:nth-child(3) { animation-delay:.14s; }
+.st-col > .st-card:nth-child(4) { animation-delay:.21s; }
+.st-col > .st-card:hover { border-color:#2f7a52; box-shadow:inset 0 0 22px rgba(0,0,0,.18), 0 6px 26px rgba(80,255,120,.10); }
+@keyframes st-rise { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce) { .st-card { animation:none; } }
 .st-card-title { display:flex; align-items:center; gap:10px; margin:0 0 14px; font:500 18px 'Kanit',sans-serif; }
 .st-mini { width:32px; height:32px; flex:none; display:grid; place-items:center; border:1px solid #5ea02c; border-radius:9px; background:rgba(110,255,45,.07); color:#91ff3e; }
 
-.st-menu { position:sticky; top:12px; }
+.st-menu { position:sticky; top:12px; display:flex; flex-direction:column; gap:12px; }
+.st-menu-title { order:0; }
+.st-menu-sum { display:flex; align-items:center; gap:10px; padding:4px 2px 12px; border-bottom:1px dashed #1f4f55; min-width:0; }
+.st-menu-sum > div { min-width:0; display:grid; }
+.st-menu-sum strong { font:500 15px 'Kanit',sans-serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.st-menu-sum small { color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.st-menu-ava { width:42px; height:42px; flex:none; border-radius:50%; overflow:hidden; display:grid; place-items:center; border:2px solid var(--cyan); background:radial-gradient(circle at 35% 25%,#4c5053,#101719 60%); color:#fff; font:600 17px 'Kanit',sans-serif; }
+.st-menu-ava img { width:100%; height:100%; object-fit:cover; display:block; }
+.st-menu-meter { display:flex; align-items:center; gap:12px; margin-top:4px; padding:12px; border:1px solid rgba(110,255,50,.25); border-radius:12px; background:linear-gradient(135deg,rgba(14,40,22,.55),rgba(4,12,12,.4)); }
+.st-menu-meter > div:last-child { min-width:0; display:grid; gap:3px; }
+.st-menu-meter strong { font:500 12.5px 'Kanit',sans-serif; }
+.st-menu-meter small { font-size:11.5px; color:var(--green2); }
+.st-menu-meter button { padding:0; border:0; background:none; color:var(--green2); font-size:11.5px; text-align:left; cursor:pointer; }
+.st-menu-meter button:hover { text-decoration:underline; }
+.st-ring { --p:0; width:52px; height:52px; flex:none; display:grid; place-items:center; border-radius:50%; background:conic-gradient(var(--green) calc(var(--p) * 1%), rgba(255,255,255,.1) 0); position:relative; transition:background .4s ease; }
+.st-ring::before { content:''; position:absolute; inset:5px; border-radius:50%; background:#07131a; }
+.st-ring b { position:relative; font:600 12px 'Kanit',sans-serif; }
 .st-menu-title { margin:0 0 10px; font:500 16px 'Kanit',sans-serif; color:var(--muted); }
 .st-menu-list { display:grid; gap:6px; }
 .st-menu-item { display:flex; align-items:center; gap:12px; min-height:46px; padding:0 12px; border:1px solid transparent; border-radius:11px; background:transparent; color:#d8dddd; font-size:13.5px; text-align:left; cursor:pointer; transition:.2s; }
@@ -1388,7 +1459,7 @@ select.st-input { appearance:auto; }
 .st-actions strong { display:block; font:500 15px 'Kanit',sans-serif; }
 .st-actions small { display:block; margin-top:2px; font-size:11.5px; color:var(--muted); line-height:1.5; }
 
-.st-save { width:100%; min-height:56px; display:flex; align-items:center; justify-content:center; gap:10px; border:0; border-radius:14px; background:linear-gradient(90deg,#72ed2e,#baff3e); color:#071005; font:600 18px 'Kanit',sans-serif; cursor:pointer; box-shadow:0 0 22px rgba(125,255,45,.3); transition:.2s; }
+.st-save { position:sticky; bottom:12px; z-index:5; width:100%; min-height:56px; display:flex; align-items:center; justify-content:center; gap:10px; border:0; border-radius:14px; background:linear-gradient(90deg,#72ed2e,#baff3e); color:#071005; font:600 18px 'Kanit',sans-serif; cursor:pointer; box-shadow:0 0 22px rgba(125,255,45,.3); transition:.2s; }
 .st-save:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 0 32px rgba(125,255,45,.5); }
 .st-save:disabled { opacity:.65; cursor:wait; }
 
@@ -1411,12 +1482,15 @@ html[data-anim="off"] *, html[data-anim="off"] *::before, html[data-anim="off"] 
 @media (max-width:1200px) {
   .st-layout { grid-template-columns:1fr; }
   .st-menu { position:static; }
-  .st-menu-title { display:none; }
+  .st-menu-title, .st-menu-sum, .st-menu-meter { display:none; }
   .st-menu-list { display:flex; overflow-x:auto; gap:8px; padding-bottom:4px; scrollbar-width:thin; }
   .st-menu-item { flex:none; white-space:nowrap; }
 }
 @media (max-width:900px) {
   .st-grid { grid-template-columns:1fr; }
+  .st-col { display:contents; }
+  #st-profile { order:1; } #st-account { order:2; } #st-health { order:3; } .st-bmi { order:4; }
+  #st-goals { order:5; } #st-notifications { order:6; } #st-display { order:7; } #st-security { order:8; }
   .st-head-ai { display:none; }
 }
 @media (max-width:640px) {
@@ -1457,6 +1531,14 @@ html[data-theme="light"] .st-card,
 html[data-theme="light"] .st-stats > div,
 html[data-theme="light"] .st-progress-box,
 html[data-theme="light"] .st-actions li { background:#fff; border-color:#bfd8d0; box-shadow:none; }
+html[data-theme="light"] .st-menu-sum { border-bottom-color:#cfe0d8; }
+html[data-theme="light"] .st-menu-sum small { color:#4a5e57; }
+html[data-theme="light"] .st-menu-ava { border-color:#4fb8d6; }
+html[data-theme="light"] .st-menu-meter { background:linear-gradient(135deg,#f1faec,#fff); border-color:#9ccb6b; }
+html[data-theme="light"] .st-menu-meter small, html[data-theme="light"] .st-menu-meter button { color:#2f8a10; }
+html[data-theme="light"] .st-ring::before { background:#f6fbf2; }
+html[data-theme="light"] .st-ring { background:conic-gradient(#2a9d16 calc(var(--p) * 1%), rgba(0,0,0,.09) 0); }
+html[data-theme="light"] .st-col > .st-card:hover { border-color:#6cc943; box-shadow:0 6px 20px rgba(29,76,56,.10); }
 html[data-theme="light"] .st-menu-item { color:#2a3a36; }
 html[data-theme="light"] .st-menu-item svg { color:#40584e; }
 html[data-theme="light"] .st-menu-item:hover { background:#f1faec; border-color:#9ccb6b; }

@@ -400,10 +400,10 @@ export default function History() {
         </div>
 
         <nav className="side-menu">
-          <button className="side-link" onClick={() => navigate('/')}><span className="side-icon">⌂</span>หน้าหลัก</button>
+          <button className="side-link" onClick={() => navigate('/dashboard')}><span className="side-icon">⌂</span>หน้าหลัก</button>
           <button className="side-link" onClick={() => navigate('/exercises')}><span className="side-icon side-icon-dumbbell" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M8 18v12M14 14v20M34 14v20M40 18v12M14 24h20M8 24h6M34 24h6" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 18v12M11 14v20M37 14v20M43 18v12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg></span>ออกกำลังกาย</button>
           <button className="side-link active" onClick={() => navigate('/history')}><span className="side-icon">◷</span>ประวัติการออกกำลังกาย</button>
-          <button className="side-link" onClick={() => navigate('/settings')}><span className="side-icon">⚙</span>ตั้งค่า</button>
+          <button className="side-link" onClick={() => navigate('/profile')}><span className="side-icon">⚙</span>ตั้งค่า</button>
         </nav>
 
         <div className="sidebar-quote">
