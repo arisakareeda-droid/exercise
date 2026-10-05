@@ -34,40 +34,175 @@ const getSavedDailyCalories = () => {
   }
 };
 
-const exerciseInfoMap = {
-  squat: {
-    name: "Squat",
-    thaiName: "ลุกนั่ง",
-    icon: "🏋️‍♂️",
-    description: "บริหารกล้ามเนื้อขาและสะโพก",
-  },
-  jumping_jack: {
-    name: "Jumping Jack",
-    thaiName: "กระโดดตบ",
-    icon: "⭐",
-    description: "ช่วยเพิ่มการเผาผลาญและความแข็งแรง",
-  },
-  high_knees: {
-    name: "High Knees",
-    thaiName: "ยกเข่าสูง",
-    icon: "🏃",
-    description: "เพิ่มอัตราการเต้นของหัวใจและฝึกกล้ามเนื้อต้นขา",
-  },
-  punches: {
-    name: "Punches",
-    thaiName: "ชกหมัด",
-    icon: "🥊",
-    description: "ชกหมัดสลับซ้าย-ขวา ฝึกกล้ามเนื้อแขน ไหล่ และเพิ่มอัตราการเต้นของหัวใจ",
-  },
+// ======================================================================
+// แคตตาล็อกท่าออกกำลังกาย — ชุดเดียวกับหน้าเลือกท่า (ExerciseSelect)
+// หน้านี้อ่านพารามิเตอร์ ?exercise=<id> แล้วค้นหาท่าจากที่นี่ จึงรองรับทุกท่าที่เลือกมา
+// หมายเหตุ: ถ้าเพิ่มท่าใหม่ในหน้าเลือกท่า ให้เพิ่มแถวเดียวกันที่นี่ด้วย
+// ======================================================================
+const NONE = "none";
+
+const PART_LABEL = {
+  shoulder: "ไหล่", chest: "อก", back: "หลัง", arm: "แขน",
+  core: "ท้อง", leg: "สะโพก", leg2: "ต้นขา", calf: "น่อง",
 };
+
+// ไฟล์วิดีโอตัวอย่าง (โฟลเดอร์ public) — ท่าที่ยังไม่มีคลิปจะแสดงไอคอนแทน
+const EXERCISE_VIDEOS = {
+  squat: "/squats.mp4",
+  jumping_jack: "/jumping_jack.mp4",
+  high_knees: "/high_knees.mp4",
+  punches: "/punches.mp4",
+  push_up: "/Push_up.mp4",
+  diamond_push_up: "/Diamond_push_up.mp4",
+  bird_dog: "/Bird_dog.mp4",
+  mountain_climber: "/Mountain_climber.mp4",
+  reverse_snow_angel: "/Reverse_snow_angel.mp4",
+  plank: "/Plank.mp4",
+};
+
+const BODYWEIGHT_ROWS = [
+  ["push_up", "Push Up", "วิดพื้น", ["chest", "arm"], NONE, 3, "10-15 ครั้ง", "กลาง", "วางมือกว้างกว่าไหล่เล็กน้อย ลำตัวตรงเป็นเส้นเดียว งอศอกลดอกลงใกล้พื้น แล้วดันกลับขึ้น"],
+  ["diamond_push_up", "Diamond Push Up", "วิดพื้นมือเพชร", ["arm", "chest"], NONE, 3, "8-12 ครั้ง", "ยาก", "วางมือชิดกันใต้อกให้นิ้วโป้งและนิ้วชี้ประกบเป็นรูปข้าวหลามตัด ลดอกลงโดยให้ศอกแนบลำตัว แล้วดันกลับ"],
+  ["bird_dog", "Bird Dog", "เบิร์ดด็อก", ["back", "core"], NONE, 3, "10 ครั้ง/ข้าง", "ง่าย", "ตั้งท่าคลาน เหยียดแขนข้างหนึ่งไปข้างหน้าและขาฝั่งตรงข้ามไปข้างหลังพร้อมกัน ค้างแล้วสลับข้างโดยลำตัวไม่เอียง"],
+  ["reverse_snow_angel", "Reverse Snow Angel", "สโนว์แองเจิลย้อนกลับ", ["back", "shoulder"], NONE, 3, "12 ครั้ง", "กลาง", "นอนคว่ำยกแขนลอยจากพื้น กวาดแขนเป็นครึ่งวงกลมจากข้างลำตัวไปเหนือศีรษะแล้วกลับมาช้า ๆ"],
+  ["plank", "Plank", "แพลงก์", ["core"], NONE, 3, "30-45 วินาที", "ง่าย", "ค้ำตัวบนข้อศอกและปลายเท้า ลำตัวตรงเป็นเส้นเดียว เกร็งหน้าท้องและก้นค้างไว้ตามเวลา"],
+  ["mountain_climber", "Mountain Climber", "ปีนเขา", ["core", "leg2"], NONE, 3, "30 วินาที", "กลาง", "ตั้งท่าวิดพื้นแขนตรง สลับดึงเข่าเข้าหาอกอย่างรวดเร็วโดยสะโพกไม่ยกสูง"],
+];
+
+const EQUIPMENT_ROWS = [
+  // ดัมเบล
+  ["dumbbell_shoulder_press", "Dumbbell Shoulder Press", "ดัมเบลชอล์เดอร์เพรส", ["shoulder", "arm"], "ดัมเบล", 3, "8-12 ครั้ง", "กลาง", "นั่งหลังตรง ถือดัมเบลระดับหูฝ่ามือหันไปข้างหน้า ดันขึ้นเหนือศีรษะจนแขนเกือบตรง แล้วลดลงช้า ๆ"],
+  ["dumbbell_lateral_raise", "Dumbbell Lateral Raise", "ดัมเบลยกไหล่ด้านข้าง", ["shoulder"], "ดัมเบล", 3, "12-15 ครั้ง", "ง่าย", "ยืนตรง ถือดัมเบลข้างลำตัว ยกแขนออกด้านข้างจนเสมอไหล่โดยศอกงอเล็กน้อย แล้วลดลงอย่างควบคุม"],
+  ["dumbbell_bench_press", "Dumbbell Bench Press", "ดัมเบลเบนช์เพรส", ["chest", "arm"], "ดัมเบล", 3, "8-12 ครั้ง", "กลาง", "นอนหงายบนม้านั่ง ถือดัมเบลสองข้างระดับอก ดันขึ้นจนแขนเกือบตรง แล้วลดลงช้า ๆ ให้ศอกทำมุมประมาณ 45 องศา"],
+  ["dumbbell_row", "One-Arm Dumbbell Row", "ดัมเบลโรว์แขนเดียว", ["back", "arm"], "ดัมเบล", 3, "10-12 ครั้ง/ข้าง", "กลาง", "ใช้มือและเข่าข้างหนึ่งยันม้านั่ง หลังขนานพื้น ดึงดัมเบลเข้าหาสะโพกพร้อมบีบสะบัก แล้วลดลงช้า ๆ"],
+  ["dumbbell_curl", "Dumbbell Curl", "ดัมเบลเคิร์ล", ["arm"], "ดัมเบล", 3, "10-12 ครั้ง", "ง่าย", "ยืนตรง ศอกแนบลำตัว งอข้อศอกยกดัมเบลขึ้นหาไหล่ แล้วลดลงช้า ๆ โดยไม่เหวี่ยงตัว"],
+  ["goblet_squat", "Goblet Squat", "ก็อบเล็ตสควอท", ["leg", "leg2"], "ดัมเบล", 3, "10-12 ครั้ง", "ง่าย", "ถือดัมเบลแนบอก ยืนกว้างเท่าไหล่ ย่อสะโพกลงโดยหลังตรง แล้วดันส้นเท้ากลับขึ้น"],
+  ["dumbbell_calf_raise", "Dumbbell Calf Raise", "ดัมเบลเขย่งปลายเท้า", ["calf"], "ดัมเบล", 3, "15-20 ครั้ง", "ง่าย", "ถือดัมเบลสองข้างลำตัว เขย่งส้นเท้าขึ้นให้สูงที่สุด ค้างเล็กน้อย แล้วลดลงช้า ๆ"],
+  // บาร์เบล
+  ["barbell_bench_press", "Barbell Bench Press", "บาร์เบลเบนช์เพรส", ["chest", "arm"], "บาร์เบล", 4, "6-10 ครั้ง", "ยาก", "นอนหงาย จับบาร์กว้างกว่าไหล่ ลดบาร์ลงแตะกลางอก แล้วดันขึ้นจนแขนตรง ควรมีผู้ช่วยดู"],
+  ["barbell_deadlift", "Barbell Deadlift", "บาร์เบลเดดลิฟต์", ["back", "leg"], "บาร์เบล", 3, "5-8 ครั้ง", "ยาก", "ยืนชิดบาร์ หลังตรง งอสะโพกจับบาร์ แล้วดันเท้าลงพื้นยืดลำตัวขึ้นพร้อมบาร์ ลดลงอย่างควบคุม"],
+  ["barbell_squat", "Barbell Back Squat", "บาร์เบลสควอท", ["leg", "leg2"], "บาร์เบล", 4, "6-10 ครั้ง", "ยาก", "วางบาร์บนหลังส่วนบน ยืนกว้างเท่าไหล่ ย่อลงจนต้นขาขนานพื้นโดยหลังตรง แล้วดันขึ้น"],
+  ["barbell_overhead_press", "Barbell Overhead Press", "บาร์เบลโอเวอร์เฮดเพรส", ["shoulder", "arm"], "บาร์เบล", 3, "6-10 ครั้ง", "ยาก", "ยืนตรง ถือบาร์ระดับไหล่ เกร็งท้อง ดันบาร์ขึ้นเหนือศีรษะจนแขนตรง แล้วลดกลับช้า ๆ"],
+  // เคเบิล
+  ["cable_row", "Seated Cable Row", "เคเบิลโรว์นั่ง", ["back", "arm"], "เคเบิล", 3, "10-12 ครั้ง", "กลาง", "นั่งหลังตรง ดึงมือจับเข้าหาท้องพร้อมบีบสะบักเข้าหากัน แล้วปล่อยกลับช้า ๆ"],
+  ["cable_triceps_pushdown", "Cable Triceps Pushdown", "เคเบิลดันไตรเซ็ปส์", ["arm"], "เคเบิล", 3, "12-15 ครั้ง", "ง่าย", "ยืนหน้าเครื่อง ศอกแนบลำตัว กดมือจับลงจนแขนตรง แล้วปล่อยกลับช้า ๆ โดยศอกอยู่กับที่"],
+  ["cable_crunch", "Cable Crunch", "เคเบิลครันช์", ["core"], "เคเบิล", 3, "12-15 ครั้ง", "กลาง", "คุกเข่าหน้าเครื่อง จับเชือกข้างศีรษะ ม้วนลำตัวลงโดยเกร็งหน้าท้อง แล้วกลับขึ้นช้า ๆ"],
+  // เครื่องออกกำลังกาย
+  ["lat_pulldown", "Lat Pulldown", "แลตพูลดาวน์", ["back", "arm"], "เครื่องออกกำลังกาย", 3, "10-12 ครั้ง", "กลาง", "นั่งล็อกต้นขาให้แน่น จับบาร์กว้างกว่าไหล่ ดึงลงมาที่หน้าอกส่วนบนพร้อมบีบสะบัก แล้วปล่อยขึ้นช้า ๆ"],
+  ["chest_press_machine", "Chest Press Machine", "เครื่องเชสต์เพรส", ["chest", "arm"], "เครื่องออกกำลังกาย", 3, "10-12 ครั้ง", "ง่าย", "ปรับเบาะให้มือจับอยู่ระดับอก ดันไปข้างหน้าจนแขนเกือบตรง แล้วปล่อยกลับช้า ๆ"],
+  ["leg_press", "Leg Press", "เลกเพรส", ["leg", "leg2"], "เครื่องออกกำลังกาย", 3, "10-12 ครั้ง", "กลาง", "นั่งหลังแนบเบาะ วางเท้ากว้างเท่าไหล่บนแป้น ดันออกจนเกือบเหยียดเข่า แล้วงอกลับช้า ๆ โดยไม่ล็อกเข่า"],
+  ["seated_calf_raise", "Seated Calf Raise", "เครื่องเขย่งน่องแบบนั่ง", ["calf"], "เครื่องออกกำลังกาย", 3, "15-20 ครั้ง", "ง่าย", "นั่งวางปลายเท้าบนแป้น ดันส้นเท้าขึ้นให้สูงที่สุด ค้างเล็กน้อย แล้วลดลงช้า ๆ"],
+  ["shoulder_press_machine", "Shoulder Press Machine", "เครื่องชอล์เดอร์เพรส", ["shoulder"], "เครื่องออกกำลังกาย", 3, "10-12 ครั้ง", "ง่าย", "ปรับเบาะให้มือจับอยู่ระดับไหล่ ดันขึ้นเหนือศีรษะ แล้วลดลงช้า ๆ โดยหลังแนบเบาะ"],
+  // ยางยืด
+  ["band_pull_apart", "Band Pull Apart", "ดึงยางยืดแยกแขน", ["back", "shoulder"], "ยางยืด", 3, "15 ครั้ง", "ง่าย", "ถือยางยืดสองมือระดับอกแขนตรง ดึงแยกออกด้านข้างพร้อมบีบสะบัก แล้วปล่อยกลับช้า ๆ"],
+  ["band_chest_press", "Band Chest Press", "ยางยืดดันอก", ["chest", "arm"], "ยางยืด", 3, "12-15 ครั้ง", "ง่าย", "คล้องยางยืดไว้ด้านหลัง จับสองปลายที่ระดับอก ดันไปข้างหน้าจนแขนตรง แล้วปล่อยกลับช้า ๆ"],
+  ["band_squat", "Banded Squat", "สควอทยางยืด", ["leg", "leg2"], "ยางยืด", 3, "12-15 ครั้ง", "ง่าย", "คล้องยางยืดเหนือเข่า ยืนกว้างเท่าไหล่ ย่อตัวลงโดยดันเข่าออกต้านยาง แล้วดันกลับขึ้น"],
+  // Kettlebell
+  ["kettlebell_swing", "Kettlebell Swing", "เคตเทิลเบลสวิง", ["leg", "back"], "Kettlebell", 3, "12-15 ครั้ง", "กลาง", "ยืนกว้างกว่าไหล่ ถือเคตเทิลเบลสองมือ ส่งสะโพกไปข้างหลังแล้วดันสะโพกไปข้างหน้าให้เคตเทิลเบลแกว่งถึงระดับอก"],
+  ["kettlebell_goblet_squat", "Kettlebell Goblet Squat", "เคตเทิลเบลก็อบเล็ตสควอท", ["leg2", "leg"], "Kettlebell", 3, "10-12 ครั้ง", "ง่าย", "ถือเคตเทิลเบลแนบอก ย่อสะโพกลงโดยหลังตรง แล้วดันส้นเท้ากลับขึ้น"],
+  ["kettlebell_russian_twist", "Kettlebell Russian Twist", "รัสเซียนทวิสต์เคตเทิลเบล", ["core"], "Kettlebell", 3, "20 ครั้ง", "กลาง", "นั่งเอนตัวเล็กน้อย ยกเท้าลอย ถือเคตเทิลเบลหน้าอก บิดลำตัวสลับซ้าย-ขวาอย่างควบคุม"],
+  // ม้านั่ง
+  ["bench_dip", "Bench Dip", "ดิปบนม้านั่ง", ["arm", "chest"], "ม้านั่ง", 3, "10-15 ครั้ง", "กลาง", "วางมือบนขอบม้านั่งด้านหลังลำตัว งอศอกลดตัวลงแล้วดันกลับขึ้น โดยศอกชี้ไปด้านหลัง"],
+  ["bench_step_up", "Bench Step Up", "สเต็ปอัพบนม้านั่ง", ["leg", "leg2"], "ม้านั่ง", 3, "10 ครั้ง/ข้าง", "ง่าย", "ก้าวเท้าหนึ่งขึ้นบนม้านั่ง ดันตัวขึ้นจนยืนตรง แล้วก้าวลงช้า ๆ สลับข้าง"],
+  ["bench_incline_pushup", "Incline Push Up", "วิดพื้นมือเหนือม้านั่ง", ["chest", "arm"], "ม้านั่ง", 3, "10-15 ครั้ง", "ง่าย", "วางมือบนม้านั่ง ลำตัวตรงเป็นเส้นเดียว งอศอกลดอกลงใกล้ขอบม้านั่ง แล้วดันกลับขึ้น"],
+];
+
+const EXISTING_ROWS = [
+  ["squat", "Squat", "สควอท", ["leg", "leg2"], NONE, 3, "10-15 ครั้ง", "ง่าย", "ยืนกว้างเท่าไหล่ ย่อสะโพกลงเหมือนนั่งเก้าอี้ โดยหลังตรงและเข่าไม่เลยปลายเท้ามากนัก แล้วดันส้นเท้ากลับขึ้น", "บริหารกล้ามเนื้อต้นขา สะโพก และแกนกลางลำตัว"],
+  ["jumping_jack", "Jumping Jack", "กระโดดตบ", ["leg2", "calf"], NONE, 3, "30 วินาที", "ง่าย", "ยืนเท้าชิด กระโดดแยกเท้าพร้อมยกแขนเหนือศีรษะ แล้วกระโดดกลับท่าเดิมอย่างต่อเนื่อง", "เพิ่มอัตราการเต้นของหัวใจและช่วยเผาผลาญพลังงาน"],
+  ["high_knees", "High Knees", "ยกเข่าสูง", ["leg2", "leg"], NONE, 3, "30 วินาที", "ง่าย", "วิ่งอยู่กับที่พร้อมยกเข่าสลับให้สูงถึงระดับสะโพก แกว่งแขนสลับ และลงพื้นเบา ๆ ด้วยปลายเท้า", "วิ่งอยู่กับที่พร้อมยกเข่าสูง เพิ่มความเร็วหัวใจและฝึกกล้ามเนื้อต้นขา"],
+  ["punches", "Punches", "ชกหมัด", ["arm", "shoulder"], NONE, 3, "30 วินาที", "ง่าย", "ยืนแยกเท้าเล็กน้อย ชกหมัดสลับซ้าย-ขวาไปข้างหน้าอย่างต่อเนื่อง เกร็งหน้าท้อง และหมุนลำตัวเล็กน้อยตามหมัด", "ชกหมัดสลับซ้าย-ขวา เพิ่มความเร็วหัวใจและฝึกกล้ามเนื้อแขน ไหล่ และแกนกลางลำตัว"],
+];
+
+// ดึงตัวเลขแนะนำจากข้อความ เช่น "10-15 ครั้ง" → { min: 10, max: 15, unit: "ครั้ง" }
+const parseRecommended = (text = "") => {
+  const m = String(text).match(/(\d+)(?:\s*-\s*(\d+))?\s*(ครั้ง|วินาที)/);
+  if (!m) return { min: 10, max: 10, unit: "ครั้ง" };
+  const min = Number(m[1]);
+  return { min, max: m[2] ? Number(m[2]) : min, unit: m[3] };
+};
+
+const buildExercise = ([id, name, thaiName, parts, equipment, sets, reps, level, howTo, description]) => {
+  const names = parts.map((p) => PART_LABEL[p]).join(" และ ");
+  const bodyweight = equipment === NONE;
+  const rec = parseRecommended(reps);
+  return {
+    id, name, thaiName, parts, level, howTo, reps,
+    sets: Number(sets) || 3,
+    equipment: bodyweight ? "ไม่ใช้อุปกรณ์" : equipment,
+    bodyweight,
+    muscles: parts.map((p) => PART_LABEL[p]),
+    video: EXERCISE_VIDEOS[id] || null,
+    description: description || (bodyweight
+      ? `บริหารกล้ามเนื้อ${names} ด้วยน้ำหนักตัว`
+      : `บริหารกล้ามเนื้อ${names} โดยใช้ ${equipment}`),
+    recommended: rec,
+    // ค่าเริ่มต้นของเป้าหมาย: ท่านับครั้งใช้ค่าต่ำสุดที่แนะนำ, ท่านับเวลาเริ่มที่ 10
+    defaultTarget: rec.unit === "ครั้ง" ? Math.max(1, Math.min(100, rec.min)) : 10,
+  };
+};
+
+const EXERCISE_CATALOG = Object.fromEntries(
+  [...EXISTING_ROWS, ...BODYWEIGHT_ROWS, ...EQUIPMENT_ROWS].map((row) => {
+    const ex = buildExercise(row);
+    return [ex.id, ex];
+  })
+);
+
+const LEVEL_CLASS = { "ง่าย": "easy", "กลาง": "mid", "ยาก": "hard" };
+const TARGET_PRESETS = [5, 10, 15, 20, 30, 50];
+const clampTarget = (n) => Math.max(1, Math.min(100, Math.round(Number(n) || 1)));
+
+// ไอคอนแบบเส้น (SVG) ใช้แทนอิโมจิ ให้ดูเรียบและสมจริงเหมือนกันทุกอุปกรณ์
+const ICON_PATHS = {
+  clipboard: (<><rect x="8" y="3" width="8" height="4" rx="1" /><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" /><path d="m9 14 2 2 4-4" /></>),
+  camera: (<><path d="M4 8a2 2 0 0 1 2-2h1.5l1.2-1.6a1 1 0 0 1 .8-.4h5a1 1 0 0 1 .8.4L16.5 6H18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><circle cx="12" cy="12.5" r="3.5" /></>),
+  space: (<><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4" /><circle cx="12" cy="9.5" r="1.7" /><path d="M9 16.5V15a3 3 0 0 1 6 0v1.5" /></>),
+  dumbbell: (<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11" />),
+  scan: (<><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" /><circle cx="12" cy="9.5" r="2.2" /><path d="M8.2 16.5a3.8 3.8 0 0 1 7.6 0" /></>),
+  pulse: (<path d="M3 12h4l3-7 4 14 3-7h4" />),
+  bulb: (<><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" /></>),
+  sliders: (<><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></>),
+  body: (<><circle cx="12" cy="4.5" r="2" /><path d="M12 7.5v6.5M7.5 10l4.5-2.5 4.5 2.5M9 21l3-7 3 7" /></>),
+  swap: (<path d="M7 7h12m0 0-3-3m3 3-3 3M17 17H5m0 0 3-3m-3 3 3 3" />),
+};
+
+function Icon({ name, size = 20 }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+      {ICON_PATHS[name]}
+    </svg>
+  );
+}
+
+// ภาพตัวอย่างท่า: ใช้วิดีโอถ้ามี ไม่งั้น (หรือโหลดไม่ได้) แสดงไอคอนแทน
+function ExerciseOrb({ info }) {
+  const [failed, setFailed] = useState(false);
+  const showVideo = Boolean(info.video) && !failed;
+  return (
+    <div className={`es-orb${showVideo ? " has-video" : ""}`}>
+      {showVideo ? (
+        <video src={info.video} autoPlay muted loop playsInline preload="metadata" onError={() => setFailed(true)} />
+      ) : (
+        <Icon name={info.bodyweight ? "body" : "dumbbell"} size={64} />
+      )}
+    </div>
+  );
+}
 
 export default function ExerciseSetting() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const exerciseType = searchParams.get("exercise") || "squat";
-  const [targetCount, setTargetCount] = useState(10);
-  const exerciseInfo = exerciseInfoMap[exerciseType] || exerciseInfoMap.squat;
+  const requestedExercise = searchParams.get("exercise") || "squat";
+  const exerciseInfo = EXERCISE_CATALOG[requestedExercise] || EXERCISE_CATALOG.squat;
+  const exerciseType = exerciseInfo.id;
+  const [targetCount, setTargetCount] = useState(exerciseInfo.defaultTarget);
+
+  // เปลี่ยนท่า (เช่นกดย้อนกลับแล้วเลือกท่าใหม่) → ตั้งเป้าหมายเริ่มต้นตามท่านั้น
+  useEffect(() => {
+    setTargetCount(exerciseInfo.defaultTarget);
+  }, [exerciseType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---------- ชื่อผู้ใช้ (ดึงจาก Firestore เหมือนหน้า Dashboard) ----------
   const [displayName, setDisplayName] = useState(getInitialName);
@@ -240,34 +375,37 @@ export default function ExerciseSetting() {
           </div>
         </header>
 
-        <section className="es-title">
-          <div className="es-title-icon" aria-hidden="true">✦</div>
-          <div>
-            <h1>ตั้งค่าการออกกำลังกาย</h1>
-            <p>เลือกท่า · กำหนดเป้าหมาย · เริ่มออกกำลังกาย</p>
-          </div>
-        </section>
-
         <div className="es-grid">
           {/* ---------- การ์ดตั้งค่า ---------- */}
           <section className="es-card">
             <div className="es-heading">
-              <div className="es-icon" aria-hidden="true">✦</div>
+              <div className="es-icon" aria-hidden="true"><Icon name="sliders" size={20} /></div>
               <div>
                 <h2>ตั้งค่าการออกกำลังกาย</h2>
                 <span>เตรียมความพร้อมก่อนเริ่มเซสชัน</span>
               </div>
             </div>
 
+            <div className="es-scroll">
             <div className="es-setting-body">
               <div className="es-visual">
-                <div className="es-orb"><span>{exerciseInfo.icon}</span></div>
+                <ExerciseOrb key={exerciseType} info={exerciseInfo} />
                 <span className="es-label">SELECTED EXERCISE</span>
                 <h3>
                   {exerciseInfo.name}
                   <small>({exerciseInfo.thaiName})</small>
                 </h3>
                 <p>{exerciseInfo.description}</p>
+
+                <div className="es-badges">
+                  <span className={`es-level ${LEVEL_CLASS[exerciseInfo.level] || "mid"}`}>ระดับ{exerciseInfo.level}</span>
+                  <span className="es-badge"><Icon name={exerciseInfo.bodyweight ? "body" : "dumbbell"} size={14} />{exerciseInfo.equipment}</span>
+                  <span className="es-badge">{exerciseInfo.sets} เซ็ต</span>
+                </div>
+                <div className="es-muscles">
+                  {exerciseInfo.muscles.map((m) => <span key={m}>{m}</span>)}
+                </div>
+                <button type="button" className="es-change" onClick={() => navigate("/exercises")}><Icon name="swap" size={14} />เปลี่ยนท่า</button>
               </div>
 
               <div className="es-divider" />
@@ -317,64 +455,119 @@ export default function ExerciseSetting() {
                   </button>
                 </div>
 
+                <input
+                  type="range"
+                  className="es-range"
+                  min="1"
+                  max="100"
+                  value={clampTarget(safeTarget)}
+                  onChange={(e) => setTargetCount(clampTarget(e.target.value))}
+                  style={{ "--fill": `${((clampTarget(safeTarget) - 1) / 99) * 100}%` }}
+                  aria-label="ปรับเป้าหมายจำนวนครั้ง"
+                />
+
                 <div className="es-helper">
                   <span>กำหนดได้ตั้งแต่ 1–100 ครั้ง</span>
                   <strong>{safeTarget} ครั้ง</strong>
                 </div>
-              </div>
 
-              <div className="es-actions">
-                <button type="button" className="es-secondary" onClick={() => navigate("/exercises")}>
-                  <span>‹</span>
-                  ย้อนกลับ
-                </button>
-                <button type="button" className="es-primary" onClick={handleStartSession}>
-                  <span>▶</span>
-                  เริ่มออกกำลังกาย
-                </button>
+                <div className="es-presets" role="group" aria-label="ค่าที่ใช้บ่อย">
+                  {TARGET_PRESETS.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className={`es-preset${safeTarget === n ? " active" : ""}`}
+                      onClick={() => setTargetCount(n)}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="es-recommend">
+                  <span className="es-recommend-icon"><Icon name="bulb" size={18} /></span>
+                  <p>
+                    ท่านี้แนะนำ <b>{exerciseInfo.reps}</b> × {exerciseInfo.sets} เซ็ต
+                    <button type="button" onClick={() => setTargetCount(exerciseInfo.defaultTarget)}>ใช้ค่าแนะนำ ({exerciseInfo.defaultTarget})</button>
+                  </p>
+                </div>
               </div>
+            </div>
+            </div>
+
+            <div className="es-actions">
+              <button type="button" className="es-secondary" onClick={() => navigate("/exercises")}>
+                <span>‹</span>
+                ย้อนกลับ
+              </button>
+              <button type="button" className="es-primary" onClick={handleStartSession}>
+                <span>▶</span>
+                เริ่มออกกำลังกาย
+              </button>
             </div>
           </section>
 
           {/* ---------- คำแนะนำ ---------- */}
-          <section className="es-card">
+          <section className="es-card es-card-side">
             <div className="es-heading">
-              <div className="es-icon" aria-hidden="true">✓</div>
+              <div className="es-icon" aria-hidden="true"><Icon name="clipboard" size={20} /></div>
               <div>
                 <h2>ก่อนเริ่มออกกำลังกาย</h2>
-                <span>คำแนะนำเพื่อการใช้งานที่ราบรื่น</span>
+                <span>คำแนะนำเพื่อให้การออกกำลังกายราบรื่น</span>
               </div>
             </div>
 
             <div className="es-tips">
-              <div className="es-tip">
-                <span className="es-tip-icon">📷</span>
-                <div>
-                  <b>จัดตำแหน่งให้เหมาะสม</b>
-                  <p>อยู่ในตำแหน่งที่กล้องสามารถมองเห็นร่างกายได้ชัดเจน</p>
+              <article className="es-tip es-tip-howto">
+                <span className="es-tip-icon"><Icon name="clipboard" size={20} /></span>
+                <div className="es-tip-text">
+                  <h4>วิธีทำท่า{exerciseInfo.thaiName}</h4>
+                  <p>{exerciseInfo.howTo}</p>
                 </div>
-              </div>
+              </article>
 
-              <div className="es-tip">
-                <span className="es-tip-icon">🧍</span>
-                <div>
-                  <b>เตรียมพื้นที่ให้พร้อม</b>
-                  <p>เลือกพื้นที่โล่งและปลอดภัยก่อนเริ่มท่าออกกำลังกาย</p>
+              <article className="es-tip">
+                <span className="es-tip-icon"><Icon name="pulse" size={20} /></span>
+                <div className="es-tip-text">
+                  <h4>อบอุ่นร่างกายก่อนเริ่ม</h4>
+                  <p>ขยับข้อต่อและยืดกล้ามเนื้อเบา ๆ ประมาณ 2–3 นาที เพื่อลดความเสี่ยงต่อการบาดเจ็บ</p>
                 </div>
-              </div>
+              </article>
 
-              <div className="es-tip">
-                <span className="es-tip-icon">🤖</span>
-                <div>
-                  <b>AI ช่วยตรวจจับท่าทาง</b>
-                  <p>ระบบจะตรวจจับและนับจำนวนครั้งระหว่างการออกกำลังกาย</p>
+              <article className="es-tip">
+                <span className="es-tip-icon"><Icon name={exerciseInfo.bodyweight ? "space" : "dumbbell"} size={20} /></span>
+                <div className="es-tip-text">
+                  <h4>{exerciseInfo.bodyweight ? "เตรียมพื้นที่ให้โล่ง" : `เตรียม${exerciseInfo.equipment}ให้พร้อม`}</h4>
+                  <p>{exerciseInfo.bodyweight
+                    ? "เลือกพื้นที่ที่กว้างพอให้ขยับตัวได้สะดวก ไม่มีสิ่งของกีดขวาง และพื้นไม่ลื่น"
+                    : "ตรวจดูให้อุปกรณ์แน่นหนา และเว้นพื้นที่รอบตัวให้โล่งก่อนเริ่มทุกครั้ง"}</p>
                 </div>
-              </div>
+              </article>
+
+              <article className="es-tip">
+                <span className="es-tip-icon"><Icon name="camera" size={20} /></span>
+                <div className="es-tip-text">
+                  <h4>วางตำแหน่งให้กล้องเห็นทั้งตัว</h4>
+                  <p>ตั้งกล้องให้เห็นร่างกายตั้งแต่ศีรษะถึงปลายเท้า และยืนห่างจากกล้องพอประมาณ</p>
+                </div>
+              </article>
+
+              <article className="es-tip">
+                <span className="es-tip-icon"><Icon name="scan" size={20} /></span>
+                <div className="es-tip-text">
+                  <h4>ระบบนับจำนวนครั้งให้อัตโนมัติ</h4>
+                  <p>AI จะตรวจจับท่าทางผ่านกล้องและนับให้ขณะที่คุณออกกำลังกาย ไม่ต้องนับเอง</p>
+                </div>
+              </article>
             </div>
           </section>
         </div>
 
-        <footer className="es-footer">Small Steps · Big Changes · FITTRACK</footer>
+        <footer className="fittrack-footer">
+          <div className="footer-brand"><span className="footer-mark" aria-hidden="true">FT</span><strong>FitTrack</strong></div>
+          <span className="footer-description">ระบบดูแลสุขภาพและติดตามโภชนาการด้วย AI</span>
+          <span className="footer-copyright">ดูแลสุขภาพของคุณในทุกวัน</span>
+        </footer>
       </main>
 
       <style>{`
@@ -695,19 +888,16 @@ body{overflow-x:hidden;}
 }
 
 /* ===== ExerciseSetting: เนื้อหาหน้า (ใช้ตัวแปรสีเดียวกับ Dashboard) ===== */
-.es-title{display:flex;align-items:center;gap:16px;padding:26px 8px 18px}
-.es-title-icon{width:46px;height:46px;flex:0 0 46px;border-radius:12px;display:grid;place-items:center;color:var(--green);border:1px solid #5ea02c;background:rgba(110,255,45,.07);font-size:22px}
-.es-title h1{margin:0;font-family:'Kanit',sans-serif;font-size:32px;font-weight:600;line-height:1.15}
-.es-title p{margin:4px 0 0;color:var(--muted);font-size:14px}
-.es-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(320px,.78fr);gap:18px;align-items:start;padding-bottom:10px}
-.es-card{min-width:0;padding:20px;border-radius:15px;border:1px solid #2a5360;background:linear-gradient(145deg,#050b0e,#071116);box-shadow:inset 0 0 25px rgba(0,0,0,.25)}
+.es-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(320px,.78fr);gap:18px;align-items:stretch;padding-top:22px}
+.es-card{min-width:0;min-height:0;display:flex;flex-direction:column;padding:22px 22px 20px;border-radius:15px;border:1px solid #2a5360;background:linear-gradient(145deg,#050b0e,#071116);box-shadow:inset 0 0 25px rgba(0,0,0,.25)}
 html[data-theme="light"] .es-card{background:linear-gradient(145deg,#ffffff,#f5f9f8);border-color:#cddbd7;box-shadow:none}
-.es-heading{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.es-heading{flex:0 0 auto;display:flex;align-items:center;gap:12px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
 .es-icon{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border-radius:9px;font-size:18px;color:#91ff3e;border:1px solid #5ea02c;background:rgba(110,255,45,.07)}
 html[data-theme="light"] .es-icon{color:#2a9d16}
 .es-heading h2{margin:0;font-family:'Kanit',sans-serif;font-size:18px;font-weight:500}
 .es-heading span{display:block;margin-top:2px;color:var(--muted);font-size:12px}
 
+.es-scroll{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center}
 .es-setting-body{display:grid;grid-template-columns:minmax(0,1fr) 1px minmax(0,1fr);gap:26px;align-items:center}
 .es-divider{align-self:stretch;background:var(--line)}
 .es-visual{text-align:center}
@@ -730,26 +920,27 @@ html[data-theme="light"] .es-orb{background:radial-gradient(circle at 35% 25%,rg
 .es-helper{display:flex;justify-content:space-between;gap:10px;margin-top:14px;color:var(--muted);font-size:13px}
 .es-helper strong{color:var(--green);font-family:'Kanit',sans-serif;font-weight:500}
 
-.es-actions{grid-column:1 / -1;display:flex;justify-content:flex-end;gap:12px;margin-top:6px;padding-top:18px;border-top:1px solid var(--line)}
+.es-actions{flex:0 0 auto;display:flex;justify-content:flex-end;gap:12px;margin-top:14px;padding-top:16px;border-top:1px solid var(--line)}
 .es-secondary,.es-primary{height:44px;padding:0 22px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:.2s}
 .es-secondary{background:transparent;color:var(--text);border:1px solid var(--line)}
 .es-secondary:hover{border-color:#35534a;background:rgba(103,255,41,.05)}
 .es-primary{border:0;color:#071005;font-weight:700;background:linear-gradient(90deg,#72ed2e,#baff3e);box-shadow:0 0 16px rgba(125,255,45,.15)}
 .es-primary:hover{box-shadow:0 0 22px rgba(125,255,45,.3);transform:translateY(-1px)}
 
-.es-tips{display:flex;flex-direction:column;gap:12px}
-.es-tip{display:flex;gap:12px;align-items:flex-start;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--panel2)}
-.es-tip-icon{flex:0 0 38px;width:38px;height:38px;display:grid;place-items:center;border-radius:10px;font-size:19px;background:rgba(110,255,45,.07);border:1px solid #2f5d2a}
-.es-tip b{display:block;font-family:'Kanit',sans-serif;font-size:15px;font-weight:500}
-.es-tip p{margin:3px 0 0;color:var(--muted);font-size:13px;line-height:1.5}
-.es-footer{padding:26px 0 10px;text-align:center;color:var(--muted);font-size:12px;letter-spacing:1.5px}
+.es-tips{flex:1 1 auto;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:6px;margin-right:-6px;text-align:left}
+.es-tip{flex:0 0 auto;display:flex;gap:14px;align-items:flex-start;text-align:left;padding:16px;border-radius:12px;border:1px solid var(--line);background:var(--panel2)}
+.es-tip-icon{flex:0 0 40px;width:40px;height:40px;display:grid;place-items:center;border-radius:11px;color:#9bff4a;background:rgba(110,255,45,.07);border:1px solid #2f5d2a}
+.es-tip-text{min-width:0;text-align:left}
+.es-tip h4{margin:0;font-family:'Kanit',sans-serif;font-size:15px;font-weight:500;line-height:1.4;color:var(--text);text-align:left}
+.es-tip p{margin:4px 0 0;color:var(--muted);font-size:13.5px;line-height:1.65;text-align:left}
 
 @media (max-width:1100px){
   .es-grid{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:760px){
-  .es-title{padding:18px 4px 12px;gap:12px}
-  .es-title h1{font-size:24px}
+  .es-grid{padding-top:14px}
+  .es-card-side{contain:none}
+  .es-tips{max-height:460px}
   .es-card{padding:16px}
   .es-setting-body{grid-template-columns:minmax(0,1fr);gap:20px}
   .es-divider{width:100%;height:1px;align-self:auto}
@@ -768,6 +959,98 @@ html[data-theme="light"] .sidebar-logo {
   filter: invert(1) hue-rotate(180deg);
   mix-blend-mode: multiply;
   animation-name: fittrack-logo-glow-light !important;
+}
+
+/* ===== ExerciseSetting: ปรับโฉมให้สวยและรองรับทุกท่า ===== */
+.es-card{position:relative;overflow:hidden}
+.es-tips{scrollbar-width:thin;scrollbar-color:#2f5d2a transparent}
+.es-tips::-webkit-scrollbar{width:6px}
+.es-tips::-webkit-scrollbar-thumb{background:#2f5d2a;border-radius:6px}
+/* กรอบคำแนะนำสูงเท่ากรอบตั้งค่า (ไม่ดันความสูงเอง) ถ้าเนื้อหาเกินให้เลื่อนในกรอบ */
+.es-card-side{contain:size}
+.es-card::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,transparent,#8cff32 30%,#18d8ff 70%,transparent);opacity:.55}
+.es-orb{position:relative;width:148px;height:148px;overflow:hidden;box-shadow:0 0 0 6px rgba(125,255,45,.06),0 0 34px rgba(125,255,45,.22);animation:es-glow 3.2s ease-in-out infinite}
+.es-orb.has-video{background:#04100c}
+.es-orb video{width:100%;height:100%;object-fit:cover;display:block}
+.es-orb svg{color:#9bff4a;stroke-width:1.4;filter:drop-shadow(0 0 10px rgba(125,255,45,.35))}
+@keyframes es-glow{0%,100%{box-shadow:0 0 0 6px rgba(125,255,45,.05),0 0 26px rgba(125,255,45,.16)}50%{box-shadow:0 0 0 9px rgba(125,255,45,.08),0 0 40px rgba(125,255,45,.3)}}
+.es-visual h3{overflow-wrap:anywhere}
+
+.es-badges{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px}
+.es-badge,.es-level{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:500;border:1px solid var(--line);background:var(--panel2);color:var(--text)}
+.es-level.easy{color:#b9ff7a;border-color:rgba(125,255,70,.5);background:rgba(125,255,70,.1)}
+.es-level.mid{color:#ffe27a;border-color:rgba(255,214,74,.5);background:rgba(255,214,74,.1)}
+.es-level.hard{color:#ff9aa8;border-color:rgba(255,107,125,.5);background:rgba(255,107,125,.1)}
+.es-muscles{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:10px}
+.es-muscles span{padding:3px 11px;border-radius:8px;font-size:12px;color:#7fe3ff;border:1px solid rgba(24,216,255,.35);background:rgba(24,216,255,.08)}
+.es-change{display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:6px 16px;border-radius:999px;border:1px dashed #3d6b45;background:transparent;color:var(--muted);font-size:12px;cursor:pointer;transition:.2s}
+.es-change:hover{color:var(--green);border-color:var(--green);background:rgba(110,255,45,.06)}
+
+.es-range{-webkit-appearance:none;appearance:none;display:block;width:100%;height:6px;margin:20px 0 4px;border-radius:999px;outline:none;cursor:pointer;background:linear-gradient(90deg,#72ed2e var(--fill,10%),var(--line) var(--fill,10%))}
+.es-range::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#baff3e;border:3px solid #071005;box-shadow:0 0 0 2px #72ed2e,0 0 14px rgba(125,255,45,.5)}
+.es-range::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#baff3e;border:3px solid #071005;box-shadow:0 0 0 2px #72ed2e,0 0 14px rgba(125,255,45,.5)}
+.es-presets{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.es-preset{min-width:44px;height:34px;padding:0 12px;border-radius:9px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-family:'Kanit',sans-serif;font-size:14px;cursor:pointer;transition:.2s}
+.es-preset:hover{border-color:#5ea02c;color:var(--green)}
+.es-preset.active{color:#071005;font-weight:600;border-color:transparent;background:linear-gradient(90deg,#72ed2e,#baff3e);box-shadow:0 0 12px rgba(125,255,45,.25)}
+.es-recommend{display:flex;gap:10px;align-items:flex-start;margin-top:16px;padding:11px 14px;border-radius:12px;border:1px solid rgba(255,214,74,.3);background:linear-gradient(120deg,rgba(255,214,74,.08),transparent 70%)}
+.es-recommend-icon{flex:0 0 auto;display:grid;place-items:center;width:30px;height:30px;border-radius:9px;color:#ffd84a;background:rgba(255,214,74,.12)}
+.es-recommend p{margin:0;align-self:center;font-size:13px;line-height:1.6;color:var(--muted)}
+.es-recommend b{color:var(--text);font-weight:600}
+.es-recommend button{display:inline-block;margin-left:8px;padding:0;border:0;background:none;color:var(--green);font-size:13px;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+
+.es-tip{transition:.2s}
+.es-tip:hover{border-color:#2f5d2a;background:rgba(110,255,45,.04)}
+.es-tip-howto{border-color:rgba(140,255,50,.4);background:linear-gradient(120deg,rgba(140,255,50,.1),var(--panel2) 70%)}
+.es-tip-howto .es-tip-icon{background:rgba(140,255,50,.14);border-color:#5ea02c}
+.es-tip-howto p{color:var(--text);opacity:.88}
+
+html[data-theme="light"] .es-tip-icon{color:#2a9d16;background:#eef9e3;border-color:#b6dc94}
+html[data-theme="light"] .es-orb svg{color:#2a9d16}
+html[data-theme="light"] .es-recommend-icon{color:#8a6a00;background:#fff1c2}
+html[data-theme="light"] .es-orb{box-shadow:0 0 0 6px rgba(60,200,100,.1),0 0 22px rgba(60,200,100,.22)}
+html[data-theme="light"] .es-level.easy{color:#2a7a16;border-color:#8bcf58;background:#eaf7df}
+html[data-theme="light"] .es-level.mid{color:#8a6a00;border-color:#e0c04a;background:#fff6d6}
+html[data-theme="light"] .es-level.hard{color:#b02244;border-color:#e59aab;background:#fff0f3}
+html[data-theme="light"] .es-muscles span{color:#1f6f8e;border-color:#a9cfe0;background:#e8f3f9}
+html[data-theme="light"] .es-change{border-color:#9ccb6b}
+html[data-theme="light"] .es-preset.active{color:#fff;background:linear-gradient(90deg,#2a9d16,#4cc02a)}
+html[data-theme="light"] .es-recommend{border-color:#ecd48a;background:linear-gradient(120deg,#fff7dc,transparent 70%)}
+html[data-theme="light"] .es-tip-howto{border-color:#b6dc94;background:linear-gradient(120deg,#eef9e3,#f7fbf9 70%)}
+
+@media (max-width:760px){
+  .es-orb{width:128px;height:128px}
+  .es-presets .es-preset{flex:1 1 40px}
+}
+@media (prefers-reduced-motion:reduce){.es-orb{animation:none}}
+
+/* ฟุตเตอร์แบรนด์ FitTrack (เหมือนหน้าเลือกท่า/Dashboard) */
+.fittrack-footer{
+  width:min(1230px,100%); min-width:0; margin:28px auto 0; padding:16px 8px 10px;
+  border-top:1px solid rgba(91,145,139,.24);
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  color:var(--muted); font-family:'Anuphan','Noto Sans Thai',sans-serif;
+}
+.footer-brand{display:flex; align-items:center; gap:9px; color:var(--text); white-space:nowrap}
+.footer-mark{width:27px;height:27px;display:grid;place-items:center;border-radius:8px;
+  color:#071006;background:linear-gradient(135deg,#9cff37,#36d98a);
+  font:700 10px 'Kanit',sans-serif;letter-spacing:-.5px;
+  box-shadow:0 3px 12px rgba(125,255,54,.16)}
+.footer-brand strong{font:600 15px 'Kanit',sans-serif;letter-spacing:.25px;
+  background:linear-gradient(90deg,#baff52,#42dca0);-webkit-background-clip:text;background-clip:text;color:transparent}
+.footer-description{font-size:11px;text-align:center;line-height:1.5}
+.footer-copyright{font-size:10px;white-space:nowrap;opacity:.78}
+html[data-theme="light"] .fittrack-footer{border-top-color:rgba(57,120,99,.2);color:#64766d}
+html[data-theme="light"] .footer-brand{color:#20382d}
+@media(max-width:760px){
+  .fittrack-footer{margin-top:18px;padding:13px 4px 8px;flex-wrap:wrap;justify-content:center;gap:6px 12px}
+  .footer-brand{width:100%;justify-content:center}
+  .footer-description{font-size:10px;width:100%}
+  .footer-copyright{font-size:9px;width:100%;text-align:center}
+}
+@media (max-width:1100px){
+  .es-card-side{contain:none}
+  .es-tips{max-height:480px}
 }
 `}</style>
     </div>
