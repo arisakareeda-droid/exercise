@@ -260,7 +260,7 @@ const buildProgram = (part, type, equipChip, list) => {
       : `โปรแกรมฝึก${partName}${withEquip ? "ด้วยอุปกรณ์" : "แบบไม่ใช้อุปกรณ์"}`;
   const subtitle = withEquip
     ? equipChip !== "ทั้งหมด" ? `(${equipChip})` : "(อุปกรณ์ทุกประเภท)"
-    : type === "bodyweight" ? "(Bodyweight)" : "(ผสมทุกประเภท)";
+    : type === "bodyweight" ? "(ใช้น้ำหนักตัว)" : "(ผสมทุกประเภท)";
   const items = [...list]
     .sort((a, b) => LEVEL_RANK[a.level] - LEVEL_RANK[b.level])
     .slice(0, 4);
@@ -292,13 +292,24 @@ const TYPE_TIPS = {
   all: ["ผสมท่าที่ไม่ใช้อุปกรณ์และใช้อุปกรณ์ให้เหมาะกับสถานที่ฝึกของคุณ", "เริ่มจากท่าที่ง่ายก่อน แล้วค่อยขยับไปท่าที่ยากขึ้น"],
 };
 
-const buildAiTips = (part, type) => [
-  ...(PART_TIPS[part] || PART_TIPS.all),
-  ...(TYPE_TIPS[type] || TYPE_TIPS.all),
-  "พักกล้ามเนื้อกลุ่มเดิมอย่างน้อย 48 ชม. ก่อนฝึกซ้ำ และหยุดทันทีหากเจ็บผิดปกติ",
-];
+const TYPE_TIP_LABELS = {
+  bodyweight: ["เริ่มต้น", "ปรับความยาก"],
+  equipment: ["เลือกน้ำหนัก", "ความปลอดภัย"],
+  all: ["เลือกท่า", "ลำดับ"],
+};
 
-const AI_TIP_ICONS = ["➜", "♧", "◷", "⌁", "⌁"];
+// คำแนะนำแต่ละข้อมีหัวข้อสั้น ๆ กำกับ เพื่อให้อ่านผ่านตาแล้วรู้ทันทีว่าข้อนั้นเกี่ยวกับอะไร
+const buildAiTips = (part, type) => {
+  const partTips = PART_TIPS[part] || PART_TIPS.all;
+  const typeTips = TYPE_TIPS[type] || TYPE_TIPS.all;
+  const partLabels = part === "all" ? ["วอร์มอัพ", "สลับกลุ่ม"] : ["วอร์มอัพ", "ท่าทาง"];
+  const typeLabels = TYPE_TIP_LABELS[type] || TYPE_TIP_LABELS.all;
+  return [
+    ...partTips.map((text, i) => ({ label: partLabels[i], text })),
+    ...typeTips.map((text, i) => ({ label: typeLabels[i], text })),
+    { label: "พักฟื้น", text: "พักกล้ามเนื้อกลุ่มเดิมอย่างน้อย 48 ชม. ก่อนฝึกซ้ำ และหยุดทันทีหากเจ็บผิดปกติ" },
+  ];
+};
 
 // ---------- โปรแกรมของฉัน (เก็บไว้ในเครื่อง ไม่กระทบหน้าอื่น) ----------
 const PROGRAM_KEY = "fittrack-my-program";
@@ -368,8 +379,8 @@ function ExerciseDetailModal({ exercise, added, onClose, onToggle, onStart }) {
         </div>
 
         <div className="ft-modal-body">
-          <h2 id="exercise-modal-title">{exercise.name}</h2>
-          <p className="ft-modal-thai">{exercise.thaiName}</p>
+          <h2 id="exercise-modal-title">{exercise.thaiName}</h2>
+          <p className="ft-modal-thai ft-modal-en" lang="en">{exercise.name}</p>
 
           <div className="exercise-tags">
             <span>{partNames(exercise.parts)}</span>
@@ -446,7 +457,7 @@ function ProgramDetailModal({ program, selectedIds, onClose, onAddAll, onOpenExe
             {program.items.map((item) => (
               <li key={item.id}>
                 <button type="button" onClick={() => onOpenExercise(item)}>
-                  <strong>{item.name}</strong>
+                  <strong>{item.thaiName}<small lang="en">{item.name}</small></strong>
                   <span>{item.sets} · {item.reps}</span>
                 </button>
               </li>
@@ -743,7 +754,7 @@ export default function ExerciseSelect() {
   };
 
   return (
-    <div className="fittrack-page">
+    <div className="fittrack-page" lang="th">
       {/* ================= SIDEBAR (เหมือนหน้า Dashboard) ================= */}
       <aside className="sidebar">
         <div className="sidebar-logo-wrap">
@@ -865,7 +876,7 @@ export default function ExerciseSelect() {
               <span></span>
             </div>
 
-            <div>
+            <div className="page-title-text">
               <h1>ออกกำลังกาย</h1>
               <p>เลือกส่วนที่ต้องการฝึก และดูท่าออกกำลังกายที่เหมาะกับคุณ</p>
             </div>
@@ -940,20 +951,26 @@ export default function ExerciseSelect() {
             {/* ================= RIGHT EXERCISES ================= */}
             <div className="exercise-panel">
               <div className="exercise-panel-title">
-                <div className="title-person-icon">
+                <div className="title-person-icon" aria-hidden="true">
                   <svg viewBox="0 0 40 40">
-                    <circle cx="20" cy="9" r="5"></circle>
-                    <path d="M13 18 Q20 14 27 18 L30 29 M10 22 L30 22 M15 18 L12 31 M25 18 L28 31"></path>
+                    <circle className="bi-body" cx="20" cy="6.2" r="3.7" />
+                    <path className="bi-body" d="M13.6 12.2Q20 10 26.4 12.2L28.6 14 26.6 25.4H13.4L11.4 14Z" />
+                    <path className="bi-body" d="M11.4 14Q8 15 7 20.5L6.2 28.4Q6.1 30.2 7.7 30.2Q9.2 30.2 9.4 28.6L11.4 21.5 12.6 16.6Z" />
+                    <path className="bi-body" d="M28.6 14Q32 15 33 20.5L33.8 28.4Q33.9 30.2 32.3 30.2Q30.8 30.2 30.6 28.6L28.6 21.5 27.4 16.6Z" />
+                    <path className="bi-body" d="M14 25.4H19.7L19.2 36.8Q19.1 38.4 17.5 38.4Q15.9 38.4 15.8 36.8Z" />
+                    <path className="bi-body" d="M26 25.4H20.3L20.8 36.8Q20.9 38.4 22.5 38.4Q24.1 38.4 24.2 36.8Z" />
+                    <path className="bi-muscle" d="M20 13.2V24M15.2 15.8Q17.8 18.4 20 17.6Q22.2 18.4 24.8 15.8M16.4 21H23.6" />
                   </svg>
                 </div>
 
-                <div>
+                <div className="exercise-panel-heading">
                   <h2>
                     ท่าออกกำลังกายสำหรับ{" "}
                     <span>{partTitle}</span>
                   </h2>
                   <p>เลือกท่าที่เหมาะสมกับเป้าหมายของคุณ</p>
                 </div>
+                <span className="exercise-count">{filteredExercises.length} ท่า</span>
               </div>
 
               {/* ประเภทการออกกำลังกาย: ไม่ใช้อุปกรณ์ / ใช้อุปกรณ์ */}
@@ -965,7 +982,7 @@ export default function ExerciseSelect() {
                   aria-pressed={equipmentType === "bodyweight"}
                   onClick={() => changeEquipmentType("bodyweight")}
                 >
-                  <span className="toggle-icon">🧍</span>
+                  <span className="toggle-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.4" /><path d="M12 8.5v6M7.5 11l4.5-2.5 4.5 2.5M12 14.5l-3 6M12 14.5l3 6" /></svg></span>
                   ไม่ใช้อุปกรณ์
                 </button>
 
@@ -975,7 +992,7 @@ export default function ExerciseSelect() {
                   aria-pressed={equipmentType === "equipment"}
                   onClick={() => changeEquipmentType("equipment")}
                 >
-                  <span className="toggle-icon">🏋️</span>
+                  <span className="toggle-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 8v8M3 10v4M18 8v8M21 10v4M6 12h12" /></svg></span>
                   ใช้อุปกรณ์
                 </button>
               </div>
@@ -1020,7 +1037,10 @@ export default function ExerciseSelect() {
                         </div>
 
                         <div className="exercise-row-info">
-                          <h3>{exercise.name}</h3>
+                          <div className="exercise-title-line">
+                            <h3>{exercise.thaiName}</h3>
+                            <span className="exercise-en" lang="en">{exercise.name}</span>
+                          </div>
                           <p className="exercise-desc">{exercise.description}</p>
 
                           <div className="exercise-tags">
@@ -1041,7 +1061,7 @@ export default function ExerciseSelect() {
                               {exercise.reps}
                             </span>
 
-                            <span>
+                            <span className={`exercise-level level-${LEVEL_RANK[exercise.level] ?? 0}`}>
                               <i>◆</i>
                               ระดับ{exercise.level}
                             </span>
@@ -1087,123 +1107,118 @@ export default function ExerciseSelect() {
             </div>
           </section>
 
-          {/* ================= BOTTOM ================= */}
+          {/* ================= BOTTOM (กล่องขนาดคงที่ เลื่อนดูเฉพาะภายในกล่อง) ================= */}
           <section className="bottom-grid">
-            {/* recommendation */}
+            {/* โปรแกรมแนะนำ: สรุปว่าควรฝึกอะไร ความถี่เท่าไร */}
             <div className="recommendation-panel">
-              <div className="bottom-title">
-                <span className="star-icon">★</span>
-                <div>
-                  <h2>โปรแกรมแนะนำ</h2>
-                  <span>({recommendedProgram.level})</span>
-                </div>
+              <div className="panel-head">
+                <span className="panel-badge" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z" /></svg>
+                </span>
+                <h2>โปรแกรมแนะนำ</h2>
+                <span className="panel-chip">{recommendedProgram.level}</span>
               </div>
 
-              <div className="program-card">
-                <div className="program-image">
-                  <div className="program-person"></div>
-                </div>
-
-                <div className="program-info">
-                  <h3>{recommendedProgram.title}</h3>
-                  <p>{recommendedProgram.subtitle}</p>
-
-                  <div className="program-meta">
-                    <span>▣ {recommendedProgram.days}</span>
-                    <span>◷ {recommendedProgram.duration}</span>
+              {recommendedProgram.items.length > 0 ? (
+                <div className="rec-body">
+                  <div className="rec-title">
+                    <h3>{recommendedProgram.title}</h3>
+                    <p>{recommendedProgram.subtitle}</p>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={recommendedProgram.items.length === 0}
-                    onClick={() => setShowProgramDetail(true)}
-                  >
+                  <div className="rec-stats">
+                    <div><b>{recommendedProgram.days}</b><span>ความถี่</span></div>
+                    <div><b>{recommendedProgram.duration}</b><span>ต่อครั้ง</span></div>
+                    <div><b>{recommendedProgram.items.length} ท่า</b><span>ในโปรแกรม</span></div>
+                  </div>
+
+                  <ul className="rec-moves" aria-label="ท่าในโปรแกรมแนะนำ">
+                    {recommendedProgram.items.map((item) => (
+                      <li key={item.id}>{item.thaiName}</li>
+                    ))}
+                  </ul>
+
+                  <button type="button" className="rec-btn" onClick={() => setShowProgramDetail(true)}>
                     ดูรายละเอียด
                   </button>
                 </div>
-
-                <div className="program-arrow">›</div>
-              </div>
+              ) : (
+                <div className="panel-empty">
+                  ยังไม่มีท่าที่ตรงกับเงื่อนไข ลองเปลี่ยนส่วนของร่างกายหรือประเภทอุปกรณ์
+                </div>
+              )}
             </div>
 
-            {/* AI */}
+            {/* คำแนะนำจาก AI: เคล็ดลับการฝึก เปลี่ยนตามส่วนที่เลือก */}
             <div className="ai-panel">
-              <div className="ai-heading">
-                <span className="bulb">♧</span>
+              <div className="panel-head">
+                <span className="panel-badge" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M10 3l1.8 5.2L17 10l-5.2 1.8L10 17l-1.8-5.2L3 10l5.2-1.8zM18.5 14l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" /></svg>
+                </span>
                 <h2>คำแนะนำจาก AI</h2>
+                <span className="panel-chip">{partTitle}</span>
               </div>
 
-              <div className="ai-content">
+              <ol className="ai-list">
                 {aiTips.map((tip, index) => (
-                  <div className="ai-item" key={tip}>
-                    <span>{AI_TIP_ICONS[index % AI_TIP_ICONS.length]}</span>
-                    <p>{tip}</p>
-                  </div>
+                  <li className="ai-item" key={tip.text}>
+                    <span className="ai-num">{index + 1}</span>
+                    <b className="ai-label">{tip.label}</b>
+                    <p>{tip.text}</p>
+                  </li>
                 ))}
-              </div>
-
-              <div className="ai-quote">
-                <span>“ก้าวเล็ก ๆ</span>
-                <span>ในทุกวัน</span>
-                <span>คือการเปลี่ยนแปลง</span>
-                <span>ที่ยิ่งใหญ่”</span>
-
-                <svg viewBox="0 0 180 30">
-                  <polyline
-                    points="0,16 30,16 42,15 51,5 60,25 70,11 82,16 180,16"
-                    fill="none"
-                  />
-                </svg>
-              </div>
+              </ol>
             </div>
           </section>
 
           {/* ================= MY PROGRAM ================= */}
           <section className="my-program-panel">
-            <div className="bottom-title">
-              <span className="star-icon">✓</span>
-              <div>
-                <h2>โปรแกรมของฉัน</h2>
-                <span>({myProgramItems.length} ท่า)</span>
+            <div className="panel-head">
+              <span className="panel-badge" aria-hidden="true">
+                <svg className="stroke" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+              </span>
+              <h2>โปรแกรมของฉัน</h2>
+              <span className="panel-chip">{myProgramItems.length} ท่า</span>
+
+              <div className="my-program-actions">
+                {myProgramItems.length > 0 && (
+                  <button type="button" className="mp-clear" onClick={() => { setSelectedExercises([]); showToast("ล้างโปรแกรมของฉันแล้ว"); }}>
+                    ล้างทั้งหมด
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="mp-start"
+                  disabled={myProgramItems.length === 0}
+                  onClick={startMyProgram}
+                >
+                  เริ่มออกกำลังกาย
+                </button>
               </div>
             </div>
 
-            {myProgramItems.length > 0 ? (
-              <ul className="my-program-list">
-                {myProgramItems.map((item) => (
-                  <li key={item.id}>
-                    <span className="mp-check">✓</span>
-                    <span className="mp-name">{item.name}</span>
-                    <em>{item.sets} · {item.reps}</em>
-                    <button
-                      type="button"
-                      aria-label={`นำ ${item.name} ออกจากโปรแกรม`}
-                      onClick={() => toggleProgramExercise(item.id)}
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="my-program-empty">
-                ยังไม่ได้เลือกท่า กดปุ่ม “เลือก” ที่ท่าออกกำลังกายเพื่อเพิ่มเข้าโปรแกรมของคุณ
-              </p>
-            )}
-
-            <div className="my-program-actions">
-              <button
-                type="button"
-                className="mp-start"
-                disabled={myProgramItems.length === 0}
-                onClick={startMyProgram}
-              >
-                เริ่มออกกำลังกาย
-              </button>
-              {myProgramItems.length > 0 && (
-                <button type="button" className="mp-clear" onClick={() => { setSelectedExercises([]); showToast("ล้างโปรแกรมของฉันแล้ว"); }}>
-                  ล้างทั้งหมด
-                </button>
+            <div className="my-program-body">
+              {myProgramItems.length > 0 ? (
+                <ul className="my-program-list">
+                  {myProgramItems.map((item) => (
+                    <li key={item.id}>
+                      <span className="mp-check">✓</span>
+                      <span className="mp-name">{item.thaiName}</span>
+                      <em>{item.sets} · {item.reps}</em>
+                      <button
+                        type="button"
+                        aria-label={`นำ ${item.thaiName} ออกจากโปรแกรม`}
+                        onClick={() => toggleProgramExercise(item.id)}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="panel-empty">
+                  ยังไม่ได้เลือกท่า — กดปุ่ม “เลือก” ที่ท่าออกกำลังกายด้านบนเพื่อเพิ่มเข้าโปรแกรมของคุณ
+                </div>
               )}
             </div>
           </section>
@@ -1827,13 +1842,6 @@ export default function ExerciseSelect() {
           height: 39px;
         }
 
-        .title-person-icon circle,
-        .title-person-icon path {
-          fill: none;
-          stroke: #70c8ff;
-          stroke-width: 1.6;
-        }
-
         .exercise-panel-title h2 {
           margin: 0;
           color: #f1f7f4;
@@ -2137,277 +2145,6 @@ export default function ExerciseSelect() {
         }
 
         /* =====================================================
-           BOTTOM
-        ===================================================== */
-
-        .bottom-grid {
-          margin-top: 12px;
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-          gap: 12px;
-        }
-
-        .recommendation-panel,
-        .ai-panel {
-          position: relative;
-          min-height: 153px;
-          padding: 13px 15px;
-          border: 1px solid #0089c4;
-          border-radius: 14px;
-          background:
-            linear-gradient(
-              145deg,
-              rgba(3, 16, 19, .96),
-              rgba(1, 8, 11, .96)
-            );
-          overflow: hidden;
-        }
-
-        .recommendation-panel::before,
-        .ai-panel::before {
-          content: "";
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
-          height: 2px;
-          background: linear-gradient(
-            90deg,
-            #b7ff21,
-            #00b9ff,
-            transparent
-          );
-        }
-
-        .bottom-title {
-          display: flex;
-          align-items: center;
-          gap: 9px;
-          margin-bottom: 9px;
-        }
-
-        .star-icon {
-          color: #d7ff26;
-          font-size: 27px;
-          text-shadow: 0 0 10px rgba(183,255,33,.65);
-        }
-
-        .bottom-title h2 {
-          margin: 0;
-          color: #edf5f1;
-          font-family: "Kanit", sans-serif;
-          font-size: 16px;
-          font-weight: 500;
-          line-height: 1;
-        }
-
-        .bottom-title span:not(.star-icon) {
-          color: #9ba9a5;
-          font-size: 8px;
-        }
-
-        .program-card {
-          position: relative;
-          min-height: 88px;
-          padding: 7px;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          border: 1px solid #278a52;
-          border-radius: 10px;
-          background: rgba(11, 29, 21, .55);
-        }
-
-        .program-image {
-          width: 91px;
-          height: 73px;
-          flex: 0 0 91px;
-          position: relative;
-          overflow: hidden;
-          border-radius: 7px;
-          background:
-            radial-gradient(
-              circle at 55% 30%,
-              rgba(100, 160, 130, .35),
-              transparent 25%
-            ),
-            linear-gradient(
-              135deg,
-              #263c34,
-              #0a1512
-            );
-        }
-
-        .program-person {
-          position: absolute;
-          left: 35px;
-          top: 8px;
-          width: 21px;
-          height: 52px;
-          border-radius: 45% 45% 30% 30%;
-          background: linear-gradient(
-            180deg,
-            #bfcac5,
-            #394c47
-          );
-          box-shadow:
-            0 0 12px rgba(180,255,220,.12);
-        }
-
-        .program-person::before {
-          content: "";
-          position: absolute;
-          top: -8px;
-          left: 5px;
-          width: 11px;
-          height: 11px;
-          border-radius: 50%;
-          background: #cdd8d3;
-        }
-
-        .program-info {
-          min-width: 0;
-          flex: 1;
-        }
-
-        .program-info h3 {
-          margin: 0;
-          color: #eff8f3;
-          font-family: "Kanit", sans-serif;
-          font-size: 12px;
-          font-weight: 500;
-        }
-
-        .program-info p {
-          margin: 1px 0 7px;
-          color: #9ca9a5;
-          font-size: 8px;
-        }
-
-        .program-meta {
-          display: flex;
-          gap: 12px;
-          color: #b9c6c1;
-          font-size: 7px;
-        }
-
-        .program-info button {
-          margin-top: 7px;
-          min-width: 95px;
-          height: 26px;
-          padding: 0 13px;
-          border: 0;
-          border-radius: 14px;
-          color: #071206;
-          background: linear-gradient(
-            135deg,
-            #caff2c,
-            #75ff19
-          );
-          cursor: pointer;
-          font-family: "Kanit", sans-serif;
-          font-size: 9px;
-          font-weight: 600;
-        }
-
-        .program-arrow {
-          width: 27px;
-          height: 27px;
-          display: grid;
-          place-items: center;
-          margin-right: 4px;
-          border-radius: 50%;
-          color: #0b1b08;
-          background: #82a4b8;
-          font-size: 22px;
-        }
-
-        .ai-panel {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 165px;
-          gap: 12px;
-        }
-
-        .ai-heading {
-          grid-column: 1 / -1;
-          height: 25px;
-          display: flex;
-          align-items: center;
-          gap: 9px;
-        }
-
-        .bulb {
-          color: #d7ff26;
-          font-size: 24px;
-          text-shadow: 0 0 10px rgba(183,255,33,.5);
-        }
-
-        .ai-heading h2 {
-          margin: 0;
-          color: #f0f6f2;
-          font-family: "Kanit", sans-serif;
-          font-size: 16px;
-          font-weight: 500;
-        }
-
-        .ai-content {
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-        }
-
-        .ai-item {
-          display: flex;
-          align-items: flex-start;
-          gap: 8px;
-        }
-
-        .ai-item > span {
-          width: 14px;
-          color: #c5ff2c;
-          font-size: 12px;
-          line-height: 1.4;
-        }
-
-        .ai-item p {
-          margin: 0;
-          color: #bec9c5;
-          font-size: 8px;
-          line-height: 1.45;
-        }
-
-        .ai-quote {
-          padding-left: 15px;
-          border-left: 1px solid rgba(126, 204, 227, .22);
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: flex-start;
-          color: #d7d0df;
-          font-family: "Kanit", sans-serif;
-          font-size: 13px;
-          font-style: italic;
-          line-height: 1.4;
-        }
-
-        .ai-quote span:nth-child(3),
-        .ai-quote span:nth-child(4) {
-          color: #c3bacb;
-        }
-
-        .ai-quote svg {
-          width: 150px;
-          height: 23px;
-          margin-top: 6px;
-        }
-
-        .ai-quote polyline {
-          stroke: #b7ff21;
-          stroke-width: 1.3;
-          filter: drop-shadow(0 0 4px rgba(183,255,33,.6));
-        }
-
-        /* =====================================================
            เพิ่มใหม่: การ์ดท่า / โปรแกรมของฉัน / Modal
            (ใช้เฉพาะหน้า ออกกำลังกาย)
         ===================================================== */
@@ -2494,16 +2231,6 @@ export default function ExerciseSelect() {
           touch-action: manipulation;
         }
 
-        .program-card .empty-note {
-          color: #91a29e;
-          font-size: 11px;
-        }
-
-        .program-info button:disabled {
-          opacity: .5;
-          cursor: default;
-        }
-
         /* ---------- โปรแกรมของฉัน ---------- */
         .my-program-panel {
           position: relative;
@@ -2586,12 +2313,6 @@ export default function ExerciseSelect() {
         .my-program-list li button:hover {
           border-color: #ff6b6b;
           color: #ff9a9a;
-        }
-
-        .my-program-empty {
-          margin: 0 0 10px;
-          color: #8fa19d;
-          font-size: 11px;
         }
 
         .my-program-actions {
@@ -3034,22 +2755,6 @@ export default function ExerciseSelect() {
             display: none;
           }
 
-          .ai-panel {
-            display: block;
-          }
-
-          .ai-heading {
-            margin-bottom: 10px;
-          }
-
-          .ai-quote {
-            display: none;
-          }
-
-          .program-meta {
-            flex-direction: column;
-            gap: 2px;
-          }
         }
 
         @media (max-width: 420px) {
@@ -3147,7 +2852,7 @@ export default function ExerciseSelect() {
           .sidebar-logo { width:132px; height:68px; max-width:42vw; }
           .logo-caption { margin-top:-5px; font-size:6px; letter-spacing:1.5px; }
           .side-menu { width:100%; grid-template-columns:repeat(5,minmax(0,1fr)); gap:4px; }
-          .side-link { width:100%; min-width:0; height:54px; padding:5px 2px; gap:3px; font-size:clamp(8px,2.25vw,10px); line-height:1.15; white-space:normal; overflow-wrap:anywhere; }
+          .side-link { width:100%; min-width:0; height:54px; padding:5px 2px; gap:3px; font-size:clamp(8px,2.25vw,10px); line-height:1.15; white-space:normal; overflow-wrap:break-word; }
           .side-icon { width:auto; min-height:19px; font-size:19px; line-height:1; }
         }
         @media (max-width: 340px) {
@@ -3389,8 +3094,6 @@ export default function ExerciseSelect() {
           }
 
           .exercise-list {
-            max-height: none;
-            overflow: visible;
             padding-right: 0;
           }
         }
@@ -3452,7 +3155,6 @@ export default function ExerciseSelect() {
         html[data-theme="light"] .mp-check { color: #3f9a1c; }
         html[data-theme="light"] .mp-name { color: #12201c; }
         html[data-theme="light"] .my-program-list em,
-        html[data-theme="light"] .my-program-empty { color: #5d6e6a; }
         html[data-theme="light"] .my-program-list li button { border-color: #a9cfe0; color: #33433f; }
         html[data-theme="light"] .mp-clear,
         html[data-theme="light"] .ft-btn-ghost { color: #2a3a36; border-color: #8cc7de; background: #ffffff; }
@@ -3557,8 +3259,6 @@ export default function ExerciseSelect() {
         html[data-theme="light"] .tiny-person.front::after { border-color: #4fb82b; }
 
         /* แผงท่าออกกำลังกาย */
-        html[data-theme="light"] .title-person-icon circle,
-        html[data-theme="light"] .title-person-icon path { stroke: #2a8fcf; }
         html[data-theme="light"] .exercise-panel-title h2 { color: #12201c; }
         html[data-theme="light"] .exercise-panel-title h2 span { color: #2f8a10; }
         html[data-theme="light"] .exercise-panel-title p { color: #3a4a46; }
@@ -3597,22 +3297,6 @@ export default function ExerciseSelect() {
         html[data-theme="light"] .empty-exercises { border-color: #8cc7de; color: #667773; }
 
         /* โปรแกรมแนะนำ / AI */
-        html[data-theme="light"] .star-icon,
-        html[data-theme="light"] .bulb { color: #7aa800; }
-        html[data-theme="light"] .bottom-title h2 { color: #12201c; }
-        html[data-theme="light"] .bottom-title span:not(.star-icon) { color: #667773; }
-        html[data-theme="light"] .program-card { border-color: #9ccb6b; background: #f4fbef; }
-        html[data-theme="light"] .program-image { background: #e8f1ed; }
-        html[data-theme="light"] .program-info h3 { color: #12201c; }
-        html[data-theme="light"] .program-info p { color: #5d6e6a; }
-        html[data-theme="light"] .program-meta { color: #4a5b57; }
-        html[data-theme="light"] .ai-heading h2 { color: #12201c; }
-        html[data-theme="light"] .ai-item > span { color: #2f8a10; }
-        html[data-theme="light"] .ai-item p { color: #4a5b57; }
-        html[data-theme="light"] .ai-quote { color: #4a5b57; border-left-color: rgba(0, 90, 130, .25); }
-        html[data-theme="light"] .ai-quote span:nth-child(3),
-        html[data-theme="light"] .ai-quote span:nth-child(4) { color: #667773; }
-        html[data-theme="light"] .ai-quote polyline { stroke: #4fb82b; }
 
         /* การ์ดแจ้งเตือนโหมดสว่าง */
         html[data-theme="light"] .notification-panel-title { color: #5c7065; }
@@ -3679,9 +3363,9 @@ html[data-theme="light"] .sidebar-logo {
 /* ปุ่มกดแล้วยุบเล็กน้อย + เรืองแสงเมื่อชี้ */
 .equipment-toggle button, .equipment-tabs button, .body-part, .body-view { transition:background .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease, transform .15s ease; }
 .equipment-toggle button:active, .equipment-tabs button:active:not(:disabled), .body-part:active, .body-view:active { transform:scale(.96); }
-.play-button, .choose-button, .program-card button, .mp-start, .mp-clear { transition:transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease; }
-.choose-button:hover, .program-card button:hover:not(:disabled), .mp-start:hover:not(:disabled) { box-shadow:0 0 18px rgba(125,255,45,.4); }
-.play-button:active, .choose-button:active, .program-card button:active:not(:disabled), .mp-start:active:not(:disabled), .mp-clear:active { transform:scale(.94); }
+.play-button, .choose-button, .rec-btn, .mp-start, .mp-clear { transition:transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease; }
+.choose-button:hover, .rec-btn:hover, .mp-start:hover:not(:disabled) { box-shadow:0 0 18px rgba(125,255,45,.4); }
+.play-button:active, .choose-button:active, .rec-btn:active, .mp-start:active:not(:disabled), .mp-clear:active { transform:scale(.94); }
 .choose-button.added { animation:ft-pop .4s cubic-bezier(.2,.8,.2,1); }
 
 /* รายการอื่น ๆ */
@@ -3766,6 +3450,283 @@ html[data-anim="off"] .ft-toast { animation:none !important; }
   .sidebar { overflow:visible; }
   .logout-link { display:flex !important; align-items:center; justify-content:center; position:absolute; top:10px; right:10px; z-index:2; width:42px; height:42px; padding:0; border:1px solid rgba(120,160,150,.45); border-radius:12px; font-size:0; }
   .logout-link span { margin:0; font-size:22px; }
+}
+        /* ===== ภาษา: ชื่อไทยนำ ชื่ออังกฤษเป็นบรรทัดรอง + ตัดบรรทัดไทยให้เป็นธรรมชาติ ===== */
+        .fittrack-page { line-break: auto; word-break: normal; }
+        .fittrack-page p, .fittrack-page h1, .fittrack-page h2, .fittrack-page h3 { text-wrap: pretty; overflow-wrap: break-word; }
+        .exercise-row-info h3 { margin-bottom: 1px; line-height: 1.3; }
+        .exercise-row-info .exercise-en { display: block; margin: 0 0 4px; color: #7f948f; font-size: 10px; letter-spacing: .2px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ft-modal-en { letter-spacing: .3px; }
+        .ft-program-items strong { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        .ft-program-items strong small { color: #8fa19d; font-size: 10px; font-weight: 400; letter-spacing: .2px; }
+        html[data-theme="light"] .exercise-row-info .exercise-en,
+        html[data-theme="light"] .ft-program-items strong small { color: #5d6e6a; }
+
+        /* ===== หัวข้อหน้า: การ์ดหัวเรื่องจัดชิดซ้ายอ่านง่าย + ไอคอนแบบกรอบเรืองแสง ===== */
+        .page-title { min-height: 96px; padding: 16px 24px; gap: 18px; margin-bottom: 6px; overflow: hidden; border: 1px solid rgba(183,255,33,.17); border-radius: 18px; background: radial-gradient(circle at 0% 50%, rgba(183,255,33,.11), transparent 42%), linear-gradient(100deg, rgba(10,24,20,.78), rgba(7,16,20,.5)); box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 10px 28px rgba(0,0,0,.22); }
+        .page-title::after { content: ""; position: absolute; left: 24px; right: 24px; bottom: 0; height: 1px; background: linear-gradient(90deg, rgba(183,255,33,.55), rgba(183,255,33,.08) 55%, transparent); pointer-events: none; }
+        .title-icon { width: 58px; height: 58px; flex: 0 0 58px; gap: 5px; border: 1px solid rgba(183,255,33,.42); border-radius: 17px; background: radial-gradient(circle at 50% 25%, rgba(183,255,33,.2), rgba(8,20,14,.78) 72%); box-shadow: 0 0 24px rgba(183,255,33,.16), inset 0 0 14px rgba(183,255,33,.07); }
+        .title-icon span { width: 6px; height: 22px; border: 0; border-radius: 6px; background: linear-gradient(180deg, #d8ff5a, #8fe51d); box-shadow: 0 0 9px rgba(183,255,33,.65); transform-origin: center; animation: ft-eq 1.7s ease-in-out infinite; }
+        .title-icon span:nth-child(2) { height: 32px; animation-delay: .25s; }
+        .title-icon span:nth-child(3) { height: 15px; animation-delay: .5s; }
+        @keyframes ft-eq { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(.6); } }
+        .page-title-text { flex: 1 1 auto; min-width: 0; text-align: left; }
+        .page-title h1 { font-size: 30px; line-height: 1.3; letter-spacing: .2px; }
+        .page-title h1::after { content: ""; display: block; width: 44px; height: 3px; margin-top: 5px; border-radius: 3px; background: linear-gradient(90deg, #b7ff21, rgba(183,255,33,0)); }
+        .page-title p { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: #a9b8b3; }
+        .ai-title { padding: 2px 0 2px 22px; border-left: 1px solid rgba(183,255,33,.2); font-size: 12px; font-style: normal; line-height: 1.6; text-align: left; }
+        .ai-title .mini-heartbeat { width: 132px; margin: 4px 0 0; }
+        html[data-anim="off"] .title-icon span { animation: none !important; }
+        @media (prefers-reduced-motion: reduce) { .title-icon span { animation: none !important; } }
+        @media (max-width: 760px) {
+          .page-title { min-height: 0; padding: 14px 15px; gap: 13px; align-items: center; }
+          .page-title::after { left: 15px; right: 15px; }
+          .title-icon { width: 46px; height: 46px; flex-basis: 46px; border-radius: 14px; }
+          .title-icon span { height: 17px; }
+          .title-icon span:nth-child(2) { height: 25px; }
+          .title-icon span:nth-child(3) { height: 12px; }
+          .page-title h1 { font-size: 24px; }
+          .page-title p { font-size: 11px; }
+        }
+        html[data-theme="light"] .page-title { border-color: #c3dcb3; background: radial-gradient(circle at 0% 50%, rgba(120,200,70,.16), transparent 42%), linear-gradient(100deg, #f3fbec, #ffffff 60%); box-shadow: 0 8px 22px rgba(30,75,51,.07); }
+        html[data-theme="light"] .page-title::after { background: linear-gradient(90deg, rgba(79,184,43,.55), rgba(79,184,43,.08) 55%, transparent); }
+        html[data-theme="light"] .title-icon { border-color: #8cc96b; background: radial-gradient(circle at 50% 25%, #ecfadf, #dcf2cc 75%); box-shadow: 0 4px 14px rgba(79,184,43,.18); }
+        html[data-theme="light"] .title-icon span { background: linear-gradient(180deg, #78dc3f, #3fa71f); box-shadow: none; }
+        html[data-theme="light"] .page-title h1::after { background: linear-gradient(90deg, #4fb82b, rgba(79,184,43,0)); }
+        html[data-theme="light"] .page-title p { color: #53675f; }
+        html[data-theme="light"] .ai-title { border-left-color: #bcd9ad; }
+
+        /* ===== แผงท่าออกกำลังกาย: จัดชิดซ้าย อ่านง่าย การ์ดโปร่งขึ้น ===== */
+        .exercise-panel { text-align: left; padding: 18px; }
+        .exercise-panel-title { gap: 13px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid rgba(42,160,210,.2); }
+        .title-person-icon { width: 50px; height: 50px; flex: 0 0 50px; border-radius: 15px; border: 1px solid rgba(70,170,255,.35); background: radial-gradient(circle at 50% 25%, rgba(48,154,255,.24), rgba(4,16,24,.8) 72%); box-shadow: 0 0 18px rgba(48,154,255,.14); }
+        .title-person-icon svg { width: 32px; height: 32px; }
+        .exercise-panel-heading { flex: 1 1 auto; min-width: 0; text-align: left; }
+        .exercise-panel-title h2 { font-size: 21px; line-height: 1.35; }
+        .exercise-panel-title p { margin: 2px 0 0; color: #9fb2ad; font-family: inherit; font-size: 12.5px; }
+        .exercise-count { flex: none; padding: 4px 14px; border: 1px solid rgba(183,255,33,.4); border-radius: 14px; background: rgba(183,255,33,.08); color: #d6ff6a; font-family: "Kanit", sans-serif; font-size: 12px; }
+
+        .equipment-title { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; color: #cfdad6; font-size: 12px; text-align: left; }
+        .equipment-title::before { content: ""; width: 3px; height: 13px; border-radius: 2px; background: linear-gradient(#d4ff31, #7cff1c); }
+        .equipment-toggle { gap: 4px; padding: 4px; border: 1px solid rgba(17,126,180,.55); border-radius: 15px; background: rgba(3,16,22,.85); margin-bottom: 14px; }
+        .equipment-toggle button { min-height: 44px; border: 0; border-radius: 11px; background: transparent; color: #b9c9c5; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; }
+        .equipment-toggle button:hover:not(.active) { background: rgba(42,160,210,.1); color: #e6f0ec; }
+        .equipment-toggle button.active { color: #0b1a05; font-weight: 500; border: 0; background: linear-gradient(135deg, #d4ff31, #7cff1c); box-shadow: 0 0 16px rgba(183,255,33,.28); }
+        .toggle-icon { margin-right: 8px; display: inline-flex; color: #b7ff21; }
+        .equipment-toggle button.active .toggle-icon { color: #0b1a05; }
+        .toggle-icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .equipment-tabs { gap: 8px; margin-bottom: 14px; }
+        .equipment-tabs button { height: 34px; font-size: 11.5px; }
+
+        .exercise-list { gap: 10px; }
+        .exercise-row { padding: 10px; gap: 14px; border-color: rgba(42,160,210,.3); background: linear-gradient(100deg, rgba(8,26,32,.92), rgba(3,13,18,.92)); }
+        .exercise-row::before { content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 0 3px 3px 0; background: linear-gradient(#d4ff31, #2ac0ef); opacity: 0; transition: opacity .2s ease; }
+        .exercise-row:hover::before, .exercise-row.is-added::before { opacity: 1; }
+        .exercise-row:hover { border-color: rgba(42,192,239,.7); }
+        .exercise-row-info { text-align: left; display: flex; flex-direction: column; gap: 5px; }
+        .exercise-title-line { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+        .exercise-row-info h3 { flex: 0 1 auto; min-width: 0; margin: 0; font-size: 17px; line-height: 1.35; }
+        .exercise-title-line .exercise-en { display: block; flex: 0 1 auto; min-width: 0; margin: 0; color: #7f948f; font-size: 11px; letter-spacing: .3px; }
+        .exercise-desc { margin: 0; color: #9fb0ab; font-size: 11.5px; line-height: 1.5; text-align: left; }
+        .exercise-tags { margin: 2px 0 0; gap: 6px; }
+        .exercise-tags span { padding: 3px 10px; font-size: 10.5px; }
+        .exercise-meta { gap: 14px; color: #b4c2be; font-size: 11px; }
+        .exercise-meta span { display: inline-flex; align-items: center; }
+        .exercise-meta i { margin-right: 5px; }
+        .exercise-level.level-0 i { color: #8dff4a; }
+        .exercise-level.level-1 i { color: #ffd84a; }
+        .exercise-level.level-2 i { color: #ff6b7d; }
+        .play-button { width: 38px; height: 38px; font-size: 13px; }
+        .choose-button { height: 34px; font-size: 12px; }
+        @media (min-width: 761px) {
+          .exercise-row { grid-template-columns: 118px minmax(0, 1fr) 40px 68px; min-height: 112px; }
+          .exercise-thumb { width: 118px; height: 90px; border-radius: 11px; }
+        }
+        @media (max-width: 760px) {
+          .exercise-panel { padding: 13px; }
+          .exercise-count { display: none; }
+          .exercise-panel-title h2 { font-size: 18px; }
+          .exercise-title-line { flex-wrap: wrap; row-gap: 0; }
+          .exercise-row-info h3 { font-size: 15px; }
+          .exercise-tags span { font-size: 9.5px; }
+          .exercise-meta { font-size: 10px; gap: 9px; }
+        }
+
+        html[data-theme="light"] .exercise-panel-title { border-bottom-color: #cfe1d7; }
+        html[data-theme="light"] .title-person-icon { border-color: #9fcbe6; background: radial-gradient(circle at 50% 25%, #eaf6ff, #d9edfb 75%); box-shadow: 0 4px 12px rgba(42,143,207,.14); }
+        html[data-theme="light"] .exercise-panel-title p { color: #53675f; }
+        html[data-theme="light"] .exercise-count { border-color: #8bcf58; background: #f1faec; color: #2a7a16; }
+        html[data-theme="light"] .equipment-toggle { background: #f1f7f4; border-color: #b7d3c7; }
+        html[data-theme="light"] .equipment-toggle button { background: transparent; border: 0; color: #3a4a46; }
+        html[data-theme="light"] .equipment-toggle button:hover:not(.active) { background: #e4f0ea; }
+        html[data-theme="light"] .equipment-toggle button.active { color: #0b1a05; background: linear-gradient(135deg, #d4ff31, #8fe533); box-shadow: 0 2px 10px rgba(120,200,40,.3); }
+        html[data-theme="light"] .equipment-toggle button.active .toggle-icon { color: #0b1a05; }
+        html[data-theme="light"] .exercise-row { border-color: #c7dccf; }
+        html[data-theme="light"] .exercise-row:hover { border-color: #2ac0ef; }
+        html[data-theme="light"] .exercise-title-line .exercise-en { color: #5d6e6a; }
+        html[data-theme="light"] .exercise-desc { color: #51655d; }
+        html[data-theme="light"] .exercise-level.level-0 i { color: #3fa71f; }
+        html[data-theme="light"] .exercise-level.level-1 i { color: #d99a00; }
+        html[data-theme="light"] .exercise-level.level-2 i { color: #d02a52; }
+
+/* =====================================================
+   LOCKED LAYOUT — ทุกกล่องมีขนาดคงที่ ไม่ขยับเมื่อข้อมูลเพิ่ม/ลด
+   เลื่อนดูเนื้อหาได้เฉพาะภายในกล่องของตัวเอง
+===================================================== */
+.exercise-workspace { height: 720px; }
+.exercise-workspace > .body-panel,
+.exercise-workspace > .exercise-panel { height: 100%; min-height: 0; }
+.exercise-panel { display: flex; flex-direction: column; overflow: hidden; }
+.exercise-panel > * { flex: none; }
+.exercise-panel > .exercise-list { flex: 1 1 0; min-height: 0; max-height: none; overflow-x: hidden; overflow-y: auto; }
+
+/* กล่องไม่ลอยขึ้นเมื่อชี้ (เหลือแค่เรืองแสงขอบ) */
+.body-panel:hover, .exercise-panel:hover, .recommendation-panel:hover, .ai-panel:hover, .my-program-panel:hover { transform: none; }
+
+.recommendation-panel, .ai-panel, .my-program-panel {
+  position: relative; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  padding: 14px 16px; border: 1px solid #0089c4; border-radius: 14px;
+  background: linear-gradient(145deg, rgba(3, 16, 19, .96), rgba(1, 8, 11, .96));
+}
+.recommendation-panel::before, .ai-panel::before {
+  content: ""; position: absolute; left: 0; top: 0; width: 100%; height: 2px;
+  background: linear-gradient(90deg, #b7ff21, #00b9ff, transparent);
+}
+.recommendation-panel, .ai-panel { height: 300px; }
+.my-program-panel { height: 250px; }
+
+.bottom-grid { margin-top: 12px; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 12px; }
+
+/* หัวการ์ดแบบเดียวกันทั้ง 3 กล่อง */
+.panel-head { flex: none; display: flex; align-items: center; gap: 10px; min-height: 40px; margin-bottom: 12px; }
+.panel-head h2 { margin: 0; color: #edf5f1; font-family: "Kanit", sans-serif; font-size: 17px; font-weight: 500; line-height: 1.3; }
+.panel-badge {
+  flex: none; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px; color: #d7ff26;
+  border: 1px solid rgba(183, 255, 33, .4);
+  background: radial-gradient(circle at 50% 25%, rgba(183, 255, 33, .2), rgba(8, 20, 14, .78) 72%);
+  box-shadow: 0 0 16px rgba(183, 255, 33, .14);
+}
+.panel-badge svg { width: 20px; height: 20px; fill: currentColor; }
+.panel-badge svg.stroke { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.panel-chip {
+  margin-left: auto; flex: none; padding: 3px 13px; border: 1px solid rgba(183, 255, 33, .4); border-radius: 14px;
+  background: rgba(183, 255, 33, .08); color: #d6ff6a; font-family: "Kanit", sans-serif; font-size: 12px; white-space: nowrap;
+}
+.my-program-panel .panel-chip { margin-left: 0; }
+.panel-empty {
+  flex: 1; min-height: 0; display: grid; place-items: center; padding: 14px; text-align: center;
+  border: 1px dashed rgba(42, 160, 210, .4); border-radius: 12px; color: #8fa19d; font-size: 12.5px; line-height: 1.6;
+}
+
+/* โปรแกรมแนะนำ */
+.rec-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.rec-title h3 { margin: 0; color: #f1f7f4; font-family: "Kanit", sans-serif; font-size: 16px; font-weight: 500; line-height: 1.35; }
+.rec-title p { margin: 1px 0 0; color: #9fb2ad; font-size: 12px; }
+.rec-stats { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.rec-stats div { padding: 8px 6px; text-align: center; border: 1px solid #1c4553; border-radius: 10px; background: rgba(3, 19, 25, .7); }
+.rec-stats b { display: block; color: #edf5f1; font-family: "Kanit", sans-serif; font-size: 13px; font-weight: 500; line-height: 1.3; }
+.rec-stats span { display: block; margin-top: 1px; color: #8fa19d; font-size: 10.5px; }
+.rec-moves {
+  flex: 1; min-height: 0; margin: 0; padding: 0 2px 0 0; list-style: none; overflow-y: auto;
+  display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; scrollbar-width: thin; scrollbar-color: #1c6b8a transparent;
+}
+.rec-moves li { padding: 3px 11px; border: 1px solid #39835d; border-radius: 13px; color: #e3f9d2; background: rgba(50, 122, 66, .17); font-size: 11.5px; white-space: nowrap; }
+.rec-btn {
+  flex: none; width: 100%; height: 38px; border: 0; border-radius: 19px; cursor: pointer; color: #071207;
+  background: linear-gradient(135deg, #d2ff31, #83ff1b); font-family: "Kanit", sans-serif; font-size: 13px; font-weight: 600;
+  box-shadow: 0 0 11px rgba(183, 255, 33, .25); transition: transform .15s ease, box-shadow .2s ease;
+}
+.rec-btn:hover { box-shadow: 0 0 18px rgba(125, 255, 45, .45); }
+.rec-btn:active { transform: scale(.97); }
+
+/* คำแนะนำจาก AI */
+.ai-list {
+  flex: 1; min-height: 0; margin: 0; padding: 0 4px 0 0; list-style: none; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; scrollbar-color: #1c6b8a transparent;
+}
+.ai-item { flex: none; display: flex; align-items: flex-start; gap: 10px; padding: 8px 11px; border: 1px solid rgba(42, 160, 210, .22); border-radius: 10px; background: rgba(3, 19, 25, .55); }
+.ai-num {
+  flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid rgba(183, 255, 33, .45); background: rgba(183, 255, 33, .12); color: #d6ff6a; font-family: "Kanit", sans-serif; font-size: 12px;
+}
+.ai-list, .ai-item { text-align: left; }
+.ai-item p { flex: 1 1 0; min-width: 0; margin: 0; color: #c3cfcb; font-size: 12.5px; line-height: 1.55; text-align: left; }
+.ai-label { flex: 0 0 92px; color: #c9ff2b; font-family: "Kanit", sans-serif; font-size: 12.5px; font-weight: 500; line-height: 1.55; text-align: left; }
+
+/* โปรแกรมของฉัน */
+.my-program-actions { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.my-program-actions button { min-height: 36px; padding: 0 18px; }
+.my-program-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; scrollbar-color: #1c6b8a transparent; }
+.my-program-list { margin: 0; }
+
+@media (max-width: 950px) {
+  .exercise-workspace { height: auto; }
+  .exercise-workspace > .body-panel { height: auto; min-height: 560px; }
+  .exercise-workspace > .exercise-panel { height: 680px; }
+  .bottom-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 650px) {
+  .recommendation-panel { height: 350px; }
+  .ai-panel { height: 340px; }
+  .my-program-panel { height: 320px; }
+  .panel-head { flex-wrap: wrap; row-gap: 8px; }
+  .my-program-actions { width: 100%; margin-left: 0; }
+  .my-program-actions button { flex: 1 1 130px; }
+}
+
+/* โหมดสว่าง */
+html[data-theme="light"] .panel-head h2 { color: #12201c; }
+html[data-theme="light"] .panel-badge { color: #3f9a1c; border-color: #8cc96b; background: radial-gradient(circle at 50% 25%, #ecfadf, #dcf2cc 75%); box-shadow: 0 4px 12px rgba(79, 184, 43, .15); }
+html[data-theme="light"] .panel-chip { border-color: #8bcf58; background: #f1faec; color: #2a7a16; }
+html[data-theme="light"] .panel-empty { border-color: #8cc7de; color: #667773; }
+html[data-theme="light"] .rec-title h3 { color: #12201c; }
+html[data-theme="light"] .rec-title p { color: #53675f; }
+html[data-theme="light"] .rec-stats div { border-color: #c3d9d2; background: #f4f9f8; }
+html[data-theme="light"] .rec-stats b { color: #12201c; }
+html[data-theme="light"] .rec-stats span { color: #5d6e6a; }
+html[data-theme="light"] .rec-moves li { border-color: #9ccb6b; color: #3f7a15; background: #e9f6df; }
+html[data-theme="light"] .rec-btn { box-shadow: 0 2px 10px rgba(120, 200, 40, .3); }
+html[data-theme="light"] .ai-item { border-color: #c7dccf; background: #f7fbf9; }
+html[data-theme="light"] .ai-num { border-color: #8bcf58; background: #eaf7df; color: #2a7a16; }
+html[data-theme="light"] .ai-item p { color: #4a5b57; }
+html[data-theme="light"] .ai-label { color: #2f8a10; }
+
+/* ไอคอนรูปร่างกายคนข้างหัวข้อ "ท่าออกกำลังกายสำหรับ…" */
+.title-person-icon svg { width: 36px; height: 36px; overflow: visible; }
+.title-person-icon .bi-body { fill: rgba(112, 200, 255, .2); stroke: #70c8ff; stroke-width: 1.2; stroke-linejoin: round; }
+.title-person-icon .bi-muscle { fill: none; stroke: #b7ff21; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; opacity: .9; }
+html[data-theme="light"] .title-person-icon .bi-body { fill: rgba(42, 143, 207, .16); stroke: #2a8fcf; }
+html[data-theme="light"] .title-person-icon .bi-muscle { stroke: #3f9a1c; }
+
+/* โมเดลร่างกาย: ย่อให้พอดีกรอบเสมอ เห็นครบตั้งแต่หัวจรดเท้า ไม่ถูกตัด */
+.body-visual { padding: 4px 0; }
+.body-visual .human-svg { width: 100%; height: 100%; max-width: 330px; max-height: 100%; object-fit: contain; }
+.body-glow { max-height: 96%; }
+
+/* โมเดลร่างกาย (แก้รอบ 2): วางรูปทับเต็มพื้นที่กรอบแบบ absolute แล้วให้ย่อตามสัดส่วนเอง
+   ไม่ขึ้นกับความสูงของ panel จึงไม่ถูกตัดไม่ว่าหน้าจอกว้างแค่ไหน */
+.body-visual { position: relative; overflow: hidden; padding: 0; }
+.body-visual > svg,
+.body-visual .human-svg {
+  position: absolute !important;
+  top: 14px !important; bottom: 14px !important; left: 8px !important; right: 8px !important;
+  width: calc(100% - 16px) !important; height: calc(100% - 28px) !important;
+  max-width: none !important; max-height: none !important;
+  margin: 0 auto;
+}
+@media (max-width: 950px) {
+  .exercise-workspace > .body-panel { min-height: 640px; }
+}
+
+/* โมเดลร่างกาย (รอบ 3): เหลือพื้นที่ด้านล่างไว้ให้ป้ายชื่อส่วนที่เลือก ไม่ให้ทับตัวคน */
+.body-visual > svg,
+.body-visual .human-svg {
+  top: 10px !important; bottom: 62px !important; left: 14px !important; right: 14px !important;
+  width: calc(100% - 28px) !important; height: calc(100% - 72px) !important;
+}
+.body-visual > *:not(svg):not(.body-glow) {
+  position: absolute !important; top: auto !important; bottom: 10px !important;
+  left: 50% !important; right: auto !important; transform: translateX(-50%) !important; z-index: 3;
 }
 `}</style>
     </div>

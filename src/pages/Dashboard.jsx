@@ -497,7 +497,7 @@ export default function Dashboard() {
 
   const bmiPosition = bmiResult
     ? Math.max(0, Math.min(100, ((bmiResult.value - 10) / 30) * 100))
-    : 0;
+    : 50;
 
   const meals = {
     เช้า: [
@@ -635,7 +635,7 @@ export default function Dashboard() {
             <div className="bmi-result">
               <div className="result-label">ค่า BMI <span>{bmiResult?.status || "ยังไม่คำนวณ"}</span></div>
               <div className="bmi-number" key={bmiResult?.value ?? "init"}>{bmiResult?.value ?? "0"}</div>
-              <div className="bmi-bar"><i style={{ left: `${bmiPosition}%` }}></i></div>
+              <div className="bmi-bar"><i className={bmiResult ? "" : "idle"} style={{ left: `${bmiPosition}%` }}></i></div>
               <div className="bmi-scale-labels">
                 <span>&lt; 18.5<br />ผอม</span><span>18.5 - 22.9<br /><b>ปกติ</b></span><span>23 - 24.9<br />น้ำหนักเกิน</span><span>25 - 29.9<br />อ้วนระดับ 1</span><span>&gt; 30<br />อ้วนระดับ 2</span>
               </div>
@@ -2188,6 +2188,12 @@ html[data-theme="light"] .warning-card.today-log .food-log-del { color:#b4264a; 
 html[data-theme="light"] .warning-card.today-log .food-log-del:hover { background:#fff0f3; }
 html[data-anim="off"] .food-log-list, html[data-anim="off"] .food-log-item { animation:none !important; }
 @media (prefers-reduced-motion: reduce) { .food-log-list, .food-log-item { animation:none !important; } }
+
+/* ===== BMI: เลขและป้ายสถานะอยู่กึ่งกลางจริง (ป้ายไม่ float มาดันเลขเอียงอีก) ===== */
+.bmi-result .result-label { position:relative; display:flex; align-items:center; justify-content:center; min-height:26px; text-align:center; }
+.bmi-result .result-label span { float:none; position:absolute; right:0; top:50%; transform:translateY(-50%); white-space:nowrap; }
+.bmi-result .bmi-number { text-align:center; clear:both; }
+.bmi-bar i.idle { opacity:.5; }
 
 `;
 
