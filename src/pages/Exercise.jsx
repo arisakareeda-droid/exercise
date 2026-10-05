@@ -166,46 +166,9 @@ export default function Exercise() {
   const parsedTarget = parseInt(searchParams.get('target') || '10', 10);
   const targetCount = Number.isFinite(parsedTarget) && parsedTarget > 0 ? parsedTarget : 10;
 
-  // ------------------------------------------------------------------
-  // แผนผังท่าออกกำลังกาย: ใช้ id ที่ส่งมาจาก ExerciseSetting โดยตรง
-  // เพื่อให้หน้า Exercise รู้ว่าผู้ใช้เลือกท่าใด โดยไม่ต้อง hard-code แค่ 4 ท่า
-  // ------------------------------------------------------------------
-  const exerciseModeMap = {
-    // ขา / squat pattern
-    squat: 'squat', goblet_squat: 'squat', barbell_squat: 'squat', band_squat: 'squat',
-    kettlebell_goblet_squat: 'squat',
-    // push / chest
-    push_up: 'push', diamond_push_up: 'push', bench_incline_pushup: 'push',
-    dumbbell_bench_press: 'push', barbell_bench_press: 'push', band_chest_press: 'push',
-    chest_press_machine: 'push',
-    // แขนงอ/เหยียด
-    dumbbell_curl: 'arm', cable_triceps_pushdown: 'arm', bench_dip: 'arm',
-    // ยกแขน / press / lateral raise
-    dumbbell_shoulder_press: 'arm_raise', dumbbell_lateral_raise: 'arm_raise',
-    barbell_overhead_press: 'arm_raise', shoulder_press_machine: 'arm_raise',
-    // ดึง/พาย
-    dumbbell_row: 'row', cable_row: 'row', lat_pulldown: 'row', band_pull_apart: 'row',
-    // สะโพก/ลำตัว
-    barbell_deadlift: 'hinge', kettlebell_swing: 'hinge', bird_dog: 'knee',
-    bench_step_up: 'knee', high_knees: 'high_knees',
-    // น่อง
-    dumbbell_calf_raise: 'calf', seated_calf_raise: 'calf', leg_press: 'leg_press',
-    // ท้อง
-    cable_crunch: 'crunch', kettlebell_russian_twist: 'twist',
-    // static
-    plank: 'plank',
-    // ท่าเดิมที่มี detector เฉพาะ
-    jumping_jack: 'jumping_jack', punches: 'punches',
-    mountain_climber: 'knee', reverse_snow_angel: 'arm_raise',
-    // ถ้ามีท่าใหม่จากหน้า Setting แต่ยังไม่ได้กำหนด mode จะใช้ generic movement
-  };
-  const exerciseMode = exerciseModeMap[exerciseType] || 'generic';
-
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
-  const cameraControlRef = useRef(null);
 
-  const [cameraEnabled, setCameraEnabled] = useState(true);
   const [counter, setCounter] = useState(0);
   const [feedback, setFeedback] = useState('กำลังโหลด AI...');
   const [calories, setCalories] = useState(0);
@@ -343,8 +306,8 @@ export default function Exercise() {
       lastRepTime = now;
 
       count += 1;
-      const caloriesPerRepMap = { squat: 0.32, jumping_jack: 0.2, high_knees: 0.1, punches: 0.15, push: 0.35, arm: 0.18, arm_raise: 0.2, row: 0.25, hinge: 0.3, knee: 0.12, calf: 0.12, crunch: 0.18, twist: 0.15, plank: 0.08, generic: 0.2 };
-      const caloriesPerRep = caloriesPerRepMap[exerciseMode] ?? 0.2;
+      const caloriesPerRepMap = { squat: 0.32, jumping_jack: 0.2, high_knees: 0.1, punches: 0.15 };
+      const caloriesPerRep = caloriesPerRepMap[exerciseType] ?? 0.2;
       const totalCal = Number((count * caloriesPerRep).toFixed(2));
       setCounter(count);
       setCalories(totalCal);
@@ -1005,150 +968,6 @@ export default function Exercise() {
       });
     };
 
-    // ------------------------------------------------------------------
-    // Generic detector สำหรับท่าที่ไม่ได้มี detector เฉพาะ
-    // ใช้ landmark ของ MediaPipe Pose และเลือกสัญญาณตามรูปแบบการเคลื่อนไหว
-    // ------------------------------------------------------------------
-    let genericStage = 'start';
-    let genericReady = false;
-    let genericBuffer = [];
-    let genericLastValue = null;
-    let genericStaticStarted = 0;
-    let genericStaticLastSecond = 0;
-
-    const visiblePoint = (lm, i, v = 0.45) => isVisible(lm[i], v) ? lm[i] : null;
-    const pointDistance = (a, b) => a && b ? Math.hypot(a.x - b.x, a.y - b.y, (a.z ?? 0) - (b.z ?? 0)) : null;
-    const torsoLength = (lm) => {
-      const ls = visiblePoint(lm, 11), rs = visiblePoint(lm, 12);
-      const lh = visiblePoint(lm, 23), rh = visiblePoint(lm, 24);
-      const shoulder = pointDistance(ls, rs) || 0.2;
-      const hip = pointDistance(lh, rh) || 0.2;
-      const midShoulder = ls && rs ? { x: (ls.x + rs.x) / 2, y: (ls.y + rs.y) / 2, z: ((ls.z ?? 0) + (rs.z ?? 0)) / 2 } : null;
-      const midHip = lh && rh ? { x: (lh.x + rh.x) / 2, y: (lh.y + rh.y) / 2, z: ((lh.z ?? 0) + (rh.z ?? 0)) / 2 } : null;
-      return Math.max(0.12, pointDistance(midShoulder, midHip) || (shoulder + hip) / 2);
-    };
-
-    const getModeValue = (lm) => {
-      const tl = torsoLength(lm);
-      const angle = (a,b,c) => {
-        if (!a || !b || !c) return null;
-        return calculateAngle(a,b,c);
-      };
-      const L = (i) => visiblePoint(lm, i);
-      const kneeL = angle(L(23), L(25), L(27));
-      const kneeR = angle(L(24), L(26), L(28));
-      const elbowL = angle(L(11), L(13), L(15));
-      const elbowR = angle(L(12), L(14), L(16));
-      const shoulderL = angle(L(23), L(11), L(13));
-      const shoulderR = angle(L(24), L(12), L(14));
-      const avg = (...xs) => { const a = xs.filter((x) => x !== null); return a.length ? average(a) : null; };
-
-      if (exerciseMode === 'push') return avg(kneeL, kneeR) ?? avg(elbowL, elbowR);
-      if (exerciseMode === 'arm') return avg(elbowL, elbowR);
-      if (exerciseMode === 'arm_raise') {
-        const ls=L(11), rs=L(12), lw=L(15), rw=L(16);
-        if (!ls || !rs || !lw || !rw) return null;
-        return avg((ls.y-lw.y)/tl, (rs.y-rw.y)/tl);
-      }
-      if (exerciseMode === 'row') return avg(elbowL, elbowR);
-      if (exerciseMode === 'hinge') {
-        return avg(angle(L(11),L(23),L(25)), angle(L(12),L(24),L(26)));
-      }
-      if (exerciseMode === 'knee') {
-        const lh=L(23), rh=L(24), lk=L(25), rk=L(26);
-        if (!lh || !rh || !lk || !rk) return null;
-        return Math.min((lh.y-lk.y)/tl, (rh.y-rk.y)/tl);
-      }
-      if (exerciseMode === 'calf') {
-        const la=L(27), ra=L(28), lh=L(23), rh=L(24);
-        if (!la || !ra || !lh || !rh) return null;
-        return avg(lh.y-la.y, rh.y-ra.y);
-      }
-      if (exerciseMode === 'leg_press') return avg(kneeL, kneeR);
-      if (exerciseMode === 'crunch') {
-        return avg(angle(L(11),L(23),L(25)), angle(L(12),L(24),L(26)));
-      }
-      if (exerciseMode === 'twist') {
-        const ls=L(11), rs=L(12), lh=L(23), rh=L(24);
-        if (!ls || !rs || !lh || !rh) return null;
-        return ((ls.x+rs.x)/2 - (lh.x+rh.x)/2) / tl;
-      }
-      return null;
-    };
-
-    const handleGenericExercise = (lm) => {
-      // Plank เป็นท่าค้าง จึงนับเป็นวินาทีแทนครั้ง
-      if (exerciseMode === 'plank') {
-        const now = Date.now();
-        const shoulder = visiblePoint(lm,11), hip = visiblePoint(lm,23), ankle = visiblePoint(lm,27);
-        if (!shoulder || !hip || !ankle) {
-          updateFeedback('จัดตัวให้เห็นลำตัวและขาชัดเจน');
-          genericStaticStarted = 0;
-          return;
-        }
-        const bodyAngle = calculateAngle(shoulder, hip, ankle);
-        if (bodyAngle > 145) {
-          if (!genericStaticStarted) genericStaticStarted = now;
-          if (now - genericStaticLastSecond >= 1000) {
-            genericStaticLastSecond = now;
-            tryCountRep(0);
-          }
-          updateFeedback(`ค้างท่าแพลงก์ ${counter}/${targetCount} วินาที`);
-        } else {
-          genericStaticStarted = 0;
-          updateFeedback('รักษาลำตัวให้ตรง แล้วค้างท่า');
-        }
-        return;
-      }
-
-      const value = getModeValue(lm);
-      if (value === null || !Number.isFinite(value)) {
-        updateFeedback('จัดตำแหน่งให้เห็นร่างกายชัดเจน');
-        return;
-      }
-      genericBuffer.push(value);
-      if (genericBuffer.length > 5) genericBuffer.shift();
-      const smooth = average(genericBuffer);
-
-      // เริ่มจากท่าปกติก่อน แล้วตรวจการเคลื่อนกลับครบ 1 รอบ
-      if (!genericReady) {
-        genericLastValue = smooth;
-        genericReady = true;
-        genericStage = 'start';
-        updateFeedback(`พร้อมแล้ว เริ่ม ${exerciseName || 'ท่านี้'} ได้เลย`);
-        return;
-      }
-
-      const delta = smooth - genericLastValue;
-      genericLastValue = smooth;
-
-      // กลุ่มมุม: ลงต่ำ/งอ -> กลับตรง
-      if (['push','arm','row','hinge','leg_press','crunch'].includes(exerciseMode)) {
-        const down = smooth < (exerciseMode === 'push' ? 125 : exerciseMode === 'arm' || exerciseMode === 'row' ? 125 : 145);
-        const up = smooth > (exerciseMode === 'push' ? 155 : exerciseMode === 'arm' || exerciseMode === 'row' ? 155 : 160);
-        if (genericStage === 'start' && down) {
-          genericStage = 'down';
-          updateFeedback('ทำต่อจนกลับสู่ท่าเริ่มต้น');
-        } else if (genericStage === 'down' && up) {
-          if (tryCountRep(500)) genericStage = 'start';
-        } else {
-          updateFeedback(genericStage === 'down' ? 'กลับสู่ท่าเริ่มต้น' : 'ทำท่าให้สุดช่วงการเคลื่อนไหว');
-        }
-        return;
-      }
-
-      // กลุ่มยกแขน/เข่า/น่อง: ค่าต้องเปลี่ยนจาก baseline แล้วกลับมา
-      const movement = Math.abs(delta);
-      if (genericStage === 'start' && movement > 0.035) {
-        genericStage = 'moving';
-        updateFeedback('ดีมาก กลับสู่ท่าเริ่มต้น');
-      } else if (genericStage === 'moving' && movement < 0.012) {
-        if (tryCountRep(500)) genericStage = 'start';
-      } else {
-        updateFeedback('ทำท่าให้ชัดเจนและต่อเนื่อง');
-      }
-    };
-
     const onResults = (results) => {
       if (!active || !canvasRef.current) return;
 
@@ -1159,11 +978,6 @@ export default function Exercise() {
 
       ctx.save();
       ctx.clearRect(0, 0, cw, ch);
-
-      // กลับภาพกล้องเป็นแบบกระจก ให้ทิศทางในหน้าจอตรงกับท่าที่ผู้ใช้เห็นตัวเอง
-      // การกลับทั้ง canvas ทำให้ภาพกล้องและโครงร่าง AI กลับด้านตรงกัน
-      ctx.translate(cw, 0);
-      ctx.scale(-1, 1);
 
       // คำนวณการวางภาพแบบ "cover" ให้เต็มแคนวาสแนวตั้ง
       const img = results.image;
@@ -1188,11 +1002,11 @@ export default function Exercise() {
         drawSkeleton(ctx, lm, map);
 
         if (!finished) {
-          if (exerciseMode === 'squat') handleSquat(lm);
-          else if (exerciseMode === 'jumping_jack') handleJumpingJack(lm);
-          else if (exerciseMode === 'high_knees') handleHighKnees(lm);
-          else if (exerciseMode === 'punches') handlePunches(lm);
-          else handleGenericExercise(lm);
+          if (exerciseType === 'squat') handleSquat(lm);
+          else if (exerciseType === 'jumping_jack') handleJumpingJack(lm);
+          else if (exerciseType === 'high_knees') handleHighKnees(lm);
+          else if (exerciseType === 'punches') handlePunches(lm);
+          else updateFeedback('ไม่รู้จักท่านี้');
         }
       } else {
         lostFrames += 1;
@@ -1238,7 +1052,6 @@ export default function Exercise() {
           width: CANVAS_W,
           height: CANVAS_H,
         });
-        cameraControlRef.current = camera;
         camera.start();
         updateFeedback('จัดท่าทางให้เห็นเต็มตัว');
       }
@@ -1251,24 +1064,9 @@ export default function Exercise() {
       clearTimeout(initTimer);
       clearTimeout(navigateTimer);
       if (camera && typeof camera.stop === 'function') camera.stop();
-      if (cameraControlRef.current === camera) cameraControlRef.current = null;
       if (pose && typeof pose.close === 'function') pose.close();
     };
   }, [exerciseType, targetCount]);
-
-  // เปิด/ปิดกล้องโดยไม่รีเซ็ตจำนวนครั้งหรือผลการออกกำลังกาย
-  useEffect(() => {
-    const cam = cameraControlRef.current;
-    if (!cam) return;
-
-    if (cameraEnabled) {
-      try { cam.start(); } catch (err) { console.warn('camera.start failed:', err); }
-      setFeedback('กำลังติดตามร่างกาย');
-    } else {
-      try { cam.stop(); } catch (err) { console.warn('camera.stop failed:', err); }
-      setFeedback('ปิดกล้องแล้ว กดเปิดกล้องเพื่อเริ่มตรวจจับ');
-    }
-  }, [cameraEnabled]);
 
   // ---------------- UI: โครงเดียวกับ Dashboard ----------------
 
@@ -1348,21 +1146,10 @@ export default function Exercise() {
   };
 
   const exerciseNames = {
-    push_up: 'Push Up', diamond_push_up: 'Diamond Push Up', bird_dog: 'Bird Dog',
-    reverse_snow_angel: 'Reverse Snow Angel', plank: 'Plank', mountain_climber: 'Mountain Climber',
-    dumbbell_shoulder_press: 'Dumbbell Shoulder Press', dumbbell_lateral_raise: 'Dumbbell Lateral Raise',
-    dumbbell_bench_press: 'Dumbbell Bench Press', dumbbell_row: 'One-Arm Dumbbell Row',
-    dumbbell_curl: 'Dumbbell Curl', goblet_squat: 'Goblet Squat', dumbbell_calf_raise: 'Dumbbell Calf Raise',
-    barbell_bench_press: 'Barbell Bench Press', barbell_deadlift: 'Barbell Deadlift',
-    barbell_squat: 'Barbell Back Squat', barbell_overhead_press: 'Barbell Overhead Press',
-    cable_row: 'Seated Cable Row', cable_triceps_pushdown: 'Cable Triceps Pushdown',
-    cable_crunch: 'Cable Crunch', lat_pulldown: 'Lat Pulldown', chest_press_machine: 'Chest Press Machine',
-    leg_press: 'Leg Press', seated_calf_raise: 'Seated Calf Raise', shoulder_press_machine: 'Shoulder Press Machine',
-    band_pull_apart: 'Band Pull Apart', band_chest_press: 'Band Chest Press', band_squat: 'Banded Squat',
-    kettlebell_swing: 'Kettlebell Swing', kettlebell_goblet_squat: 'Kettlebell Goblet Squat',
-    kettlebell_russian_twist: 'Kettlebell Russian Twist', bench_dip: 'Bench Dip', bench_step_up: 'Bench Step Up',
-    bench_incline_pushup: 'Incline Push Up', squat: 'Squat', jumping_jack: 'Jumping Jack',
-    high_knees: 'High Knees', punches: 'Punches',
+    squat: 'Squat',
+    jumping_jack: 'Jumping Jack',
+    high_knees: 'High Knees',
+    punches: 'Punches',
   };
   const exerciseName = exerciseNames[exerciseType] || 'ออกกำลังกาย';
   const progress = Math.min(100, Math.round((counter / targetCount) * 100));
@@ -1465,7 +1252,7 @@ export default function Exercise() {
                 <h1>ระบบออกกำลังกายอัจฉริยะ</h1>
                 <p>ออกกำลังกายไปพร้อมระบบ AI ตรวจจับท่าทาง</p>
               </div>
-              <button className="ex-back" type="button" onClick={() => navigate('/settings?exercise=' + encodeURIComponent(exerciseType) + '&target=' + encodeURIComponent(targetCount))}>← กลับการตั้งค่าการออกกำลังกาย</button>
+              <button className="ex-back" type="button" onClick={() => navigate('/exercises')}>← กลับหน้าเลือกท่า</button>
             </header>
 
             <div className="ex-grid">
@@ -1476,19 +1263,7 @@ export default function Exercise() {
                     <h2>กล้องตรวจจับท่าทาง</h2>
                     <small>จัดตำแหน่งให้เห็นร่างกายชัดเจน</small>
                   </div>
-                  <div className="ex-camera-actions">
-                    <span className={`ex-live ${cameraEnabled ? '' : 'is-off'}`}><i /> {cameraEnabled ? 'AI LIVE' : 'กล้องปิด'}</span>
-                    <button
-                      type="button"
-                      className={`ex-camera-toggle ${cameraEnabled ? 'is-on' : 'is-off'}`}
-                      onClick={() => setCameraEnabled((prev) => !prev)}
-                      aria-pressed={cameraEnabled}
-                      aria-label={cameraEnabled ? 'ปิดกล้อง' : 'เปิดกล้อง'}
-                    >
-                      <span className="ex-toggle-dot" />
-                      {cameraEnabled ? 'ปิดกล้อง' : 'เปิดกล้อง'}
-                    </button>
-                  </div>
+                  <span className="ex-live"><i /> AI LIVE</span>
                 </div>
 
                 <div className="ex-title-row">
@@ -1500,25 +1275,18 @@ export default function Exercise() {
                 </div>
 
                 <video ref={videoRef} style={{ display: 'none' }} playsInline muted />
-                <div className={`ex-camera ${cameraEnabled ? '' : 'camera-disabled'}`}>
+                <div className="ex-camera">
                   <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H} />
-                  {!cameraEnabled && (
-                    <div className="ex-camera-off-overlay">
-                      <div className="ex-camera-off-icon">◉</div>
-                      <strong>กล้องถูกปิด</strong>
-                      <span>กด “เปิดกล้อง” เพื่อเริ่มตรวจจับท่าทาง</span>
-                    </div>
-                  )}
                   <div className="ex-cam-top">
-                    <span className="ex-cam-status"><i /> กำลังตรวจจับ</span>
-                    <span className="ex-cam-ai-label">AI POSE DETECTION</span>
+                    <span className="ex-cam-status"><i /> กำลังติดตาม</span>
+                    <span>AI Pose Detection</span>
                   </div>
                   <div className="ex-cam-count" aria-live="polite">
                     <strong>{counter}</strong><span>/ {targetCount} ครั้ง</span>
                   </div>
                   <div className="ex-cam-bottom">
-                    <span>จัดตำแหน่งให้เห็นร่างกายเต็มตัว</span>
-                    <span className="ex-cam-calories">{calories} kcal</span>
+                    <span>วางกล้องให้เห็นตัวเต็ม</span>
+                    <span>{calories} kcal</span>
                   </div>
                 </div>
                 {SHOW_DEBUG && debug && <p className="ex-debug">{debug}</p>}
@@ -1941,46 +1709,29 @@ html[data-theme="light"] .footer-brand { color:#20382d }
 .ex-grid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(300px,.7fr); gap:14px; align-items:start; }
 .ex-side { display:grid; gap:14px; min-width:0; }
 .ex-card { min-width:0; padding:16px; border:1px solid #1f4f55; border-radius:14px; background:rgba(255,255,255,.015); box-shadow:inset 0 0 22px rgba(0,0,0,.18); }
-.ex-card-head { display:flex; align-items:center; gap:12px; margin-bottom:14px; min-width:0; }
-.ex-card-head h2 { margin:0; font:500 18px 'Kanit',sans-serif; line-height:1.35; letter-spacing:.1px; }
-.ex-card-head small { display:block; margin-top:4px; font-size:11px; color:var(--muted); line-height:1.55; letter-spacing:.1px; }
+.ex-card-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; min-width:0; }
+.ex-card-head h2 { margin:0; font:500 18px 'Kanit',sans-serif; }
+.ex-card-head small { display:block; margin-top:1px; font-size:11px; color:var(--muted); }
 .ex-mini-icon { width:34px; height:34px; flex:none; display:grid; place-items:center; border:1px solid #5ea02c; border-radius:9px; background:rgba(110,255,45,.07); color:#91ff3e; font-size:17px; }
-.ex-camera-actions { margin-left:auto; display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
-.ex-live { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid rgba(110,255,50,.35); border-radius:999px; background:rgba(110,255,50,.08); color:#8cff32; font-size:10px; font-weight:700; white-space:nowrap; }
+.ex-live { margin-left:auto; display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid rgba(110,255,50,.35); border-radius:999px; background:rgba(110,255,50,.08); color:#8cff32; font-size:10px; font-weight:700; white-space:nowrap; }
 .ex-live i, .ex-cam-status i { width:7px; height:7px; border-radius:50%; background:#6eff35; box-shadow:0 0 0 3px rgba(110,255,53,.18); }
 
-.ex-title-row { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin:0 2px 12px; padding:0 2px; }
+.ex-title-row { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin:0 2px 8px; }
 .ex-eyebrow { color:var(--cyan); font-size:10px; font-weight:700; letter-spacing:2px; }
-.ex-title-row h3 { margin:5px 0 0; font:600 22px/1.35 'Kanit',sans-serif; letter-spacing:.1px; }
-.ex-target { flex:none; padding:8px 14px; border:1px solid #2a5360; border-radius:999px; color:#78d6ff; font-size:11px; font-weight:700; }
+.ex-title-row h3 { margin:2px 0 0; font:600 22px 'Kanit',sans-serif; }
+.ex-target { flex:none; padding:7px 12px; border:1px solid #2a5360; border-radius:999px; color:#78d6ff; font-size:11px; font-weight:700; }
 
-.ex-camera { position:relative; width:fit-content; max-width:100%; margin:0 auto; padding:10px; overflow:hidden; border:1px solid #2a5a66; border-radius:14px; background:#050b0c; box-shadow:0 0 22px rgba(17,204,255,.05); }
+.ex-camera { position:relative; width:fit-content; max-width:100%; margin:0 auto; padding:8px; overflow:hidden; border:1px solid #2a5a66; border-radius:14px; background:#050b0c; box-shadow:0 0 22px rgba(17,204,255,.05); }
 /* สี่เหลี่ยมผืนผ้าแนวตั้ง 3:4 สูงตามหน้าจอ เพื่อให้เห็นทั้งตัวและเห็นตัวนับโดยไม่ต้องเลื่อน */
-.ex-camera canvas { display:block; height:clamp(560px, calc(100vh - 150px), 900px); width:auto; aspect-ratio:3/4; border-radius:10px; background:#030708; }
+.ex-camera canvas { display:block; height:clamp(440px, calc(100vh - 190px), 780px); width:auto; aspect-ratio:3/4; border-radius:10px; background:#030708; }
 .ex-cam-count { position:absolute; left:50%; bottom:46px; transform:translateX(-50%); display:flex; align-items:baseline; gap:6px; padding:6px 18px; border:1px solid rgba(110,255,50,.45); border-radius:14px; background:rgba(2,8,10,.72); backdrop-filter:blur(5px); color:#fff; pointer-events:none; box-shadow:0 0 16px rgba(110,255,50,.2); }
 .ex-cam-count strong { font:600 40px/1 'Kanit',sans-serif; color:#8cff32; }
 .ex-cam-count span { font:500 15px 'Kanit',sans-serif; color:#dfe8e6; }
-.ex-cam-top, .ex-cam-bottom { position:absolute; left:22px; right:22px; display:flex; align-items:center; justify-content:space-between; gap:14px; color:#e4efef; font-size:11px; pointer-events:none; }
-.ex-cam-top { top:22px; }
-.ex-cam-bottom { bottom:22px; }
-.ex-cam-status { display:inline-flex; align-items:center; gap:8px; padding:7px 11px; border-radius:999px; background:rgba(2,8,10,.7); backdrop-filter:blur(5px); }
-.ex-cam-bottom span, .ex-cam-top > span:last-child { padding:7px 11px; border-radius:999px; background:rgba(2,8,10,.55); }
-
-.ex-camera-toggle { display:inline-flex; align-items:center; gap:7px; height:34px; padding:0 12px; border:1px solid #355b63; border-radius:9px; background:rgba(255,255,255,.035); color:var(--text); font:600 11px 'Kanit',sans-serif; letter-spacing:.1px; cursor:pointer; transition:.2s ease; }
-.ex-camera-toggle:hover { border-color:#8cff32; color:#8cff32; transform:translateY(-1px); }
-.ex-camera-toggle.is-on { border-color:rgba(110,255,50,.4); background:rgba(110,255,50,.08); color:#9aff5b; }
-.ex-camera-toggle.is-off { border-color:rgba(255,120,120,.35); background:rgba(255,90,90,.07); color:#ffb2b2; }
-.ex-toggle-dot { width:7px; height:7px; border-radius:50%; background:#6eff35; box-shadow:0 0 0 3px rgba(110,255,53,.14); }
-.ex-camera-toggle.is-off .ex-toggle-dot { background:#ff7777; box-shadow:0 0 0 3px rgba(255,119,119,.12); }
-.ex-live.is-off { color:#ffb2b2; border-color:rgba(255,120,120,.28); background:rgba(255,90,90,.06); }
-.ex-live.is-off i { background:#ff7777; box-shadow:0 0 0 3px rgba(255,119,119,.12); }
-.ex-cam-ai-label { letter-spacing:1.4px; font-size:9px; font-weight:700; }
-.ex-cam-calories { letter-spacing:.2px; }
-.ex-camera-off-overlay { position:absolute; inset:10px; z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:7px; text-align:center; color:#eaf4f2; background:rgba(2,8,10,.76); backdrop-filter:blur(6px); border-radius:10px; pointer-events:none; }
-.ex-camera-off-icon { width:48px; height:48px; display:grid; place-items:center; border:1px solid rgba(255,120,120,.35); border-radius:14px; background:rgba(255,90,90,.08); color:#ff9999; font-size:21px; }
-.ex-camera-off-overlay strong { font:600 17px/1.35 'Kanit',sans-serif; }
-.ex-camera-off-overlay span { max-width:290px; color:#aebfbc; font-size:11px; line-height:1.6; }
-
+.ex-cam-top, .ex-cam-bottom { position:absolute; left:20px; right:20px; display:flex; align-items:center; justify-content:space-between; gap:10px; color:#e4efef; font-size:10px; pointer-events:none; }
+.ex-cam-top { top:19px; }
+.ex-cam-bottom { bottom:18px; }
+.ex-cam-status { display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border-radius:999px; background:rgba(2,8,10,.7); backdrop-filter:blur(5px); }
+.ex-cam-bottom span, .ex-cam-top > span:last-child { padding:4px 9px; border-radius:999px; background:rgba(2,8,10,.55); }
 .ex-debug { margin:9px 2px 0; color:var(--muted); font-size:10px; text-align:center; }
 
 .ex-stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -2012,15 +1763,14 @@ html[data-theme="light"] .footer-brand { color:#20382d }
   .ex-grid { grid-template-columns:1fr; }
 }
 @media (max-width:640px) {
-  .ex-camera canvas { height:clamp(480px, 78vh, 780px); max-width:100%; }
+  .ex-camera canvas { height:clamp(380px, 76vh, 680px); max-width:100%; }
   .ex-cam-count strong { font-size:32px; }
   .ex-shell { padding:14px; }
   .ex-head { flex-wrap:wrap; }
   .ex-head h1 { font-size:23px; }
   .ex-head-icon { width:48px; height:48px; }
   .ex-back { margin-left:0; width:100%; }
-  .ex-camera-actions { width:100%; margin-left:0; justify-content:space-between; }
-  .ex-live { display:inline-flex; }
+  .ex-live { display:none; }
   .ex-title-row { align-items:flex-start; flex-direction:column; }
   .ex-stat { min-height:108px; padding:11px; }
   .ex-stat-value { font-size:28px; }
@@ -2059,11 +1809,4 @@ html[data-theme="light"] .ex-feedback { border-color:#a9d9e8; background:linear-
 html[data-theme="light"] .ex-feedback-icon { color:#1f7aa6; background:#dff3fa; }
 html[data-theme="light"] .ex-feedback strong { color:#172923; }
 html[data-theme="light"] .ex-camera { border-color:#9fc3cf; box-shadow:none; }
-html[data-theme="light"] .ex-camera-toggle { color:#29413a; border-color:#bfd2cb; background:#fff; }
-html[data-theme="light"] .ex-camera-toggle.is-on { color:#2f8a10; border-color:#9ccb6b; background:#f1faec; }
-html[data-theme="light"] .ex-camera-toggle.is-off { color:#a04a4a; border-color:#e2b9b9; background:#fff6f6; }
-html[data-theme="light"] .ex-live.is-off { color:#a04a4a; border-color:#e2b9b9; background:#fff6f6; }
-html[data-theme="light"] .ex-camera-off-overlay { background:rgba(245,249,248,.88); color:#20332e; }
-html[data-theme="light"] .ex-camera-off-overlay span { color:#62736e; }
-
 `;
