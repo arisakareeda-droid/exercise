@@ -66,6 +66,21 @@ const writeHealthCache = (data) => {
 const clearHealthCache = () => {
   try { localStorage.removeItem(HEALTH_CACHE_KEY); } catch { /* storage optional */ }
 };
+// สูตรเดียวกับปุ่ม "คำนวณ" (ใช้ซ้ำตอนรีเฟรชอัตโนมัติทุกวัน)
+const computeHealth = (weight, height, age) => {
+  const w = Number(weight);
+  const h = Number(height);
+  const a = Number(age);
+  if (!w || !h || h <= 0) return null;
+  const bmi = Number((w / Math.pow(h / 100, 2)).toFixed(2));
+  let status = "ผอม";
+  if (bmi >= 18.5 && bmi < 23) status = "ปกติ";
+  else if (bmi >= 23 && bmi < 25) status = "น้ำหนักเกิน";
+  else if (bmi >= 25 && bmi < 30) status = "อ้วนระดับ 1";
+  else if (bmi >= 30) status = "อ้วนระดับ 2";
+  const tdee = a > 0 ? Math.round((10 * w + 6.25 * h - 5 * a + 5) * 1.55) : null;
+  return { bmi, status, tdee };
+};
 
 // ---------- พลังงานที่เผาผลาญจากการออกกำลังกาย (ข้อมูลชุดเดียวกับหน้าประวัติ) ----------
 const WORKOUT_CACHE_KEY = "fittrack-history-workouts";
@@ -201,6 +216,16 @@ export default function Dashboard() {
     setFoodLog(readFoodLog(todayKey));
   }, [todayKey]);
 
+  // ขึ้นวันใหม่ตอนเปิดหน้าค้างไว้: รีเฟรชเป้าหมายพลังงานและยอดเผาผลาญของวันใหม่
+  const prevDayRef = useRef(todayKey);
+  useEffect(() => {
+    if (prevDayRef.current === todayKey) return;
+    prevDayRef.current = todayKey;
+    applyDailyRefresh(weight, height, age, auth.currentUser?.uid ?? null);
+    setEnergy(readEnergy());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayKey]);
+
   const dateLabel = new Intl.DateTimeFormat("th-TH", {
     day: "numeric", month: "short", year: "numeric",
   }).format(currentDateTime);
@@ -213,6 +238,22 @@ export default function Dashboard() {
     root.classList.add("theme-anim");
     setTheme((t) => (t === "dark" ? "light" : "dark"));
     setTimeout(() => root.classList.remove("theme-anim"), 450);
+  };
+
+  // รีเฟรช BMI + "พลังงานที่ควรได้รับต่อวัน" ใหม่ทุกวัน: ถ้าผลที่จำไว้ไม่ใช่ของวันนี้ ให้คำนวณใหม่จากข้อมูลล่าสุด
+  const applyDailyRefresh = (w, h, a, uid) => {
+    const dayKey = getLocalDateKey();
+    const cache = readHealthCache();
+    if (cache?.day === dayKey) return;
+    const r = computeHealth(w, h, a);
+    if (!r) return;
+    const nextTdee = r.tdee ?? (Number(cache?.tdee) > 0 ? Number(cache.tdee) : null);
+    setBmiResult({ value: r.bmi, status: r.status });
+    if (nextTdee) setTdeeResult(nextTdee);
+    writeHealthCache({
+      uid: uid ?? null, bmi: r.bmi, status: r.status, tdee: nextTdee,
+      weight: String(w), height: String(h), age: String(a ?? ""), day: dayKey,
+    });
   };
 
   useEffect(() => {
@@ -235,6 +276,8 @@ export default function Dashboard() {
         if (data.height) setHeight(data.height);
         if (data.age) setAge(data.age);
         if (data.goalWeight || data.targetWeight) setGoalWeight(String(data.goalWeight || data.targetWeight));
+        const c = readHealthCache();
+        applyDailyRefresh(data.weight || c?.weight, data.height || c?.height, data.age || c?.age, currentUser.uid);
       } catch (err) {
         console.error("โหลดข้อมูลโปรไฟล์ไม่สำเร็จ:", err);
       }
@@ -281,6 +324,7 @@ export default function Dashboard() {
       uid: auth.currentUser?.uid ?? null,
       bmi, status, tdee: nextTdee,
       weight: String(weight), height: String(height), age: String(age),
+      day: getLocalDateKey(),
     });
   };
 
