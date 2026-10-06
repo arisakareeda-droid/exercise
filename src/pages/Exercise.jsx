@@ -2036,8 +2036,9 @@ html[data-theme="light"] .footer-brand { color:#20382d }
 .ex-progress i { display:block; height:100%; border-radius:20px; background:linear-gradient(90deg,#72ed2e,#baff3e); box-shadow:0 0 12px rgba(125,255,45,.35); transition:width .3s ease; }
 .ex-progress-foot { margin-top:6px; font-size:10px; }
 
-.ex-feedback { display:flex; gap:10px; align-items:flex-start; padding:13px; border:1px solid rgba(24,216,255,.28); border-radius:12px; background:linear-gradient(100deg,rgba(24,216,255,.09),rgba(24,216,255,.02)); }
-.ex-feedback-icon { width:29px; height:29px; flex:none; display:grid; place-items:center; border-radius:9px; color:var(--cyan); background:rgba(24,216,255,.12); }
+.ex-feedback { display:flex; flex-direction:row; gap:12px; align-items:center; text-align:left; padding:13px; border:1px solid rgba(24,216,255,.28); border-radius:12px; background:linear-gradient(100deg,rgba(24,216,255,.09),rgba(24,216,255,.02)); }
+.ex-feedback > div { flex:1 1 auto; min-width:0; text-align:left; }
+.ex-feedback-icon { width:29px; height:29px; flex:none; display:grid; place-items:center; border-radius:9px; color:var(--cyan); background:rgba(24,216,255,.12); line-height:1; text-align:center; }
 .ex-feedback small { display:block; margin-bottom:2px; font-size:10px; color:var(--muted); }
 .ex-feedback strong { display:block; font-size:13px; line-height:1.5; font-weight:600; color:var(--text); }
 
