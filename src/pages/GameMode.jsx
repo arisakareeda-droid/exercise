@@ -90,7 +90,7 @@ const PUNCH_RISE = 12;      // แขนต้องเหยียดเพิ�
 const PUNCH_WINDOW = 800;   // ms หลังชก ที่หมัดนั้นทำให้ผลไม้แตกได้ (เดิม 500)
 const PUNCH_COOLDOWN = 200; // ms ระยะห่างขั้นต่ำระหว่างหมัดแต่ละครั้งของแขนเดียวกัน
 const HIT_EXT = 100;        // ตอนมือแตะผลไม้/ระเบิด แขนต้องยังเหยียดอย่างน้อยกี่องศา (กันมือที่ดึงกลับมาแล้วไปโดนของใกล้ตัว) ลดค่าถ้าชกแล้วไม่แตก
-const DEBUG_LIVE = false;   // true = โชว์บรรทัดดีบักที่จอเพื่อน (ช่องทางที่ได้ข้อมูล จำนวนผลไม้ อายุข้อมูล)
+const DEBUG_LIVE = false; // (ตอนนี้โชว์ค่าเครือข่ายด้วย: direct/relay, fps ที่รับ, แพ็กเก็ตหาย, rtt)   // true = โชว์บรรทัดดีบักที่จอเพื่อน (ช่องทางที่ได้ข้อมูล จำนวนผลไม้ อายุข้อมูล)
 const HIT_DIST = FRUIT_R * 0.8 + FIST_R; // ระยะที่ถือว่า 'มือแตะผลไม้' (ประมาณขอบวงกำปั้นแตะขอบผลไม้ที่เห็นบนจอ) เพิ่มตัวเลขถ้าอยากให้โดนง่ายขึ้น
 const LOST_MS = 1200;       // มองไม่เห็นตัวนานเท่านี้ เกมจะหยุดชั่วคราว
 const READY_MS = 1000;      // ต้องยืนอยู่ในตำแหน่งที่ถูกต้องนิ่ง ๆ นานเท่านี้ก่อนเริ่มนับถอยหลัง
@@ -172,8 +172,9 @@ const waitIce = (pc) => new Promise((resolve) => { // รอเก็บเส�
     if (pc.iceGatheringState === 'complete') { clearTimeout(t); resolve(); }
   });
 });
+let rtcStat = ''; // สรุปคุณภาพการเชื่อมต่อกล้องล่าสุด (ไว้ดีบัก)
 let liveErr = ''; // ข้อผิดพลาดล่าสุดตอนส่ง/รับภาพการเล่น (ไว้บอกผู้เล่น)
-const newView = () => ({ q: 0, src: '', tgt: null, curJ: null, curF: null, recvAt: 0, last: 0, since: performance.now(), parts: [], floats: [], rings: [], flash: 0, seen: 0, init: false });
+const newView = () => ({ q: 0, src: '', tgt: null, curJ: null, curF: null, recvAt: 0, last: 0, vt: -1, frame: null, frameAt: 0, since: performance.now(), parts: [], floats: [], rings: [], flash: 0, seen: 0, init: false });
 const liveDoc = (code, uid) => doc(getFirestore(auth.app), ROOMS, `${code}-live-${uid}`);
 
 // แพ็กภาพการเล่น (โครงร่าง กำปั้น ผลไม้ เหตุการณ์ และค่าสถานะ) เป็นอาร์เรย์ตัวเลขแบน ๆ — Firestore ไม่รองรับอาร์เรย์ซ้อนอาร์เรย์
@@ -238,7 +239,16 @@ function renderOpp(canvas, v, now, done, rv, conn) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   if (rv && rv.srcObject && rv.paused) rv.play?.().catch(() => {}); // เบราว์เซอร์บางตัวหยุดวิดีโอที่ซ่อนอยู่ ให้สั่งเล่นต่อ
-  const hasVideo = !!rv && rv.readyState >= 2 && rv.videoWidth > 0;
+  const live = !!rv && rv.readyState >= 2 && rv.videoWidth > 0;
+  if (live && rv.currentTime !== v.vt) { // มีเฟรมใหม่เท่านั้น ถึงคัดลอกเก็บไว้ (ลดงานวาด และถ้าเฟรมขาดช่วงจะค้างภาพล่าสุดแทนที่จะกะพริบหาย)
+    v.vt = rv.currentTime;
+    const kw = Math.min(480, rv.videoWidth);
+    const kh = Math.round(kw * rv.videoHeight / rv.videoWidth);
+    if (!v.frame) v.frame = document.createElement('canvas');
+    if (v.frame.width !== kw || v.frame.height !== kh) { v.frame.width = kw; v.frame.height = kh; }
+    try { v.frame.getContext('2d').drawImage(rv, 0, 0, kw, kh); v.frameAt = now; } catch { /* เฟรมนี้ข้าม */ }
+  }
+  const hasVideo = !!v.frame && v.frameAt && now - v.frameAt < 3000;
   const d = v.tgt;
   if (!d && !hasVideo) {
     ctx.fillStyle = '#c4d6da';
@@ -250,7 +260,7 @@ function renderOpp(canvas, v, now, done, rv, conn) {
     ctx.fillText(msg, cw / 2, ch / 2, cw * 0.9);
     return;
   }
-  const ar = d?.ar || (hasVideo ? rv.videoWidth / rv.videoHeight : 1.333);
+  const ar = d?.ar || (hasVideo ? v.frame.width / v.frame.height : 1.333);
   let rw = cw;
   let rh = cw / ar;
   if (rh > ch) { rh = ch; rw = ch * ar; }
@@ -260,16 +270,18 @@ function renderOpp(canvas, v, now, done, rv, conn) {
   ctx.fillStyle = 'rgba(255,255,255,.035)';
   ctx.fillRect(ox, oy, rw, rh);
   if (hasVideo) { // ครอปแบบ cover และกลับซ้ายขวา เหมือนที่เพื่อนเห็นตัวเอง
-    const va = rv.videoWidth / rv.videoHeight;
+    const fw = v.frame.width;
+    const fh = v.frame.height;
+    const va = fw / fh;
     const ra = rw / rh;
     let sw; let sh; let sx; let sy;
-    if (va > ra) { sh = rv.videoHeight; sw = sh * ra; sx = (rv.videoWidth - sw) / 2; sy = 0; }
-    else { sw = rv.videoWidth; sh = sw / ra; sx = 0; sy = (rv.videoHeight - sh) / 2; }
+    if (va > ra) { sh = fh; sw = sh * ra; sx = (fw - sw) / 2; sy = 0; }
+    else { sw = fw; sh = sw / ra; sx = 0; sy = (fh - sh) / 2; }
     ctx.save();
     ctx.translate(ox + rw, oy);
     ctx.scale(-1, 1);
     ctx.globalAlpha = 0.92;
-    ctx.drawImage(rv, sx, sy, sw, sh, 0, 0, rw, rh);
+    ctx.drawImage(v.frame, sx, sy, sw, sh, 0, 0, rw, rh);
     ctx.restore();
   }
   ctx.strokeStyle = 'rgba(124,255,49,.18)';
@@ -431,6 +443,7 @@ function renderOpp(canvas, v, now, done, rv, conn) {
     ctx.fillStyle = '#ffd24a';
     ctx.textAlign = 'left';
     ctx.fillText(`รับจาก ${v.src || '-'} · ผลไม้ ${Math.floor((d.o || []).length / 5)} ลูก · อายุข้อมูล ${Math.round(now - v.recvAt)}ms`, ox + 8, oy + rh - 10);
+    ctx.fillText(rtcStat || 'rtc: -', ox + 8, oy + rh - 26);
     ctx.textAlign = 'center';
   }
 }
@@ -500,10 +513,14 @@ function trackFists(s, video, landmarker, now) {
   s.bodyOk = false;
   s.view = { sh: false, el: false, wr: false, lg: false, dist: 'none' };
 
-  if (landmarker && video && video.readyState >= 2 && video.currentTime !== s.lastVideoTime) {
+  if (landmarker && video && video.readyState >= 2 && video.currentTime !== s.lastVideoTime && now - (s.detAt || 0) >= (s.detGap || 0)) {
     s.lastVideoTime = video.currentTime;
     try {
+      const t0 = performance.now();
       const r = landmarker.detectForVideo(video, now);
+      const cost = performance.now() - t0; // ถ้าเครื่องตรวจช้า (>20ms) เว้นระยะระหว่างรอบ ไม่ให้กินเวลาเธรดหลักจนภาพเพื่อน/การส่งข้อมูลสะดุด (สูงสุดเว้น 45ms ≈ 20 รอบ/วินาที ยังพอจับหมัด)
+      s.detGap = Math.min(45, Math.max(0, ((s.detGap || 0) * 0.8) + (cost > 20 ? (cost - 20) * 0.4 : -2)));
+      s.detAt = now;
       s.pose = r.landmarks?.[0] || null;
       s.world = r.worldLandmarks?.[0] || null;
     } catch { s.pose = null; s.world = null; }
@@ -1365,6 +1382,7 @@ export default function GameMode() {
 
   // ---------- เชื่อมกล้องกับเพื่อน (WebRTC) ----------
   const closePeer = () => {
+    clearInterval(statTimer.current);
     try { dcRef.current?.close(); } catch { /* ปิดไม่ได้ก็ข้าม */ }
     try { pcRef.current?.close(); } catch { /* ปิดไม่ได้ก็ข้าม */ }
     dcRef.current = null;
@@ -1378,6 +1396,7 @@ export default function GameMode() {
     closePeer();
     const pc = new RTCPeerConnection(ICE);
     pcRef.current = pc;
+    startStats(pc);
     pcStream.current = streamRef.current;
     streamRef.current?.getTracks().forEach((t) => pc.addTrack(t, streamRef.current));
     pc.ontrack = (ev) => {
@@ -1405,6 +1424,33 @@ export default function GameMode() {
   };
 
   // ช่องข้อมูลตรงระหว่างเครื่อง ส่งโครงร่าง/ผลไม้ได้ถี่และลื่นกว่าผ่าน Firestore
+  const statTimer = useRef(null);
+  const startStats = (pc) => {
+    clearInterval(statTimer.current);
+    if (!DEBUG_LIVE) return;
+    let prev = null;
+    statTimer.current = setInterval(async () => {
+      if (pcRef.current !== pc) return;
+      try {
+        const rep = await pc.getStats();
+        let pair = null; let inb = null; const cands = {};
+        rep.forEach((r) => {
+          if (r.type === 'candidate-pair' && (r.nominated || r.state === 'succeeded') && r.currentRoundTripTime != null) pair = r;
+          if (r.type === 'inbound-rtp' && r.kind === 'video') inb = r;
+          if (r.type === 'local-candidate' || r.type === 'remote-candidate') cands[r.id] = r;
+        });
+        const via = pair ? (cands[pair.localCandidateId]?.candidateType === 'relay' || cands[pair.remoteCandidateId]?.candidateType === 'relay' ? 'relay' : 'direct') : '-';
+        let fps = '-'; let loss = '-';
+        if (inb) {
+          fps = inb.framesPerSecond != null ? Math.round(inb.framesPerSecond) : '-';
+          if (prev) { const lp = inb.packetsLost - prev.packetsLost; const rp = inb.packetsReceived - prev.packetsReceived; loss = rp + lp > 0 ? `${Math.round((lp / (rp + lp)) * 100)}%` : '0%'; }
+          prev = inb;
+        }
+        rtcStat = `${via} · rtt ${pair ? Math.round(pair.currentRoundTripTime * 1000) : '-'}ms · รับ ${fps}fps · หาย ${loss}`;
+      } catch { /* อ่านค่าไม่ได้ก็ข้าม */ }
+    }, 2000);
+  };
+
   const wireDc = (dc) => {
     dcRef.current = dc;
     dc.onmessage = (e) => {
