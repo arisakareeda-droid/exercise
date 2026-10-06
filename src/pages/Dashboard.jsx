@@ -574,6 +574,33 @@ export default function Dashboard() {
     ],
   };
 
+  // ปุ่มรีเฟรช: ดึงยอดเผาผลาญล่าสุดมาอัปเดตตามที่ผู้ใช้ต้องการ (ออกกำลังกายจาก Firestore + เล่นเกมจาก calorieSync)
+  const [refreshingBurn, setRefreshingBurn] = useState(false);
+  const refreshBurn = async () => {
+    if (refreshingBurn) return;
+    setRefreshingBurn(true);
+    setEnergy(readEnergy());
+    try {
+      const uid = auth.currentUser?.uid;
+      if (uid) {
+        const snapshot = await getDocs(query(
+          collection(db, "workouts"),
+          where("userId", "==", uid),
+          orderBy("completedAt", "desc"),
+          limit(200)
+        ));
+        setWorkoutLog(toWorkoutLog(snapshot.docs.map((item) => item.data())));
+      }
+      setCurrentDateTime(new Date());
+      showToast("อัปเดตพลังงานที่ลดวันนี้แล้ว");
+    } catch (err) {
+      console.error("รีเฟรชยอดเผาผลาญไม่สำเร็จ:", err);
+      showToast("อัปเดตไม่สำเร็จ ลองใหม่อีกครั้ง", "error");
+    } finally {
+      setRefreshingBurn(false);
+    }
+  };
+
   const logout = async () => {
     try {
       await signOut(auth);
@@ -700,6 +727,14 @@ export default function Dashboard() {
                   <span>เล่นเกม <b>{fmtBurn(gameBurned)} kcal</b></span>
                 </span>
               </div>
+              <button
+                type="button"
+                className={`burn-refresh${refreshingBurn ? " spinning" : ""}`}
+                onClick={refreshBurn}
+                disabled={refreshingBurn}
+                title="อัปเดตข้อมูลล่าสุด"
+                aria-label="อัปเดตพลังงานที่ลดวันนี้"
+              >↻</button>
             </div>
           </section>
 
@@ -2238,6 +2273,31 @@ html[data-anim="off"] .food-log-list, html[data-anim="off"] .food-log-item { ani
 .bmi-result .result-label span { float:none; position:absolute; right:0; top:50%; transform:translateY(-50%); white-space:nowrap; }
 .bmi-result .bmi-number { text-align:center; clear:both; }
 .bmi-bar i.idle { opacity:.5; }
+
+/* ปุ่มรีเฟรช "พลังงานแคลอรี่ที่ลดในวันนี้" */
+.bmi-card .burn-today { position: relative; }
+.burn-refresh { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid rgba(255,140,60,.55); border-radius: 50%; background: rgba(255,120,40,.10); color: #ffb36b; font-size: 17px; line-height: 1; cursor: pointer; transition: background .15s ease, transform .15s ease; }
+.burn-refresh:hover:not(:disabled) { background: rgba(255,120,40,.22); transform: rotate(60deg); }
+.burn-refresh:disabled { cursor: default; opacity: .75; }
+.burn-refresh.spinning { animation: ft-burn-spin .8s linear infinite; }
+@keyframes ft-burn-spin { to { transform: rotate(360deg); } }
+html[data-theme="light"] .burn-refresh { color: #a63700; border-color: #e39a5f; background: #fff7ef; }
+html[data-anim="off"] .burn-refresh, html[data-anim="off"] .burn-refresh.spinning { animation: none; transition: none; }
+
+/* กล่อง "พลังงานที่ควรได้รับต่อวัน": หัวข้อ + ตัวเลข จัดเป็นกลุ่มเดียวอยู่กึ่งกลางกล่องทั้งแนวตั้งและแนวนอน (หัวข้อไม่ลอยชิดขอบบนอีก) */
+.bmi-card .daily-energy {
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px;
+  padding: 14px 48px !important;
+}
+.bmi-card .daily-energy .energy-heading {
+  position: static !important;
+  top: auto !important; left: auto !important; right: auto !important;
+  width: 100%;
+}
+.bmi-card .daily-energy .energy-value { transform: none !important; }
 
 `;
 

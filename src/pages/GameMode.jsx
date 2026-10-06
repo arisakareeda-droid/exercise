@@ -1328,8 +1328,8 @@ export default function GameMode() {
       <header className="gm-top">
         <button type="button" className="gm-back" onClick={() => navigate('/dashboard')}>‹ หน้าหลัก</button>
         <div className="gm-title">
-          <h1>โหมดเกม · {game.name}</h1>
-          <p>ออกกำลังกายด้วยท่าต่อยหมัด ระบบตรวจจับท่าทางจากกล้อง</p>
+          <h1>โหมดเกม</h1>
+          <p>ออกกำลังกายด้วยระบบตรวจจับท่าทางจากกล้อง</p>
         </div>
         <button type="button" className="gm-back" onClick={toggleFull} aria-label="เต็มจอ">⛶</button>
         <div className="gm-burn" title={burnTitle} aria-live="polite">
@@ -1388,49 +1388,78 @@ export default function GameMode() {
         )}
 
         {status === 'menu' && (
-          <div className="gm-overlay">
+          <div className={`gm-overlay${menuStep === 'game' ? ' menu-game' : ''}`}>
             {menuStep === 'game' && (
-              <>
-                <h2>เลือกเกม</h2>
-                <div className="gm-cards">
-                  {Object.values(GAMES).map((gm) => (
-                    <button key={gm.id} type="button" className="gm-card" onClick={() => { setSetup((s) => ({ ...s, game: gm.id })); setMessage(''); setMenuStep('mode'); }}>
-                      <span className="gm-card-ico">{gm.emoji}</span>
-                      <b>{gm.name}</b>
-                      <small>{gm.desc}</small>
-                      <small className="gm-card-best">สถิติสูงสุด {bests[gm.id]} · ลดไปวันนี้ {(energy.games[gm.id] || 0).toFixed(1)} kcal</small>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="gm-quick">
-                  <span className="gm-quick-label">🔑 เพื่อนสร้างห้องไว้แล้ว? ใส่รหัสเข้าเกมได้เลย</span>
-                  <div className="gm-quick-row">
-                    <input
-                      className="gm-input gm-code-input"
-                      inputMode="numeric"
-                      maxLength={4}
-                      placeholder="0000"
-                      aria-label="รหัสห้อง 4 หลักของเพื่อน"
-                      value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, ''))}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && joinCode.length === 4) joinRoom(); }}
-                    />
-                    <button type="button" className="gm-btn primary" onClick={joinRoom} disabled={joining || joinCode.length !== 4}>
-                      {joining ? 'กำลังเข้าห้อง...' : 'เข้าห้องเลย'}
-                    </button>
+              <div className="gm-menu">
+                <section className="gm-menu-main">
+                  <div className="gm-menu-head">
+                    <h2>เลือกเกม</h2>
+                    <p>ชกให้แตก ลดแคลอรี่ไปพร้อมกับความสนุก</p>
                   </div>
-                  <small>ไม่ต้องเลือกเกมหรือโหมดก่อน ระบบจะใช้เกมเดียวกับที่เพื่อนเลือกไว้</small>
-                </div>
+                  <div className="gm-cards">
+                    {Object.values(GAMES).map((gm) => (
+                      <button key={gm.id} type="button" className={`gm-card gm-card-${gm.id}`} onClick={() => { setSetup((s) => ({ ...s, game: gm.id })); setMessage(''); setMenuStep('mode'); }}>
+                        <span className="gm-card-ico">{gm.emoji}</span>
+                        <b>{gm.name}</b>
+                        <small>{gm.desc}</small>
+                        <span className="gm-card-stats">
+                          <span className="gm-pill best">🏆 สูงสุด {bests[gm.id]}</span>
+                          <span className="gm-pill burn">🔥 {(energy.games[gm.id] || 0).toFixed(1)} kcal</span>
+                        </span>
+                        <span className="gm-card-go">เล่นเลย ›</span>
+                      </button>
+                    ))}
+                  </div>
 
-                <div className="gm-energy" role="group" aria-label="สรุปพลังงานวันนี้">
-                  <div><small>เป้าหมายต่อวัน</small><b>{energy.target.toLocaleString()}</b></div>
-                  <div><small>กินไปแล้ว</small><b>{energy.consumed.toLocaleString()}</b></div>
-                  <div className="burn"><small>ลดไปจากเกม</small><b>−{energy.burned.toFixed(1)}</b></div>
-                  <div className={energy.over > 0 ? 'over' : 'left'}><small>{energy.over > 0 ? 'เกินเป้าหมาย' : 'เหลืออีก'}</small><b>{(energy.over > 0 ? energy.over : energy.remaining).toLocaleString()}</b></div>
-                </div>
-                <p className="gm-note">หน่วย kcal · ดึงเป้าหมายและแคลอรี่ที่กินจากหน้าหลัก และส่งยอดที่เล่นกลับไปให้อัตโนมัติ</p>
-              </>
+                  {(() => {
+                    const net = Math.max(0, energy.consumed - energy.burned);
+                    const pct = energy.target > 0 ? Math.min(100, (net / energy.target) * 100) : 0;
+                    return (
+                      <div className="gm-quest">
+                        <div className="gm-quest-head">
+                          <span>⚡ พลังงานวันนี้</span>
+                          <span className="gm-quest-val"><b>{Math.round(net).toLocaleString()}</b> / {energy.target.toLocaleString()} kcal</span>
+                        </div>
+                        <div className={`gm-xp${energy.over > 0 ? ' over' : ''}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)} aria-label="แคลอรี่สุทธิเทียบกับเป้าหมาย">
+                          <i style={{ width: `${pct}%` }} />
+                        </div>
+                        <div className="gm-energy" role="group" aria-label="สรุปพลังงานวันนี้">
+                          <div className="tgt"><span className="ei" aria-hidden="true">🎯</span><small>เป้าหมายต่อวัน</small><b>{energy.target.toLocaleString()}<em>kcal</em></b></div>
+                          <div className="eat"><span className="ei" aria-hidden="true">🍽️</span><small>กินไปแล้ว</small><b>{energy.consumed.toLocaleString()}<em>kcal</em></b></div>
+                          <div className="burn"><span className="ei" aria-hidden="true">🔥</span><small>ลดไปจากเกม</small><b>−{energy.burned.toFixed(1)}<em>kcal</em></b></div>
+                          <div className={energy.over > 0 ? 'over' : 'left'}><span className="ei" aria-hidden="true">{energy.over > 0 ? '⚠️' : '✨'}</span><small>{energy.over > 0 ? 'เกินเป้าหมาย' : 'เหลืออีก'}</small><b>{(energy.over > 0 ? energy.over : energy.remaining).toLocaleString()}<em>kcal</em></b></div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <p className="gm-note">หน่วย kcal · ดึงเป้าหมายและแคลอรี่ที่กินจากหน้าหลัก และส่งยอดที่เล่นกลับไปให้อัตโนมัติ</p>
+                </section>
+
+                <aside className="gm-join" aria-label="เข้าห้องของเพื่อน">
+                  <div className="gm-join-ico" aria-hidden="true">🔑</div>
+                  <h3>เข้าห้องเพื่อน</h3>
+                  <p className="gm-join-sub">เพื่อนสร้างห้องไว้แล้ว? ใส่รหัสเข้าเกมได้เลย</p>
+                  <input
+                    className="gm-input gm-code-input"
+                    inputMode="numeric"
+                    maxLength={4}
+                    placeholder="0000"
+                    aria-label="รหัสห้อง 4 หลักของเพื่อน"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.replace(/\D/g, ''))}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && joinCode.length === 4) joinRoom(); }}
+                  />
+                  <button type="button" className="gm-btn primary gm-join-btn" onClick={joinRoom} disabled={joining || joinCode.length !== 4}>
+                    {joining ? 'กำลังเข้าห้อง...' : 'เข้าห้องเลย'}
+                  </button>
+                  <ol className="gm-join-steps">
+                    <li>ขอรหัส 4 หลักจากเพื่อน</li>
+                    <li>พิมพ์รหัสในช่องด้านบน</li>
+                    <li>กดเข้าห้อง แล้วเริ่มแข่งทันที</li>
+                  </ol>
+                  <small>ไม่ต้องเลือกเกมหรือโหมดก่อน ระบบจะใช้เกมเดียวกับที่เพื่อนเลือกไว้</small>
+                </aside>
+              </div>
             )}
 
             {menuStep === 'mode' && (
@@ -1660,16 +1689,16 @@ export default function GameMode() {
 
 const css = `
 @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700&family=Anuphan:wght@400;500;600&display=swap');
-.gm-page { position:fixed; inset:0; height:100dvh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); display:flex; flex-direction:column; overflow:hidden; background:radial-gradient(circle at 70% 0%,rgba(50,255,100,.07),transparent 40%),#020609; color:#eef6f1; font-family:'Anuphan',sans-serif; }
-.gm-top { display:flex; align-items:center; gap:12px; padding:10px 16px; }
+.gm-page { position:fixed; inset:0; height:100dvh; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); display:flex; flex-direction:column; overflow:hidden; background:radial-gradient(circle at 78% -5%,rgba(80,255,120,.13),transparent 42%),radial-gradient(circle at 5% 105%,rgba(40,170,255,.09),transparent 40%),#020609; color:#eef6f1; font-family:'Anuphan',sans-serif; }
+.gm-top { display:flex; align-items:center; gap:12px; padding:10px 16px; margin:8px 10px 10px; border:1px solid rgba(124,255,49,.14); border-radius:18px; background:linear-gradient(120deg,rgba(14,40,46,.72),rgba(4,14,18,.6)); backdrop-filter:blur(8px); }
 .gm-wrap { flex:1; min-height:0; display:flex; flex-direction:row; gap:6px; padding:0 10px 10px; }
 .gm-wrap.imm { padding:0; gap:3px; }
 @media (orientation:portrait) { .gm-wrap { flex-direction:column; } }
 .gm-back { min-height:44px; padding:0 16px; border:1px solid #4f8f9c; border-radius:10px; background:rgba(255,255,255,.06); color:#f4fbf7; font-size:14px; cursor:pointer; transition:border-color .2s, color .2s, transform .15s; }
-.gm-back:hover { border-color:#7cff31; color:#7cff31; }
+.gm-back:hover { border-color:#7cff31; color:#7cff31; background:rgba(124,255,49,.08); }
 .gm-back:active { transform:scale(.96); }
 .gm-title { flex:1; min-width:0; }
-.gm-title h1 { margin:0; font:600 26px/1.2 'Kanit',sans-serif; }
+.gm-title h1 { margin:0; font:600 26px/1.2 'Kanit',sans-serif; color:#fff; background:linear-gradient(90deg,#ffffff,#d9ff8a 70%,#9dff5a); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
 .gm-title p { margin:2px 0 0; font-size:13px; color:#c4d6da; }
 .gm-burn { display:flex; align-items:center; gap:8px; padding:5px 12px; border:1px solid rgba(255,197,138,.45); border-radius:12px; background:rgba(255,160,60,.08); white-space:nowrap; }
 .gm-burn-ico { font-size:20px; line-height:1; }
@@ -1677,16 +1706,64 @@ const css = `
 .gm-burn b { font:600 20px/1.15 'Kanit',sans-serif; color:#ffc58a; }
 .gm-burn .unit { margin-left:4px; font-size:12px; color:#ffc58a; }
 .gm-day { padding:2px 10px; border-radius:99px; background:rgba(2,8,10,.6); font-size:12px; color:#c4d6da; text-shadow:0 1px 6px rgba(0,0,0,.9); }
-.gm-quick { width:min(460px,100%); display:flex; flex-direction:column; align-items:center; gap:8px; padding:14px; border:1px dashed rgba(124,255,49,.55); border-radius:14px; background:rgba(124,255,49,.05); }
-.gm-quick-label { font-size:14.5px; font-weight:600; color:#e9ffb0; }
-.gm-quick small { font-size:12px; color:#c4d6da; }
-.gm-quick-row { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; }
-.gm-code-input { width:150px; font:600 22px 'Kanit',sans-serif; letter-spacing:.35em; text-indent:.35em; }
-.gm-energy { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; width:min(620px,100%); }
-.gm-energy > div { display:flex; flex-direction:column; gap:2px; padding:8px 6px; border:1px solid #2c5560; border-radius:12px; background:rgba(8,28,34,.7); }
-.gm-energy small { font-size:11.5px; color:#c4d6da; }
-.gm-energy b { font:600 18px 'Kanit',sans-serif; color:#fff; }
-.gm-energy .burn b { color:#ffc58a; } .gm-energy .left b { color:#c6ff38; } .gm-energy .over b { color:#ffa3b3; }
+
+.gm-overlay.menu-game { padding:0; align-items:stretch; justify-content:flex-start; text-align:left; background:radial-gradient(ellipse at 20% 0%,rgba(80,255,120,.08),transparent 55%),rgba(2,8,10,.9); }
+.gm-menu { width:100%; min-height:100%; display:grid; grid-template-columns:minmax(0,1fr) clamp(264px,27vw,330px); gap:18px; padding:22px 22px 20px; align-items:stretch; }
+.gm-menu-main { display:flex; flex-direction:column; align-items:center; gap:16px; min-width:0; padding-top:4px; }
+.gm-menu-head { text-align:center; }
+.gm-menu-head h2 { font-size:clamp(30px,5vmin,44px); letter-spacing:.01em; }
+.gm-menu-head p { margin-top:4px; font-size:14px; color:#9fbcc2; }
+.gm-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:16px; width:min(720px,100%); }
+.gm-card { position:relative; overflow:hidden; gap:8px; padding:22px 18px 18px; border:1px solid rgba(124,210,230,.28); border-radius:20px; background:linear-gradient(170deg,rgba(14,40,48,.92),rgba(5,18,23,.95)); box-shadow:0 10px 30px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06); }
+.gm-card::before { content:''; position:absolute; inset:-1px -1px auto -1px; height:90px; background:radial-gradient(ellipse at 50% 0%,var(--gc,rgba(124,255,49,.22)),transparent 70%); pointer-events:none; }
+.gm-card-fruit { --gc:rgba(255,95,126,.28); }
+.gm-card-time { --gc:rgba(255,210,74,.26); }
+.gm-card:hover { transform:translateY(-4px); border-color:#9dff5a; box-shadow:0 16px 38px rgba(0,0,0,.45), 0 0 26px rgba(124,255,49,.22); }
+.gm-card-ico { position:relative; display:grid; place-items:center; width:72px; height:72px; margin-bottom:2px; border-radius:50%; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); font-size:38px; }
+.gm-card b { position:relative; font-size:19px; }
+.gm-card small { position:relative; min-height:3em; }
+.gm-card-stats { position:relative; display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin-top:4px; }
+.gm-pill { padding:3px 10px; border-radius:99px; font-size:12px; font-weight:600; }
+.gm-pill.best { color:#e9ffb0; background:rgba(198,255,56,.12); border:1px solid rgba(198,255,56,.35); }
+.gm-pill.burn { color:#ffc58a; background:rgba(255,160,60,.12); border:1px solid rgba(255,197,138,.35); }
+.gm-card-go { position:relative; margin-top:6px; padding:7px 22px; border-radius:99px; background:linear-gradient(90deg,#72ed2e,#baff3e); color:#071005; font:600 14px 'Kanit',sans-serif; transition:box-shadow .2s; }
+.gm-card:hover .gm-card-go { box-shadow:0 0 18px rgba(125,255,45,.5); }
+.gm-quest { position:relative; overflow:hidden; display:flex; flex-direction:column; gap:12px; width:min(720px,100%); padding:16px 16px 18px; border:1px solid rgba(124,210,230,.26); border-radius:22px; background:radial-gradient(ellipse at 50% -20%,rgba(124,255,49,.12),transparent 60%),linear-gradient(165deg,rgba(12,34,42,.92),rgba(4,15,20,.95)); box-shadow:0 12px 34px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.07); }
+.gm-quest-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; font:600 17px 'Kanit',sans-serif; color:#fff; }
+.gm-quest-val { font:500 14px 'Kanit',sans-serif; color:#9fbcc2; }
+.gm-quest-val b { font-weight:700; font-size:20px; color:#c6ff38; text-shadow:0 0 14px rgba(124,255,49,.45); }
+.gm-xp { position:relative; height:18px; padding:2px; border-radius:99px; background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.14); box-shadow:inset 0 2px 6px rgba(0,0,0,.6); overflow:hidden; }
+.gm-xp i { display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,#ff9d2e,#ffd24a 55%,#baff3e); box-shadow:0 0 14px rgba(198,255,56,.55); transition:width .7s cubic-bezier(.2,.8,.2,1); }
+.gm-xp::after { content:''; position:absolute; inset:0; background:repeating-linear-gradient(90deg,transparent 0,transparent calc(10% - 2px),rgba(3,10,13,.9) calc(10% - 2px),rgba(3,10,13,.9) 10%); pointer-events:none; }
+.gm-xp.over i { background:linear-gradient(90deg,#ff8a5c,#ff476d); box-shadow:0 0 14px rgba(255,71,109,.55); }
+.gm-energy { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; width:100%; }
+.gm-energy > div { --ea:#4fd1ff; position:relative; overflow:hidden; display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:12px 12px 15px; border:1px solid color-mix(in srgb,var(--ea) 40%,transparent); border-radius:16px; text-align:left; background:linear-gradient(160deg,color-mix(in srgb,var(--ea) 20%,transparent),rgba(4,14,18,.92) 70%); transition:transform .15s, box-shadow .2s; }
+.gm-energy > div::after { content:''; position:absolute; left:12px; right:12px; bottom:0; height:3px; border-radius:3px 3px 0 0; background:var(--ea); box-shadow:0 0 12px var(--ea); }
+.gm-energy > div:hover { transform:translateY(-2px); box-shadow:0 8px 22px color-mix(in srgb,var(--ea) 28%,transparent); }
+.gm-energy .tgt { --ea:#4fd1ff; } .gm-energy .eat { --ea:#b073ff; } .gm-energy .burn { --ea:#ffa534; } .gm-energy .left { --ea:#baff3e; } .gm-energy .over { --ea:#ff476d; }
+.gm-energy .ei { display:grid; place-items:center; width:36px; height:36px; margin-bottom:6px; border-radius:11px; background:rgba(255,255,255,.08); border:1px solid color-mix(in srgb,var(--ea) 55%,transparent); box-shadow:0 0 14px color-mix(in srgb,var(--ea) 30%,transparent); font-size:18px; line-height:1; }
+.gm-energy small { font-size:12px; color:#b9d0d5; }
+.gm-energy b { font:700 clamp(20px,3.4vmin,27px)/1.1 'Kanit',sans-serif; color:#fff; text-shadow:0 0 16px color-mix(in srgb,var(--ea) 55%,transparent); }
+.gm-energy b em { margin-left:4px; font:500 11px 'Anuphan',sans-serif; font-style:normal; color:#9fbcc2; text-shadow:none; }
+.gm-note { text-align:center; color:#8fa9af; }
+.gm-join { position:relative; display:flex; flex-direction:column; align-items:center; gap:10px; padding:26px 20px 20px; border:1px solid rgba(124,255,49,.4); border-radius:24px; background:radial-gradient(ellipse at 50% 0%,rgba(124,255,49,.16),transparent 60%),linear-gradient(175deg,rgba(14,38,30,.95),rgba(4,16,14,.97)); box-shadow:0 14px 44px rgba(0,0,0,.5), 0 0 30px rgba(124,255,49,.1), inset 0 1px 0 rgba(255,255,255,.08); text-align:center; }
+.gm-join-ico { display:grid; place-items:center; width:62px; height:62px; border-radius:50%; background:rgba(198,255,56,.12); border:1px solid rgba(198,255,56,.45); font-size:30px; box-shadow:0 0 22px rgba(124,255,49,.25); }
+.gm-join h3 { margin:2px 0 0; font:700 22px 'Kanit',sans-serif; color:#fff; }
+.gm-join-sub { margin:0; font-size:13.5px; line-height:1.5; color:#d8f5a8; }
+.gm-join .gm-code-input { width:100%; min-height:62px; margin-top:6px; border:1px solid rgba(198,255,56,.5); border-radius:16px; background:rgba(2,10,12,.8); font:700 32px 'Kanit',sans-serif; letter-spacing:.4em; text-indent:.4em; color:#c6ff38; }
+.gm-join .gm-code-input::placeholder { color:rgba(198,255,56,.25); }
+.gm-join .gm-code-input:focus { border-color:#c6ff38; box-shadow:0 0 0 3px rgba(198,255,56,.18); outline:none; }
+.gm-join-btn { width:100%; min-height:50px; font-size:16px; }
+.gm-join-steps { width:100%; margin:6px 0 0; padding:12px 14px 12px 34px; border-radius:14px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); display:grid; gap:6px; text-align:left; font-size:13px; color:#d3e2e5; line-height:1.4; }
+.gm-join-steps li::marker { color:#c6ff38; font-weight:700; }
+.gm-join > small { margin-top:auto; font-size:12px; line-height:1.5; color:#9fbcc2; }
+@media (max-width:900px), (orientation:portrait) {
+  .gm-menu { grid-template-columns:1fr; padding:16px 14px; }
+  .gm-join { order:-1; padding:18px 16px 16px; }
+  .gm-join-ico { width:48px; height:48px; font-size:24px; }
+  .gm-join-steps { display:none; }
+  .gm-join > small { margin-top:0; }
+}
 .gm-toast { position:fixed; top:calc(env(safe-area-inset-top) + 12px); left:50%; transform:translateX(-50%); z-index:60; max-width:min(560px,92vw); padding:12px 18px; border:1px solid rgba(255,197,138,.6); border-radius:14px; background:rgba(8,20,24,.96); color:#fff3e2; font-size:14px; line-height:1.5; text-align:center; box-shadow:0 10px 36px rgba(0,0,0,.55); cursor:pointer; animation:gm-toast-in .3s ease; }
 @keyframes gm-toast-in { from { opacity:0; transform:translate(-50%,-10px); } to { opacity:1; transform:translate(-50%,0); } }
 .gm-stage { position:relative; flex:1 1 0; min-width:0; min-height:0; overflow:hidden; border:1px solid #1f6d6a; border-radius:16px; background:linear-gradient(160deg,#07161a,#030b0e); user-select:none; box-shadow:0 0 28px rgba(80,255,120,.08); }
@@ -1807,6 +1884,8 @@ const css = `
   .gm-burn small { display:none; }
   .gm-burn b { font-size:16px; }
   .gm-energy { grid-template-columns:repeat(2,1fr); }
+  .gm-top { margin:6px 6px 8px; padding:8px 10px; }
+  .gm-card-ico { width:60px; height:60px; font-size:32px; }
   .gm-day { font-size:11px; }
   .gm-score { font-size:34px; }
   .gm-hearts { font-size:24px; }
@@ -1819,5 +1898,5 @@ const css = `
   .gm-check { padding:20px 12px 12px; gap:8px; }
   .gm-check h2 { font-size:18px; }
 }
-@media (prefers-reduced-motion: reduce) { .gm-count, .gm-toast { animation:none; } .gm-btn, .gm-back, .gm-end, .gm-bar i, .gm-chip { transition:none; } }
+@media (prefers-reduced-motion: reduce) { .gm-count, .gm-toast { animation:none; } .gm-card, .gm-xp i, .gm-energy > div { transition:none; } .gm-btn, .gm-back, .gm-end, .gm-bar i, .gm-chip { transition:none; } }
 `;

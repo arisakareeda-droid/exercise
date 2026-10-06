@@ -144,7 +144,7 @@ const StatCard = ({ icon, label, children, delta, ring, color }) => (
   </div>
 );
 
-export default function CustomSelect({ value, options, onChange, ariaLabel, labelMap }) {
+function CustomSelect({ value, options, onChange, ariaLabel, labelMap }) {
   const [open, setOpen] = useState(false);
   const current = options.find((o) => o.value === value) || options[0];
   const display = current ? (labelMap ? labelMap(current.value) : current.label) : '';
@@ -184,7 +184,7 @@ export default function CustomSelect({ value, options, onChange, ariaLabel, labe
   );
 }
 
-function History() {
+export default function History() {
   const navigate = useNavigate();
   const [workouts, setWorkouts] = useState(readWorkoutCache);
   // มีแคชอยู่แล้วก็ไม่ต้องโชว์สถานะ "กำลังโหลด" — แสดงค่าล่าสุดที่มีไว้ก่อน
