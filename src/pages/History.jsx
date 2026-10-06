@@ -144,7 +144,47 @@ const StatCard = ({ icon, label, children, delta, ring, color }) => (
   </div>
 );
 
-export default function History() {
+export default function CustomSelect({ value, options, onChange, ariaLabel, labelMap }) {
+  const [open, setOpen] = useState(false);
+  const current = options.find((o) => o.value === value) || options[0];
+  const display = current ? (labelMap ? labelMap(current.value) : current.label) : '';
+
+  return (
+    <div className={`hx-custom-select ${open ? 'open' : ''}`}>
+      <button
+        type="button"
+        className="hx-select-button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span>{display}</span>
+      </button>
+      {open && (
+        <div className="hx-select-menu" role="listbox" aria-label={ariaLabel}>
+          {options.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              role="option"
+              aria-selected={value === o.value}
+              className={`hx-select-option ${value === o.value ? 'active' : ''}`}
+              onClick={() => {
+                onChange(o.value);
+                setOpen(false);
+              }}
+            >
+              {labelMap ? labelMap(o.value) : o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function History() {
   const navigate = useNavigate();
   const [workouts, setWorkouts] = useState(readWorkoutCache);
   // มีแคชอยู่แล้วก็ไม่ต้องโชว์สถานะ "กำลังโหลด" — แสดงค่าล่าสุดที่มีไว้ก่อน
@@ -178,17 +218,8 @@ export default function History() {
   // ออกจากหน้านี้แล้วคืนค่า ก่อนหน้าถัดไปจะตั้งธีมของตัวเอง
   useLayoutEffect(() => () => document.documentElement.removeAttribute('data-theme'), []);
 
-  // สลับธีมจากแท็บ/หน้าอื่น → ตามทันที
-  useEffect(() => {
-    const onStorage = (ev) => {
-      if (ev.key === 'fittrack-theme') setTheme(ev.newValue === 'light' ? 'light' : 'dark');
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
   // ใช้ค่า Animation จากหน้าตั้งค่า (ปิดแล้วอนิเมชันในหน้านี้จะหยุด) — เหมือนหน้า Dashboard
-  useLayoutEffect(() => {
+  useEffect(() => {
     const root = document.documentElement;
     try {
       const saved = JSON.parse(localStorage.getItem('fittrack_user_settings') || '{}');
@@ -590,15 +621,23 @@ export default function History() {
                   <span className="hx-mini-icon"><Ico n="cal" size={20} /></span>
                   <h2>ประวัติการออกกำลังกายล่าสุด</h2>
                   <div className="hx-filters">
-                    <select value={typeFilter} onChange={pickFilter(setTypeFilter)} aria-label="กรองตามกลุ่มกล้ามเนื้อ">
-                      {typeOptions.map((o) => <option key={o} value={o}>{o === 'all' ? 'ทั้งหมด' : o}</option>)}
-                    </select>
-                    <select value={periodFilter} onChange={pickFilter(setPeriodFilter)} aria-label="กรองตามช่วงเวลา">
-                      <option value="week">สัปดาห์นี้</option>
-                      <option value="month">เดือนนี้</option>
-                      <option value="3m">3 เดือน</option>
-                      <option value="all">ทั้งหมด</option>
-                    </select>
+                    <CustomSelect
+                      value={typeFilter}
+                      options={typeOptions.map((o) => ({ value: o, label: o === 'all' ? 'ทั้งหมด' : o }))}
+                      onChange={(value) => { setTypeFilter(value); setVisibleCount(6); setExpandedId(null); }}
+                      ariaLabel="กรองตามกลุ่มกล้ามเนื้อ"
+                    />
+                    <CustomSelect
+                      value={periodFilter}
+                      options={[
+                        { value: 'week', label: 'สัปดาห์นี้' },
+                        { value: 'month', label: 'เดือนนี้' },
+                        { value: '3m', label: '3 เดือน' },
+                        { value: 'all', label: 'ทั้งหมด' },
+                      ]}
+                      onChange={(value) => { setPeriodFilter(value); setVisibleCount(6); setExpandedId(null); }}
+                      ariaLabel="กรองตามช่วงเวลา"
+                    />
                   </div>
                 </div>
 
@@ -1152,8 +1191,14 @@ html[data-theme="light"] .footer-brand { color:#20382d }
 .hx-progress i { display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,#4ee02a,#c6ff38); box-shadow:0 0 12px rgba(140,255,50,.5); transition:width .6s ease; }
 .hx-progress-label { display:flex; justify-content:space-between; gap:8px; margin-top:10px; font-size:12.5px; color:#dfe8e6; }
 
-.hx-filters { margin-left:auto; display:flex; gap:8px; }
-.hx-filters select { height:34px; min-width:96px; padding:0 10px; border:1px solid #2a5360; border-radius:8px; background:#050e11; color:var(--text); font-size:13px; cursor:pointer; }
+.hx-filters { margin-left:auto; display:flex; gap:10px; }
+.hx-custom-select { position:relative; min-width:96px; font-family:'Kanit',sans-serif; }
+.hx-select-button { width:100%; height:38px; min-width:96px; padding:0 14px; border:1px solid #b8cfc8; border-radius:16px; background:#fff; color:#1a3026; font-family:'Kanit',sans-serif; font-size:14px; font-weight:400; cursor:pointer; outline:none; display:flex; align-items:center; justify-content:center; gap:10px; transition:border-color .2s ease, box-shadow .2s ease, background .2s ease; }
+.hx-select-button:hover, .hx-custom-select.open .hx-select-button { border-color:#70c94b; box-shadow:0 0 0 2px rgba(112,201,75,.10); }
+.hx-select-menu { position:absolute; z-index:50; top:calc(100% + 6px); left:0; right:0; padding:5px; border:1px solid #b8cfc8; border-radius:16px; background:#fff; box-shadow:0 10px 24px rgba(24,49,40,.14); overflow:hidden; }
+.hx-select-option { width:100%; border:0; border-radius:11px; background:transparent; color:#1a3026; padding:8px 11px; text-align:center; font-family:'Kanit',sans-serif; font-size:14px; font-weight:400; cursor:pointer; transition:background .15s ease, color .15s ease; }
+.hx-select-option:hover { background:#eef9e9; }
+.hx-select-option.active { background:#2f6fd0; color:#fff; }
 .hx-list { display:grid; gap:8px; }
 .hx-item { border:1px solid #1f4f55; border-radius:12px; background:rgba(255,255,255,.015); transition:border-color .2s ease; }
 .hx-item:hover, .hx-item.open { border-color:rgba(110,255,50,.5); }
