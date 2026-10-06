@@ -145,7 +145,7 @@ const ICE = {
 const rtcDoc = (code) => doc(getFirestore(auth.app), ROOMS, `${code}-rtc`);
 const waitIce = (pc) => new Promise((resolve) => { // รอเก็บเส้นทางเชื่อมต่อครบ แล้วส่งไปทีเดียว
   if (pc.iceGatheringState === 'complete') { resolve(); return; }
-  const t = setTimeout(resolve, 3500);
+  const t = setTimeout(resolve, 6000); // รอ TURN ได้นานขึ้น ไม่งั้นข้อเสนอจะไม่มีเส้นทางรีเลย์
   pc.addEventListener('icegatheringstatechange', () => {
     if (pc.iceGatheringState === 'complete') { clearTimeout(t); resolve(); }
   });
@@ -215,6 +215,7 @@ function renderOpp(canvas, v, now, done, rv, conn) {
   ctx.clearRect(0, 0, cw, ch);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  if (rv && rv.srcObject && rv.paused) rv.play?.().catch(() => {}); // เบราว์เซอร์บางตัวหยุดวิดีโอที่ซ่อนอยู่ ให้สั่งเล่นต่อ
   const hasVideo = !!rv && rv.readyState >= 2 && rv.videoWidth > 0;
   const d = v.tgt;
   if (!d && !hasVideo) {
@@ -252,6 +253,21 @@ function renderOpp(canvas, v, now, done, rv, conn) {
   ctx.strokeStyle = 'rgba(124,255,49,.18)';
   ctx.lineWidth = 1;
   ctx.strokeRect(ox, oy, rw, rh);
+  if (!hasVideo && d) { // ได้ข้อมูลเกมของเพื่อน (ผ่าน Firestore) แต่ภาพกล้องยังไม่มา → บอกผู้เล่นว่าเป็นเพราะอะไร
+    const why = conn === 'failed' ? 'เชื่อมต่อกล้องไม่สำเร็จ (เครือข่ายบล็อก ต้องใช้ TURN ของตัวเอง)'
+      : conn === 'disconnected' ? 'การเชื่อมต่อกล้องหลุด กำลังลองใหม่...'
+        : conn === 'connected' ? 'เชื่อมต่อแล้ว รอภาพจากกล้องเพื่อน...'
+          : 'กำลังเชื่อมต่อกล้องเพื่อน...';
+    ctx.save();
+    ctx.font = `${Math.max(11, Math.round(cw * 0.03))}px Anuphan, sans-serif`;
+    const tw = Math.min(cw * 0.94, ctx.measureText(`📷 ${why}`).width + 20);
+    const th = Math.max(22, Math.round(cw * 0.05));
+    ctx.fillStyle = 'rgba(2,8,10,.72)';
+    ctx.fillRect((cw - tw) / 2, ch - th - 8, tw, th);
+    ctx.fillStyle = '#ffd24a';
+    ctx.fillText(`📷 ${why}`, cw / 2, ch - th / 2 - 8, tw - 12);
+    ctx.restore();
+  }
   if (!d) return; // ยังไม่มีข้อมูลโครงร่าง/ผลไม้ แสดงแค่ภาพกล้อง
   const dt = Math.min(0.1, (now - (v.last || now)) / 1000);
   v.last = now;
@@ -1218,6 +1234,7 @@ export default function GameMode() {
   const rtcUnsub = useRef(null);
   const rtcMyId = useRef('');
   const rtcLastId = useRef('');
+  const rtcRetry = useRef(0); // จำนวนครั้งที่ลองเชื่อมกล้องใหม่อัตโนมัติ
   const pendingOffer = useRef(null);
   const oppView = useRef(newView());
   const liveUnsub = useRef(null);
@@ -1344,6 +1361,18 @@ export default function GameMode() {
       if (!v) return;
       v.srcObject = ev.streams[0] || new MediaStream([ev.track]);
       v.play?.().catch(() => {});
+    };
+    pc.onconnectionstatechange = () => {
+      if (pcRef.current !== pc) return; // เป็นการเชื่อมต่อรอบเก่า
+      const st = pc.connectionState;
+      if (st === 'connected') { rtcRetry.current = 0; return; }
+      if ((st === 'failed' || st === 'disconnected') && roomMeta.current?.isHost && rtcRetry.current < 4) {
+        setTimeout(() => { // เจ้าของห้องส่งข้อเสนอใหม่ (id ใหม่) ฝั่งเพื่อนจะตอบกลับเองอัตโนมัติ
+          if (pcRef.current !== pc || pc.connectionState === 'connected' || !roomMeta.current?.isHost) return;
+          rtcRetry.current += 1;
+          hostOffer().catch((e) => console.warn('rtc retry', e));
+        }, st === 'failed' ? 800 : 5000);
+      }
     };
     return pc;
   };
@@ -2444,7 +2473,7 @@ const css = `
 .gm-bot-ico { font-size:clamp(48px,14vmin,96px); line-height:1; }
 .gm-botcard b { font:600 clamp(16px,3.5vmin,24px) 'Kanit',sans-serif; }
 .gm-wrap.split .gm-speed span, .gm-wrap.split .gm-lr { display:none; }
-.gm-rvideo { position:absolute; width:2px; height:2px; opacity:0; pointer-events:none; }
+.gm-rvideo { position:fixed; left:0; top:0; width:4px; height:4px; opacity:.01; pointer-events:none; z-index:-1; }
 .gm-btn.small { min-height:38px; padding:0 14px; font-size:13px; }
 .gm-pick { display:flex; flex-direction:column; align-items:center; gap:8px; font-size:13px; color:#c4d6da; }
 .gm-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; width:min(620px,100%); }
