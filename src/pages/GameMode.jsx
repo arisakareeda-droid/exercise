@@ -75,6 +75,7 @@ const ZOM = {
   HP: 100, HP_PER_KILL: 30,                  // พลังชีวิตซอมบี้ตัวแรก และที่เพิ่มขึ้นต่อตัวที่ล้ม
   APPROACH: 0.075, APPROACH_PER_KILL: 0.012, // ความเร็วเดินเข้าหา (ระยะ/วินาที) ยิ่งล้มหลายตัวยิ่งเร็ว
   WIND: 1.0, WIND_MIN: 0.5,                  // เวลาที่ซอมบี้ยกแขนง้างก่อนตะปบ (วินาที) ต้องต่อย/เตะให้ทันถึงจะขัดจังหวะได้
+  SIZE: 1.1,                                 // ความสูงซอมบี้เทียบกับความสูงตัวเราบนจอ (1 = เท่าเรา, 1.1 = ใหญ่กว่าเล็กน้อย ห้ามต่ำกว่า 1)
   SIDE: 0.68, SWAY: 0.35,                    // ตำแหน่งซอมบี้บนจอ (0-1 จากซ้าย: 0.68 = ฝั่งขวา ผู้เล่นยืนฝั่งซ้าย / 0.32 = สลับเป็นซ้าย) และความกว้างที่เดินส่าย (สัดส่วนของค่าเดิม)
   PENALTY: 30,                               // คะแนนที่เสียเมื่อโดนตะปบ
   HITTABLE: 0.5,                             // ซอมบี้ต้องเดินเข้ามาใกล้ระดับนี้ (0-1) ก่อนถึงจะต่อยโดน
@@ -390,7 +391,7 @@ const newGame = (o = {}, seed = o.seed ?? newSeed()) => ({
   punches: [0, 0], // จำนวนหมัดที่นับได้ [ซ้าย, ขวา]
   fists: [newFist(), newFist()],
   feet: [newFist(), newFist()], kicks: [0, 0], // เท้าซ้าย ขวา และจำนวนเตะที่นับได้ (ใช้ในโหมดซอมบี้)
-  z: null, zN: 0, zSpawnIn: 900, kills: 0, smears: [], sh: 0, // ซอมบี้ตัวปัจจุบัน / จำนวนตัวที่เกิดแล้ว / ตัวที่ล้ม / คราบเลือดบนจอ / ความกว้างไหล่(px)
+  z: null, zN: 0, zSpawnIn: 900, kills: 0, smears: [], sh: 0, bodyH: 0, // ซอมบี้ตัวปัจจุบัน / จำนวนตัวที่เกิดแล้ว / ตัวที่ล้ม / คราบเลือดบนจอ / ความกว้างไหล่(px)
   cfg: GAMES[o.game] || GAMES.fruit, mode: o.mode || 'solo',
   rng: mulberry(seed), seed, speed: o.speed || 1,
   weight: o.weight || 60, kcal: 0,
@@ -446,7 +447,16 @@ function trackFists(s, video, landmarker, now) {
       const b = mapPoint(lm[12], video);
       const raw = Math.hypot(a.x - b.x, a.y - b.y);
       shoulder = Math.max(80, raw);
-      s.sh = s.sh ? s.sh * 0.92 + shoulder * 0.08 : shoulder; // ความกว้างไหล่แบบเฉลี่ย ใช้กำหนดขนาดซอมบี้ให้ตัวเท่าเรา
+      s.sh = s.sh ? s.sh * 0.92 + shoulder * 0.08 : shoulder; // ความกว้างไหล่แบบเฉลี่ย (ใช้สำรองตอนยังวัดความสูงไม่ได้)
+      { // ประมาณความสูงตัวเราบนจอ จากระยะไหล่→ข้อเท้า (หรือไหล่→เข่า) เพื่อทำซอมบี้ให้ตัวเท่าหรือใหญ่กว่าเรา
+        const jt = s.joints;
+        const mid = (i, k) => (jt[i] && jt[k] ? { x: (jt[i].x + jt[k].x) / 2, y: (jt[i].y + jt[k].y) / 2 } : null);
+        const sm = mid(11, 12); const an = mid(27, 28); const kn = mid(25, 26);
+        let hNow = 0;
+        if (sm && an) hNow = Math.hypot(sm.x - an.x, sm.y - an.y) / 0.78; // ไหล่→ข้อเท้า ≈ 78% ของความสูง
+        else if (sm && kn) hNow = Math.hypot(sm.x - kn.x, sm.y - kn.y) / 0.53; // ไหล่→เข่า ≈ 53% ของความสูง
+        if (hNow > 0) s.bodyH = s.bodyH ? s.bodyH * 0.92 + hNow * 0.08 : hNow;
+      }
       // วัดระยะห่างจากกล้องเป็นสัดส่วนของภาพวิดีโอ (ไม่ขึ้นกับการครอปตามขนาดจอ)
       const rawN = Math.hypot((lm[11].x - lm[12].x) * (video.videoWidth || 4), (lm[11].y - lm[12].y) * (video.videoHeight || 3)) / (video.videoWidth || 4);
       s.view = {
@@ -713,11 +723,12 @@ function stepZombie(s, dt, now) {
   }
 
   // ตำแหน่งและขนาดบนจอ: ตัวเท่าคนจริง (ประมาณจากความกว้างไหล่ของผู้เล่น) ยิ่งเข้าใกล้ยิ่งใหญ่
-  const body = Math.min(H * 0.92, W * 0.95, Math.max(H * 0.55, (s.sh || 220) * 4.4)); // จำกัดไม่ให้กว้างเกินจอ เพราะซอมบี้อยู่ชิดฝั่งหนึ่ง
+  const pH = s.bodyH || (s.sh || 220) * 4.4; // ความสูงตัวผู้เล่นบนจอ (ประมาณ)
+  const body = Math.min(H * 0.97, Math.max(H * 0.7, pH * ZOM.SIZE)); // ซอมบี้ต้องไม่เล็กกว่าเรา
   const lunge = z.state === 'strike' ? Math.sin(Math.min(1, z.t / 0.35) * Math.PI) : 0;
-  z.h = body * (0.5 + 0.5 * z.d) * (1 + 0.14 * lunge);
+  z.h = Math.min(H * 1.02, body * (0.96 + 0.1 * z.d) * (1 + 0.14 * lunge)); // ไม่ย่อลงตามระยะ ตัวใหญ่เท่าเดิมตั้งแต่โผล่มา
   z.x = W * (ZOM.SIDE + z.swayAmp * ZOM.SWAY * Math.sin(z.swayPh + t * 0.9)) + (z.state === 'stagger' ? Math.sin(z.t * 40) * 6 : 0);
-  z.y = H * (0.985 - 0.1 * (1 - z.d));
+  z.y = H * 0.99;
   if (z.state !== 'down') z.hpf = Math.max(0, z.hp / z.maxHp);
   if (z.state === 'down') return;
 
