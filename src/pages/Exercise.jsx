@@ -211,7 +211,10 @@ export default function Exercise() {
   const canvasRef = useRef(null);
   const cameraControlRef = useRef(null);
 
-  const [cameraEnabled, setCameraEnabled] = useState(true);
+  // เริ่มต้นด้วยกล้องปิด ผู้ใช้กด "เปิดกล้อง" เองเมื่อพร้อม
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const cameraEnabledRef = useRef(false);
+  cameraEnabledRef.current = cameraEnabled;
   const [counter, setCounter] = useState(0);
   const [feedback, setFeedback] = useState('กำลังโหลด AI...');
   const [calories, setCalories] = useState(0);
@@ -1245,8 +1248,13 @@ export default function Exercise() {
           height: CANVAS_H,
         });
         cameraControlRef.current = camera;
-        camera.start();
-        updateFeedback('จัดท่าทางให้เห็นเต็มตัว');
+        // เปิดกล้องเฉพาะเมื่อผู้ใช้เปิดไว้ (ค่าเริ่มต้นคือปิด)
+        if (cameraEnabledRef.current) {
+          camera.start();
+          updateFeedback('จัดท่าทางให้เห็นเต็มตัว');
+        } else {
+          updateFeedback('ปิดกล้องแล้ว กดเปิดกล้องเพื่อเริ่มตรวจจับ');
+        }
       }
     };
 
@@ -1494,7 +1502,7 @@ export default function Exercise() {
                 <h1>ระบบออกกำลังกายอัจฉริยะ</h1>
                 <p>ออกกำลังกายไปพร้อมระบบ AI ตรวจจับท่าทาง</p>
               </div>
-              <button className="ex-back" type="button" onClick={() => navigate('/settings?exercise=' + encodeURIComponent(exerciseType) + '&target=' + encodeURIComponent(targetCount))}>← กลับการตั้งค่าการออกกำลังกาย</button>
+              <button className="ex-back" type="button" onClick={() => navigate('/settings?exercise=' + encodeURIComponent(exerciseType) + '&target=' + encodeURIComponent(targetCount))}>กลับการตั้งค่าการออกกำลังกาย</button>
             </header>
 
             <div className="ex-grid">
@@ -2034,7 +2042,8 @@ html[data-theme="light"] .footer-brand { color:#20382d }
 .ex-feedback strong { display:block; font-size:13px; line-height:1.5; font-weight:600; color:var(--text); }
 
 .ex-tips ul { margin:0; padding:0; list-style:none; display:grid; gap:7px; }
-.ex-tips li { position:relative; padding-left:16px; color:var(--muted); font-size:12px; line-height:1.55; }
+.ex-tips li { position:relative; padding-left:16px; color:var(--muted); font-size:12px; line-height:1.55; text-align:left; }
+.ex-tips ul { text-align:left; justify-items:stretch; }
 .ex-tips li:before { content:''; position:absolute; left:2px; top:.62em; width:6px; height:6px; border-radius:50%; background:#6eff35; box-shadow:0 0 8px rgba(110,255,53,.6); }
 
 @media (max-width:1200px) {
