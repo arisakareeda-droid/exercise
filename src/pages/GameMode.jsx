@@ -22,10 +22,18 @@ const FIST_R = 38;
 // ---- รายการเกม: เพิ่มเกมใหม่ได้ที่นี่ (time = จำกัดเวลาเป็นวินาที, lives = จำนวนหัวใจ) ----
 const GAMES = {
   fruit: { id: 'fruit', emoji: '🍉', name: 'ชกผลไม้', desc: 'แบบคลาสสิก มีหัวใจ 3 ดวง โดนระเบิดเสียหัวใจ หมดแล้วเกมจบ', lives: MAX_LIVES, time: 0 },
-  time: { id: 'time', emoji: '⏱', name: 'ชกจับเวลา 60 วินาที', desc: 'ทำคะแนนให้มากที่สุดใน 60 วินาที ไม่มีหัวใจ แต่โดนระเบิดหักคะแนน 20', lives: 0, time: 60 },
+  // ชกหนีปีศาจ: target = คะแนนที่ต้องทำให้ได้ภายในเวลา (ปรับตัวเลขได้ที่นี่) ถ้าไม่ถึง ปีศาจตามทันและมาแกล้ง
+  time: { id: 'time', emoji: '👹', name: 'ชกหนีปีศาจ', desc: 'ชกให้ถึงเป้าหมาย 500 คะแนนใน 60 วินาทีเพื่อหนีปีศาจ ถ้าไม่ถึง ปีศาจจะตามมาแกล้ง! โดนระเบิดหักคะแนน 20', lives: 0, time: 60, target: 500 },
 };
 // ตัวเร่งความเร็วผลไม้ที่ตก (v = ตัวคูณความเร็ว และเป็นตัวคูณคะแนนด้วย ยิ่งเร็วยิ่งได้แต้มเยอะ)
 const SPEEDS = [{ v: 0.75, label: 'ช้า' }, { v: 1, label: 'ปกติ' }, { v: 1.5, label: 'เร็ว' }, { v: 2, label: 'เร็วมาก' }];
+const PRANKS = [
+  { ico: '🪮', text: 'ปีศาจแอบเอาผมคุณไปมัดจุกซะแล้ว!' },
+  { ico: '🥸', text: 'ปีศาจแปะหนวดปลอมให้คุณ เท่ไปอีกแบบ!' },
+  { ico: '🍪', text: 'ปีศาจขโมยขนมของคุณไปกินหมดแล้ว!' },
+  { ico: '🪶', text: 'ปีศาจเอาขนนกมาจั๊กจี้คุณไม่หยุด!' },
+  { ico: '🎭', text: 'ปีศาจสลับหน้ากากให้คุณ ตลกมาก!' },
+];
 const LIVE_MS = 330; // ส่งภาพการเล่นของเราให้เพื่อนทุกกี่ ms
 // บอทคู่แข่ง: rate = จำนวนครั้งที่ชกต่อวินาที, acc = โอกาสชกโดนผลไม้, bomb = โอกาสพลาดไปโดนระเบิด
 const BOTS = {
@@ -1165,6 +1173,7 @@ export default function GameMode() {
       left: s.punches[0], right: s.punches[1], secs: Math.round(s.activeMs / 1000),
       kcal: s.kcal, ppm: Math.round(total / Math.max(1 / 60, s.activeMs / 60000)),
       weight: s.weight, record: s.score > 0 && s.score >= top, opp: null,
+      target: s.cfg.target || 0, escaped: !s.cfg.target || s.score >= s.cfg.target, prank: Math.floor(Math.random() * PRANKS.length),
     };
     if (s.mode === 'bot') {
       // ให้บอทเล่นต่อจนจบ เพื่อเทียบผลสุดท้ายอย่างยุติธรรม
@@ -1311,7 +1320,16 @@ export default function GameMode() {
   const diff = result ? Math.abs(result.left - result.right) : 0;
   const total = result ? result.left + result.right : 0;
   const weaker = result && total >= 10 && diff / total > 0.3 ? (result.left > result.right ? 'ขวา' : 'ซ้าย') : null;
+  const chase = game?.target ? (() => { // ข้อมูลแถบไล่ล่า: ตำแหน่งเรา ตำแหน่งปีศาจ (0 = จุดเริ่ม, 1 = ประตูหนี)
+    const p = Math.min(1, Math.max(0, hud.score / game.target));
+    const e = hud.t > 0 ? 1 - hud.t / game.time : 0;
+    const raw = -0.22 + 1.22 * e; // ปีศาจเริ่มวิ่งตามจากด้านหลังจุดเริ่ม และไปถึงประตูพอดีเมื่อหมดเวลา
+    const escaped = hud.score >= game.target;
+    const d = escaped ? 0 : Math.min(p, Math.max(0, raw));
+    return { p, d, escaped, danger: !escaped && hud.t > 0 && p - raw < 0.08, left: Math.max(0, game.target - hud.score) };
+  })() : null;
   const vs = result?.opp ? (result.outcome || (result.score > result.opp.score ? 'win' : result.score < result.opp.score ? 'lose' : 'draw')) : null;
+  const caught = !!result && !!game?.target && (vs ? vs === 'lose' : !result.escaped); // ใครแพ้/ชกไม่ถึงเป้า ปีศาจมาแกล้ง
   const modeLabel = setup.mode === 'solo' ? 'เล่นคนเดียว'
     : setup.mode === 'bot' ? `แข่งกับ ${BOTS[setup.botLvl].name}`
       : `แข่งกับเพื่อน · ห้อง ${room?.code || ''} · ${room?.joined ? room.oppName : 'กำลังรอเพื่อนเข้าห้อง...'}`;
@@ -1366,6 +1384,23 @@ export default function GameMode() {
             </div>
           </div>
         )}
+
+        {playing && chase && (
+          <div className={`gm-chase${chase.danger ? ' danger' : ''}${chase.escaped ? ' safe' : ''}`} role="status" aria-live="polite">
+            <div className="gm-chase-track">
+              <span className="gm-chase-fill" style={{ width: `${chase.p * 100}%` }} />
+              <span className="gm-chase-demon" style={{ left: `${chase.d * 100}%` }} aria-hidden="true">{chase.escaped ? '😵' : '👹'}</span>
+              <span className="gm-chase-me" style={{ left: `${chase.p * 100}%` }} aria-hidden="true">🏃</span>
+              <span className="gm-chase-door" aria-hidden="true">🚪</span>
+            </div>
+            <div className="gm-chase-msg">
+              {chase.escaped ? 'หนีรอดแล้ว! ชกต่อเพื่อทำคะแนนให้สูงขึ้น'
+                : chase.danger ? 'ปีศาจจะจับคุณแล้ว! ชกให้เร็วขึ้น!'
+                  : `ชกอีก ${chase.left} คะแนนเพื่อหนีปีศาจ`}
+            </div>
+          </div>
+        )}
+        {playing && chase?.danger && <div className="gm-danger" aria-hidden="true" />}
 
         {playing && (
           <div className="gm-speed" role="group" aria-label="ความเร็วผลไม้ที่ตก (คะแนนคูณตามความเร็ว)">
@@ -1452,11 +1487,24 @@ export default function GameMode() {
                   <button type="button" className="gm-btn primary gm-join-btn" onClick={joinRoom} disabled={joining || joinCode.length !== 4}>
                     {joining ? 'กำลังเข้าห้อง...' : 'เข้าห้องเลย'}
                   </button>
-                  <ol className="gm-join-steps">
-                    <li>ขอรหัส 4 หลักจากเพื่อน</li>
-                    <li>พิมพ์รหัสในช่องด้านบน</li>
-                    <li>กดเข้าห้อง แล้วเริ่มแข่งทันที</li>
-                  </ol>
+                  {(() => {
+                    const cur = joinCode.length === 4 ? 3 : joinCode.length > 0 ? 2 : 1;
+                    const list = [
+                      { ico: '📣', t: 'ขอรหัสจากเพื่อน', h: 'รหัส 4 หลักของห้องที่เพื่อนสร้าง' },
+                      { ico: '⌨️', t: 'พิมพ์รหัสห้อง', h: 'ใส่ในช่องด้านบน' },
+                      { ico: '⚔️', t: 'เข้าห้องแล้วแข่งเลย', h: 'กดเข้าห้อง เริ่มประลองทันที' },
+                    ];
+                    return (
+                      <ol className="gm-join-steps">
+                        {list.map((st, i) => (
+                          <li key={st.t} className={i + 1 < cur ? 'done' : i + 1 === cur ? 'on' : ''}>
+                            <span className="gm-step-node" aria-hidden="true">{i + 1 < cur ? '✓' : i + 1}</span>
+                            <div className="gm-step-body"><b><span aria-hidden="true">{st.ico}</span> {st.t}</b><small>{st.h}</small></div>
+                          </li>
+                        ))}
+                      </ol>
+                    );
+                  })()}
                   <small>ไม่ต้องเลือกเกมหรือโหมดก่อน ระบบจะใช้เกมเดียวกับที่เพื่อนเลือกไว้</small>
                 </aside>
               </div>
@@ -1540,11 +1588,11 @@ export default function GameMode() {
               <li>ยืนห่างกล้องประมาณ 1.5–2 เมตร ให้เห็นตั้งแต่ศีรษะถึงเอว และเห็นแขนทั้งสองข้าง</li>
               <li>ต้องชกหมัดจริง งอแขนแล้วชกออกไปให้เหยียดตรง ผลไม้ถึงจะแตก (แค่เอามือไปโดนหรือปัดมือไม่แตก) ได้ 10 คะแนน ต่อเนื่องจะได้คะแนนคูณ</li>
               {game.time
-                ? <li>มีเวลา {game.time} วินาที ห้ามต่อยโดนระเบิด 💣 โดนแล้วถูกหักคะแนน 20</li>
+                ? <li>ชกให้ได้ {game.target} คะแนนภายใน {game.time} วินาทีเพื่อหนีปีศาจ 👹 ถ้าไม่ถึง ปีศาจจะตามทันและมาแกล้ง ห้ามต่อยโดนระเบิด 💣 โดนแล้วถูกหักคะแนน 20</li>
                 : <li>ห้ามต่อยโดนระเบิด 💣 โดนแล้วเสียหัวใจ 1 ดวง (มี {MAX_LIVES} ดวง) หมดเมื่อไหร่เกมจบทันที</li>}
               <li>ระหว่างเล่นกดปุ่ม ×0.75 – ×2 (หรือลูกศรขึ้น/ลง) เพื่อเร่งความเร็วผลไม้ ยิ่งเร็วยิ่งได้คะแนนคูณ และเผาผลาญมากขึ้น</li>
               <li>ระบบจะนับแคลอรี่ที่เผาผลาญให้ตามน้ำหนักตัว {clampW(setup.weight)} กก. และความถี่ของหมัด</li>
-              {versus && <li>แข่งกับ{setup.mode === 'bot' ? 'บอท' : 'เพื่อน'}: ใครได้คะแนนรวมมากกว่าชนะ{setup.mode === 'real' ? ' ผลไม้และระเบิดเรียงเหมือนกันทั้งสองฝั่ง' : ''}</li>}
+              {versus && <li>แข่งกับ{setup.mode === 'bot' ? 'บอท' : 'เพื่อน'}: ใครได้คะแนนรวมมากกว่าชนะ{setup.mode === 'real' ? ' ผลไม้และระเบิดเรียงเหมือนกันทั้งสองฝั่ง' : ''}{game.target ? ' ส่วนคนแพ้จะโดนปีศาจแกล้ง 😈' : ''}</li>}
               {setup.mode === 'real' && !game.time && <li>ถ้าใครหัวใจหมดก่อน คนนั้นแพ้ทันที เกมจบ และอีกฝั่งชนะเลยโดยไม่ต้องรอ</li>}
               <li>ก้าวเท้าซ้าย-ขวาตามตำแหน่งผลไม้ และสลับแขนให้สมดุลกัน</li>
               <li>วอร์มไหล่และแขนก่อนเล่น หากรู้สึกเจ็บหรือเวียนศีรษะให้หยุดพักทันที</li>
@@ -1598,8 +1646,26 @@ export default function GameMode() {
 
         {status === 'over' && result && (
           <div className="gm-overlay gm-overlay-result">
-            <div className={`gm-panel${vs ? ` ${vs}` : ''}`}>
-              <h2 className="gm-result-title">{vs === 'win' ? '🏆 คุณชนะ!' : vs === 'lose' ? 'คุณแพ้ในรอบนี้' : vs === 'draw' ? '🤝 เสมอกัน' : 'จบเกม'}</h2>
+            {caught && (
+              <div className="gm-demons" aria-hidden="true">
+                {['👹', '😈', '👺', '😈', '👹', '👺'].map((d, i) => <span key={i} style={{ '--i': i }}>{d}</span>)}
+              </div>
+            )}
+            <div className={`gm-panel${vs ? ` ${vs}` : ''}${caught ? ' caught' : ''}`}>
+              <h2 className="gm-result-title">{game.target && !vs ? (result.escaped ? '🚪 หนีปีศาจสำเร็จ!' : '👹 ปีศาจจับได้แล้ว!') : vs === 'win' ? '🏆 คุณชนะ!' : vs === 'lose' ? 'คุณแพ้ในรอบนี้' : vs === 'draw' ? '🤝 เสมอกัน' : 'จบเกม'}</h2>
+              {game.target > 0 && (
+                caught ? (
+                  <div className="gm-prank" role="status">
+                    <span className="gm-prank-ico">{PRANKS[result.prank % PRANKS.length].ico}</span>
+                    <div><b>😈 ปีศาจมาแกล้งแล้ว!</b><small>{PRANKS[result.prank % PRANKS.length].text}{!vs ? ` (ทำได้ ${result.score} จากเป้า ${result.target})` : ''}</small></div>
+                  </div>
+                ) : (
+                  <div className="gm-prank safe" role="status">
+                    <span className="gm-prank-ico">🛡️</span>
+                    <div><b>ปีศาจตามไม่ทัน</b><small>{vs ? 'คุณรอดจากการถูกแกล้งในรอบนี้' : `ทำได้ ${result.score} คะแนน ผ่านเป้า ${result.target}`}</small></div>
+                  </div>
+                )
+              )}
               <div className="gm-final">{result.score}</div>
               <p className="gm-final-label">คะแนนของคุณ</p>
               {vs && (
@@ -1754,9 +1820,50 @@ const css = `
 .gm-join .gm-code-input::placeholder { color:rgba(198,255,56,.25); }
 .gm-join .gm-code-input:focus { border-color:#c6ff38; box-shadow:0 0 0 3px rgba(198,255,56,.18); outline:none; }
 .gm-join-btn { width:100%; min-height:50px; font-size:16px; }
-.gm-join-steps { width:100%; margin:6px 0 0; padding:12px 14px 12px 34px; border-radius:14px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); display:grid; gap:6px; text-align:left; font-size:13px; color:#d3e2e5; line-height:1.4; }
-.gm-join-steps li::marker { color:#c6ff38; font-weight:700; }
+.gm-join-steps { position:relative; width:100%; margin:8px 0 0; padding:0; list-style:none; display:flex; flex-direction:column; gap:10px; text-align:left; }
+.gm-join-steps li { position:relative; display:flex; align-items:center; gap:12px; padding:10px 12px; border:1px solid rgba(255,255,255,.1); border-radius:14px; background:linear-gradient(100deg,rgba(255,255,255,.05),rgba(255,255,255,.015)); transition:border-color .25s, background .25s, box-shadow .25s; }
+.gm-join-steps li:not(:last-child)::after { content:''; position:absolute; left:28px; top:100%; width:2px; height:10px; background:linear-gradient(180deg,rgba(198,255,56,.5),rgba(198,255,56,.1)); }
+.gm-step-node { flex:none; display:grid; place-items:center; width:34px; height:34px; clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%); background:rgba(255,255,255,.1); font:700 15px 'Kanit',sans-serif; color:#9fbcc2; transition:background .25s, color .25s; }
+.gm-step-body { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.gm-step-body b { font:600 14px 'Kanit',sans-serif; color:#e6f2ee; }
+.gm-step-body small { font-size:12px; color:#8fa9af; line-height:1.35; }
+.gm-join-steps li.on { border-color:rgba(198,255,56,.65); background:linear-gradient(100deg,rgba(198,255,56,.16),rgba(198,255,56,.04)); box-shadow:0 0 18px rgba(124,255,49,.18); }
+.gm-join-steps li.on .gm-step-node { background:linear-gradient(135deg,#72ed2e,#baff3e); color:#071005; box-shadow:0 0 14px rgba(198,255,56,.6); }
+.gm-join-steps li.on .gm-step-body b { color:#fff; }
+.gm-join-steps li.done { border-color:rgba(124,255,49,.3); }
+.gm-join-steps li.done .gm-step-node { background:rgba(124,255,49,.28); color:#c6ff38; }
+.gm-join-steps li.done .gm-step-body b { color:#c6ff38; }
 .gm-join > small { margin-top:auto; font-size:12px; line-height:1.5; color:#9fbcc2; }
+.gm-card-time { --gc:rgba(255,71,109,.3); }
+.gm-card-time:hover { border-color:#ff6b81; box-shadow:0 16px 38px rgba(0,0,0,.45), 0 0 26px rgba(255,71,109,.28); }
+.gm-card-time .gm-card-ico { animation:gm-demon-bob 2.4s ease-in-out infinite; border-color:rgba(255,107,129,.5); box-shadow:0 0 20px rgba(255,71,109,.3); }
+@keyframes gm-demon-bob { 0%,100% { transform:translateY(0) rotate(-4deg); } 50% { transform:translateY(-4px) rotate(4deg); } }
+.gm-chase { position:absolute; left:50%; top:86px; transform:translateX(-50%); width:min(520px,calc(100% - 28px)); display:flex; flex-direction:column; align-items:stretch; gap:6px; pointer-events:none; }
+.gm-chase-track { position:relative; height:16px; margin:10px 18px 0 18px; border-radius:99px; background:rgba(2,8,10,.72); border:1px solid rgba(255,255,255,.22); box-shadow:0 2px 10px rgba(0,0,0,.5); }
+.gm-chase-fill { position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:linear-gradient(90deg,#ffa534,#ffd24a 60%,#baff3e); box-shadow:0 0 12px rgba(198,255,56,.5); transition:width .35s ease; }
+.gm-chase-demon, .gm-chase-me, .gm-chase-door { position:absolute; top:50%; transform:translate(-50%,-50%); font-size:24px; line-height:1; filter:drop-shadow(0 2px 4px rgba(0,0,0,.8)); }
+.gm-chase-demon { transition:left 1s linear; z-index:1; }
+.gm-chase-me { transition:left .35s ease; z-index:2; }
+.gm-chase-door { left:100%; font-size:26px; }
+.gm-chase-msg { align-self:center; padding:3px 14px; border-radius:99px; background:rgba(2,8,10,.72); font-size:13px; color:#f0faf6; text-shadow:0 1px 6px rgba(0,0,0,.9); }
+.gm-chase.danger .gm-chase-msg { color:#ffd0d8; background:rgba(120,10,30,.8); }
+.gm-chase.danger .gm-chase-demon { animation:gm-demon-shake .25s linear infinite; }
+.gm-chase.safe .gm-chase-msg { color:#e9ffb0; }
+@keyframes gm-demon-shake { 0%,100% { transform:translate(-50%,-50%) rotate(-8deg); } 50% { transform:translate(-50%,-62%) rotate(8deg); } }
+.gm-danger { position:absolute; inset:0; pointer-events:none; background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(255,30,70,.4) 100%); animation:gm-danger-pulse .9s ease-in-out infinite; }
+@keyframes gm-danger-pulse { 0%,100% { opacity:.35; } 50% { opacity:1; } }
+.gm-prank { display:flex; align-items:center; gap:12px; width:min(480px,100%); padding:12px 16px; border:1px solid rgba(255,107,129,.65); border-radius:16px; background:linear-gradient(100deg,rgba(255,71,109,.22),rgba(120,20,60,.18)); text-align:left; box-shadow:0 0 26px rgba(255,71,109,.2); }
+.gm-prank > div { display:flex; flex-direction:column; gap:2px; }
+.gm-prank b { font:600 16px 'Kanit',sans-serif; color:#ffd0d8; }
+.gm-prank small { font-size:13.5px; line-height:1.45; color:#fff1f4; }
+.gm-prank-ico { flex:none; font-size:38px; line-height:1; animation:gm-demon-bob 1.4s ease-in-out infinite; }
+.gm-prank.safe { border-color:rgba(124,255,49,.55); background:linear-gradient(100deg,rgba(124,255,49,.16),rgba(20,80,30,.14)); box-shadow:0 0 26px rgba(124,255,49,.14); }
+.gm-prank.safe b { color:#c6ff38; }
+.gm-panel.caught { animation:gm-caught-shake .6s ease-out 1; border-color:rgba(255,107,129,.75); }
+@keyframes gm-caught-shake { 0%,100% { transform:translateX(0); } 20% { transform:translateX(-10px); } 40% { transform:translateX(9px); } 60% { transform:translateX(-6px); } 80% { transform:translateX(4px); } }
+.gm-demons { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+.gm-demons span { position:absolute; bottom:-60px; left:calc(8% + var(--i) * 16%); font-size:clamp(34px,7vmin,60px); opacity:0; animation:gm-demon-rise 3.2s ease-out calc(var(--i) * .25s) infinite; }
+@keyframes gm-demon-rise { 0% { transform:translateY(0) rotate(-12deg); opacity:0; } 15% { opacity:.9; } 100% { transform:translateY(-105vh) rotate(14deg); opacity:0; } }
 @media (max-width:900px), (orientation:portrait) {
   .gm-menu { grid-template-columns:1fr; padding:16px 14px; }
   .gm-join { order:-1; padding:18px 16px 16px; }
@@ -1885,6 +1992,8 @@ const css = `
   .gm-burn b { font-size:16px; }
   .gm-energy { grid-template-columns:repeat(2,1fr); }
   .gm-top { margin:6px 6px 8px; padding:8px 10px; }
+  .gm-chase { top:70px; }
+  .gm-chase-msg { font-size:11.5px; }
   .gm-card-ico { width:60px; height:60px; font-size:32px; }
   .gm-day { font-size:11px; }
   .gm-score { font-size:34px; }
@@ -1898,5 +2007,5 @@ const css = `
   .gm-check { padding:20px 12px 12px; gap:8px; }
   .gm-check h2 { font-size:18px; }
 }
-@media (prefers-reduced-motion: reduce) { .gm-count, .gm-toast { animation:none; } .gm-card, .gm-xp i, .gm-energy > div { transition:none; } .gm-btn, .gm-back, .gm-end, .gm-bar i, .gm-chip { transition:none; } }
+@media (prefers-reduced-motion: reduce) { .gm-count, .gm-toast, .gm-danger, .gm-demons span, .gm-card-ico, .gm-prank-ico, .gm-panel.caught, .gm-chase-demon { animation:none !important; } .gm-card, .gm-xp i, .gm-energy > div { transition:none; } .gm-btn, .gm-back, .gm-end, .gm-bar i, .gm-chip { transition:none; } }
 `;
