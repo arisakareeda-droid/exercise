@@ -6,7 +6,10 @@ import { auth } from '../firebase';
 import { notifyBrowser, readBurn, readEnergy, requestNotify, subscribeEnergy, writeBurn } from '../calorieSync';
 
 // ติดตั้งก่อนใช้: npm i @mediapipe/tasks-vision@0.10.14  (ใช้เวอร์ชันเดียวกับ WASM ด้านล่าง)
-const WASM_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
+const WASM_URLS = [ // ลองตามลำดับ ถ้าโฮสต์แรกถูกบล็อก/ล่มจะใช้อันถัดไป (ต้องเป็นเวอร์ชันเดียวกับแพ็กเกจที่ npm i ไว้)
+  'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm',
+  'https://unpkg.com/@mediapipe/tasks-vision@0.10.14/wasm',
+];
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
 const BEST_KEY = 'fittrack-game-best';
 const WEIGHT_KEY = 'fittrack-game-weight';
@@ -43,6 +46,37 @@ const mulberry = (a) => () => { // ตัวสุ่มแบบกำหนด
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 };
 const newSeed = () => Math.floor(Math.random() * 2147483647);
+
+// ---- ตัวช่วยเปิดกล้อง ----
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const withTimeout = (p, ms, label) => Promise.race([
+  p,
+  new Promise((_, rej) => setTimeout(() => { const e = new Error(`${label} ใช้เวลานานเกินไป`); e.name = 'Timeout'; rej(e); }, ms)),
+]);
+// ขอสตรีมกล้อง: ลองเงื่อนไขที่อยากได้ก่อน ถ้าไม่ผ่านค่อยลดเงื่อนไขลงจนเหลือ video: true (เหมือนหน้าออกกำลังกาย)
+async function getCameraStream(isPortrait) {
+  const tries = [
+    { video: { facingMode: 'user', aspectRatio: { ideal: isPortrait ? 3 / 4 : 4 / 3 } }, audio: false },
+    { video: { facingMode: 'user' }, audio: false },
+    { video: true, audio: false },
+  ];
+  let last;
+  for (let i = 0; i < tries.length; i += 1) {
+    try {
+      return await navigator.mediaDevices.getUserMedia(tries[i]);
+    } catch (e) {
+      last = e;
+      if (e?.name === 'NotAllowedError' || e?.name === 'SecurityError') throw e; // ผู้ใช้ไม่อนุญาต ลองซ้ำก็ไม่ช่วย
+      if (e?.name === 'NotReadableError' || e?.name === 'AbortError') await wait(600); // กล้องอาจยังไม่ถูกปล่อยจากหน้า/แท็บอื่น
+    }
+  }
+  throw last;
+}
+const playVideo = async (v) => {
+  for (let i = 0; i < 3; i += 1) {
+    try { await v.play(); return; } catch (e) { if (i === 2) throw e; await wait(200); } // play() ถูกขัดจังหวะ (AbortError) ได้ ลองซ้ำ
+  }
+};
 
 // ---- Firestore: ห้องแข่งกับเพื่อนจริง ----
 const roomDoc = (code) => doc(getFirestore(auth.app), ROOMS, code);
@@ -1523,31 +1557,50 @@ export default function GameMode() {
       e.name = 'InsecureContext';
       throw e;
     }
-    if (!streamRef.current) {
-      streamRef.current = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', aspectRatio: { ideal: isPortrait ? 3 / 4 : 4 / 3 } }, audio: false,
-      });
+    // สตรีมเก่าที่กล้องหลุดไปแล้ว (มือถือพักจอ / แอปอื่นแย่งกล้อง) ห้ามใช้ซ้ำ ต้องขอใหม่
+    const old = streamRef.current;
+    if (old && !old.getVideoTracks().some((t) => t.readyState === 'live')) {
+      old.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     }
+    if (!streamRef.current) streamRef.current = await getCameraStream(isPortrait);
     const v = videoRef.current;
+    if (!v) throw new Error('video element missing');
     v.srcObject = streamRef.current;
-    await v.play();
-    if (!landmarkerRef.current) {
-      setMessage('กำลังโหลดระบบตรวจจับท่าทาง...');
-      const { FilesetResolver, PoseLandmarker } = await import('@mediapipe/tasks-vision');
-      const fileset = await FilesetResolver.forVisionTasks(WASM_URL);
-      const make = (delegate) => PoseLandmarker.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: MODEL_URL, delegate },
-        runningMode: 'VIDEO',
-        numPoses: 1,
-      });
-      try {
-        landmarkerRef.current = await make('GPU');
-      } catch (gpuErr) {
-        // เครื่อง/เบราว์เซอร์ที่ใช้ GPU ไม่ได้ ให้ถอยไปใช้ CPU แทน
-        console.warn('GPU delegate ใช้ไม่ได้ ลองใช้ CPU แทน', gpuErr);
-        landmarkerRef.current = await make('CPU');
+    await playVideo(v);
+    for (let i = 0; i < 40 && !(v.videoWidth > 0); i += 1) await wait(100); // รอให้มีภาพเฟรมแรกจริง ๆ
+    if (!(v.videoWidth > 0)) {
+      const e = new Error('no video frames');
+      e.name = 'NoFrames';
+      throw e;
+    }
+  };
+
+  // โหลดระบบตรวจจับท่าทาง (แยกจากขั้นเปิดกล้อง เพื่อให้รู้ว่าพังตรงไหน)
+  const loadModel = async () => {
+    if (landmarkerRef.current) return;
+    setMessage('กำลังโหลดระบบตรวจจับท่าทาง... (ครั้งแรกอาจใช้เวลาสักครู่)');
+    const { FilesetResolver, PoseLandmarker } = await withTimeout(import('@mediapipe/tasks-vision'), 30000, 'โหลดไลบรารี');
+    let lastErr;
+    for (const base of WASM_URLS) {
+      for (const delegate of ['GPU', 'CPU']) { // GPU ใช้ไม่ได้ให้ถอยไป CPU
+        try {
+          // ไลบรารีท่าทางตัวเก่า (เช่นที่หน้าออกกำลังกายใช้) ทิ้ง window.Module ไว้ ทำให้ MediaPipe ตัวใหม่พังด้วย "Module.arguments has been replaced" ต้องเคลียร์ก่อน
+          try { delete window.Module; } catch { window.Module = undefined; }
+          const fileset = await FilesetResolver.forVisionTasks(base);
+          landmarkerRef.current = await withTimeout(PoseLandmarker.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath: MODEL_URL, delegate },
+            runningMode: 'VIDEO',
+            numPoses: 1,
+          }), 30000, 'โหลดโมเดล');
+          return;
+        } catch (e) {
+          lastErr = e;
+          console.warn(`โหลดโมเดลไม่ได้ (${delegate} · ${base})`, e);
+        }
       }
     }
+    throw lastErr;
   };
 
   const stopCamera = () => {
@@ -1561,22 +1614,28 @@ export default function GameMode() {
     const isPortrait = window.innerHeight > window.innerWidth;
     setMessage('กำลังเปิดกล้อง...');
     setStatus('loading');
+    let stage = 'camera';
     try {
       await openCamera(isPortrait);
+      stage = 'model';
+      await loadModel();
     } catch (err) {
-      console.error('เปิดกล้องไม่สำเร็จ:', err);
+      console.error(`เริ่มเกมไม่สำเร็จ (ขั้น ${stage}):`, err);
       const name = err?.name || '';
+      const detail = `${name || 'Error'}${err?.message ? `: ${err.message}` : ''}`;
       let msg;
-      if (name === 'NotAllowedError' || name === 'SecurityError') {
+      if (stage === 'model') {
+        msg = `เปิดกล้องได้แล้ว แต่โหลดระบบตรวจจับท่าทางไม่สำเร็จ (${detail}) ตรวจอินเทอร์เน็ต หรือตัวบล็อกโฆษณา/ไฟร์วอลล์ที่บล็อก cdn.jsdelivr.net และ storage.googleapis.com แล้วลองใหม่`;
+      } else if (name === 'NotAllowedError' || name === 'SecurityError') {
         msg = 'ยังไม่ได้อนุญาตให้ใช้กล้อง กรุณากดอนุญาตกล้องในเบราว์เซอร์ (ไอคอนแม่กุญแจข้างช่องที่อยู่เว็บ) แล้วกดเริ่มใหม่';
       } else if (name === 'InsecureContext') {
         msg = 'เบราว์เซอร์ไม่อนุญาตให้ใช้กล้องบนที่อยู่นี้ ต้องเปิดผ่าน https:// หรือ localhost เท่านั้น';
       } else if (name === 'NotFoundError' || name === 'OverconstrainedError') {
         msg = 'ไม่พบกล้องในเครื่องนี้ ลองต่อกล้องแล้วกดเริ่มใหม่';
-      } else if (name === 'NotReadableError' || name === 'AbortError') {
-        msg = 'เปิดกล้องไม่ได้ อาจมีแอปอื่นใช้กล้องอยู่ ปิดแอปนั้นแล้วลองใหม่';
+      } else if (name === 'NotReadableError' || name === 'AbortError' || name === 'NoFrames') {
+        msg = `เปิดกล้องไม่ได้ (${name}) อาจมีแอป/แท็บอื่นใช้กล้องอยู่ ปิดแท็บหรือแอปนั้น (รวมถึงหน้าออกกำลังกายที่เปิดค้างไว้) แล้วลองใหม่`;
       } else {
-        msg = `เปิดกล้องหรือโหลดระบบตรวจจับไม่สำเร็จ (${name || err?.message || 'ไม่ทราบสาเหตุ'}) ต้องเชื่อมต่ออินเทอร์เน็ต ลองใหม่อีกครั้ง`;
+        msg = `เปิดกล้องไม่สำเร็จ (${detail}) ลองใหม่อีกครั้ง`;
       }
       stopCamera();
       setMessage(msg);

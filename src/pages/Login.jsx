@@ -3,18 +3,6 @@ import { useNavigate, Link } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase';
 
-// ประกายแสงลอยขึ้นตามรอยต่อกลางจอ (x = ระยะห่างจากเส้นกลาง px, d = หน่วงเวลา, s = ขนาด, t = ความเร็ว)
-const SPARKS = [
-  { x: -46, d: 0,   s: 3, t: 9 },
-  { x: -18, d: 2.4, s: 2, t: 11 },
-  { x: 10,  d: 5.1, s: 4, t: 10 },
-  { x: 38,  d: 1.2, s: 2, t: 12 },
-  { x: -30, d: 6.3, s: 2, t: 8 },
-  { x: 24,  d: 3.6, s: 3, t: 9.5 },
-  { x: 52,  d: 7.4, s: 2, t: 11 },
-  { x: -6,  d: 8.8, s: 3, t: 10 },
-];
-
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,6 +15,7 @@ export default function Login() {
   const [soundOn, setSoundOn] = useState(false);
   const [capsOn, setCapsOn] = useState(false);
   const shellRef = useRef(null);
+  const userToggledRef = useRef(false); // ผู้ใช้กดปุ่มลำโพงเองแล้ว -> ห้ามระบบเปิดเสียงทับ
 
   // แสงสปอตไลต์ในการ์ดตามตำแหน่งเมาส์ (อัปเดตผ่าน CSS variable ไม่ต้อง re-render)
   const handleCardMove = (e) => {
@@ -48,15 +37,19 @@ export default function Login() {
     const v = videoRef.current;
     if (!v) return;
 
+    let cancelled = false; // กัน promise ที่ค้างอยู่ทำงานต่อหลัง unmount / StrictMode รันซ้ำ
+
     const events = ['pointerdown', 'keydown', 'touchstart'];
     const removeListeners = () => events.forEach((e) => window.removeEventListener(e, unlockOnGesture, true));
 
     function unlockOnGesture(e) {
+      if (cancelled || userToggledRef.current) return; // ผู้ใช้เลือกเองแล้ว ไม่เปิดเสียงทับ
       // ถ้าผู้ใช้กดปุ่มลำโพงเอง ให้ปุ่มจัดการ ไม่ต้องเปิดซ้ำ
       if (e.target && e.target.closest && e.target.closest('.sound-toggle')) return;
       v.muted = false;
       v.play()
         .then(() => {
+          if (cancelled) return;
           setSoundOn(true);
           removeListeners();
         })
@@ -68,20 +61,28 @@ export default function Login() {
 
     v.muted = false;
     v.play()
-      .then(() => setSoundOn(true))
+      .then(() => {
+        if (!cancelled) setSoundOn(true);
+      })
       .catch(() => {
+        if (cancelled) return; // ถ้า unmount ไปแล้ว ห้ามเพิ่ม listener ค้างไว้
         v.muted = true;
         v.play().catch(() => {});
         setSoundOn(false);
         events.forEach((e) => window.addEventListener(e, unlockOnGesture, true));
       });
 
-    return removeListeners;
+    return () => {
+      cancelled = true;
+      removeListeners();
+      v.pause(); // หยุดวิดีโอ/เสียงเมื่อออกจากหน้า Login
+    };
   }, []);
 
   const toggleSound = () => {
     const v = videoRef.current;
     if (!v) return;
+    userToggledRef.current = true;
     const next = !soundOn;
     v.muted = !next;
     if (next) v.play().catch(() => {});
@@ -96,8 +97,29 @@ export default function Login() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       navigate('/dashboard');
-    } catch (error) {
-      setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
+    } catch (err) {
+      switch (err?.code) {
+        case 'auth/too-many-requests':
+          setError('พยายามเข้าสู่ระบบหลายครั้งเกินไป กรุณารอสักครู่แล้วลองใหม่');
+          break;
+        case 'auth/network-request-failed':
+          setError('เชื่อมต่ออินเทอร์เน็ตไม่ได้ กรุณาตรวจสอบเครือข่ายแล้วลองใหม่');
+          break;
+        case 'auth/user-disabled':
+          setError('บัญชีนี้ถูกระงับการใช้งาน');
+          break;
+        case 'auth/invalid-email':
+          setError('รูปแบบอีเมลไม่ถูกต้อง');
+          break;
+        case 'auth/invalid-credential':
+        case 'auth/wrong-password':
+        case 'auth/user-not-found':
+          setError('อีเมลหรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง');
+          break;
+        default:
+          console.error('Login error:', err);
+          setError('เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง');
+      }
     } finally {
       setLoading(false);
     }
@@ -123,7 +145,7 @@ export default function Login() {
           margin: 0;
           padding: 0;
           border: 0;
-          background: linear-gradient(90deg, #14181f 50%, #efefef 50%);
+          background: #14181f;
           display: block;
           text-align: left;
           place-items: unset;
@@ -147,22 +169,58 @@ export default function Login() {
           overflow-x: hidden;
           overflow-y: auto;
           background-color: #14181f;
-          /* ภาพนิ่งโชว์ระหว่างวิดีโอโหลด หรือเมื่อเล่นอัตโนมัติไม่ได้ / สำรองเป็นสองซีกเผื่อภาพโหลดไม่ขึ้น */
-          background-image: url('/background-poster.jpg'), linear-gradient(90deg, #14181f 50%, #efefef 50%);
-          background-size: cover, 100% 100%;
-          background-position: center, center;
-          background-repeat: no-repeat;
+        }
+
+        /* =====================================================
+           วิดีโอพื้นหลัง: ย่อโลโก้ให้เล็กลง และจัดไว้กึ่งกลางซีกซ้ายของจอ
+           (ปรับค่าได้ที่ตัวแปรด้านล่างนี้ที่เดียว)
+           ===================================================== */
+        .video-stage {
+          --logo-scale: 0.76;  /* ขนาดโลโก้: 1 = เดิม, ยิ่งน้อยยิ่งเล็ก */
+          --logo-x: 0.305;     /* จุดกึ่งกลางโลโก้ในวิดีโอ แนวนอน (0-1) */
+          --logo-y: 0.494;     /* จุดกึ่งกลางโลโก้ในวิดีโอ แนวตั้ง (0-1) */
+          --target-x: 25vw;    /* ตำแหน่งที่ต้องการ = กึ่งกลางซีกซ้าย */
+          --target-y: 50vh;
+          --vid-w: max(100vw, 177.78vh);   /* ขนาดเฟรมวิดีโอ 16:9 แบบ cover */
+          --vid-h: max(56.25vw, 100vh);
+
+          position: fixed;
+          inset: 0;
+          z-index: 0;
+          overflow: hidden;
+          background: #14181f;
+          pointer-events: none;
+        }
+
+        .video-frame {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          width: var(--vid-w);
+          height: var(--vid-h);
+          background: url('/background-poster.jpg') center / cover no-repeat;
+          transform:
+            translate(
+              calc(-50% + var(--target-x) - 50vw - (var(--logo-x) - 0.5) * var(--logo-scale) * var(--vid-w)),
+              calc(-50% + var(--target-y) - 50vh - (var(--logo-y) - 0.5) * var(--logo-scale) * var(--vid-h))
+            )
+            scale(var(--logo-scale));
+          /* เกลี่ยขอบวิดีโอให้กลืนกับพื้นหลังสีเข้ม ไม่เห็นเป็นกรอบสี่เหลี่ยม */
+          -webkit-mask-image:
+            linear-gradient(90deg, transparent 0, #000 10%, #000 90%, transparent 100%),
+            linear-gradient(180deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+          -webkit-mask-composite: source-in;
+          mask-image:
+            linear-gradient(90deg, transparent 0, #000 10%, #000 90%, transparent 100%),
+            linear-gradient(180deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+          mask-composite: intersect;
         }
 
         .bg-video {
-          position: fixed;
-          inset: 0;
+          display: block;
           width: 100%;
           height: 100%;
           object-fit: cover;
-          object-position: center; /* รอยต่อมืด/สว่างของวิดีโออยู่ที่ 50% พอดี จัดกึ่งกลางจึงตรงกับกึ่งกลางจอเสมอ */
-          z-index: 0;
-          pointer-events: none;
         }
 
         @media (prefers-reduced-motion: reduce) {
@@ -395,7 +453,7 @@ export default function Login() {
           width: 480px;
           height: 480px;
           bottom: -180px;
-          left: -80px;
+          right: -120px;
           background: radial-gradient(circle, rgba(59,130,246,0.40), transparent 70%);
           animation: drift-b 20s ease-in-out infinite alternate;
         }
@@ -408,105 +466,6 @@ export default function Login() {
           to { transform: translate(90px, -70px) scale(1.1); }
         }
 
-
-        /* =====================================================
-           รอยต่อกลางจอ: ไล่สีนุ่ม + เส้นแสงนีออน
-           ===================================================== */
-        .seam {
-          position: fixed;
-          top: 0;
-          bottom: 0;
-          left: 50%;
-          width: 320px;
-          transform: translateX(-50%);
-          z-index: 1;
-          pointer-events: none;
-        }
-
-        /* เบลอพื้นหลังเฉพาะแถบแคบตรงรอยต่อ ให้ขอบแข็งของวิดีโอนุ่มลง */
-        .seam-blur {
-          position: absolute;
-          top: 0;
-          bottom: 0;
-          left: 50%;
-          width: 160px;
-          transform: translateX(-50%);
-          -webkit-backdrop-filter: blur(16px) saturate(1.25);
-          backdrop-filter: blur(16px) saturate(1.25);
-          -webkit-mask-image: linear-gradient(90deg, transparent, #000 35%, #000 65%, transparent);
-          mask-image: linear-gradient(90deg, transparent, #000 35%, #000 65%, transparent);
-        }
-
-        /* แสงสีฟ้า-ไซแอนเรืองกลางรอยต่อ (หายใจเข้าออกช้า ๆ) */
-        .seam-tint {
-          position: absolute;
-          inset: 0;
-          background:
-            linear-gradient(90deg,
-              rgba(37,99,235,0) 0%,
-              rgba(37,99,235,0.16) 30%,
-              rgba(34,211,238,0.34) 50%,
-              rgba(125,211,252,0.18) 70%,
-              rgba(125,211,252,0) 100%);
-          -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
-          mask-image: linear-gradient(180deg, transparent 0%, #000 18%, #000 82%, transparent 100%);
-          animation: seam-breathe 6s ease-in-out infinite alternate;
-        }
-
-        /* เส้นแสงบาง ๆ ตรงกลาง จางหายที่ปลายบน-ล่าง */
-        .seam-core {
-          position: absolute;
-          top: 0;
-          bottom: 0;
-          left: 50%;
-          width: 2px;
-          transform: translateX(-50%);
-          background: linear-gradient(180deg,
-            transparent 0%,
-            rgba(34,211,238,0.9) 22%,
-            rgba(96,165,250,1) 50%,
-            rgba(34,211,238,0.9) 78%,
-            transparent 100%);
-          box-shadow:
-            0 0 10px rgba(34,211,238,0.85),
-            0 0 28px rgba(37,99,235,0.55);
-        }
-
-        /* ประกายลอยขึ้น */
-        .seam-spark {
-          position: absolute;
-          left: calc(50% + var(--x));
-          bottom: -10px;
-          width: var(--s);
-          height: var(--s);
-          border-radius: 50%;
-          background: #a5f3fc;
-          box-shadow: 0 0 8px 2px rgba(34,211,238,0.8);
-          opacity: 0;
-          animation: seam-rise var(--t) linear infinite;
-          animation-delay: var(--d);
-        }
-
-        @keyframes seam-breathe {
-          from { opacity: 0.55; }
-          to   { opacity: 1; }
-        }
-
-        @keyframes seam-rise {
-          0%   { transform: translateY(0) translateX(0); opacity: 0; }
-          10%  { opacity: 0.95; }
-          85%  { opacity: 0.6; }
-          100% { transform: translateY(-105vh) translateX(14px); opacity: 0; }
-        }
-
-        @media (max-width: 850px) {
-          .seam { display: none; }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .seam-spark { display: none; }
-          .seam-tint { animation: none; }
-        }
 
         /* การ์ดเข้าฉาก */
         @keyframes card-in {
@@ -686,67 +645,93 @@ export default function Login() {
           margin-bottom: 18px;
         }
 
-        /* ช่องกรอกแบบ label ลอย (ไม่มีไอคอน) */
+        /* ช่องกรอกแบบ label ลอย + ไอคอนนำหน้า (โทนฟ้าให้เข้ากับปุ่ม/โลโก้) */
         .field {
           position: relative;
         }
 
         .field input {
           width: 100%;
-          height: 58px;
-          padding: 22px 18px 6px;
+          height: 62px;
+          padding: 25px 16px 7px 54px;
           outline: none;
-          border: 1.5px solid #dfe7f1;
-          border-radius: 14px;
-          background: #f6f9fd;
-          color: #0f172a;
+          border: 1.5px solid #d3e0d2;
+          border-radius: 16px;
+          background: #f0f5ef;
+          color: #14231a;
           font-family: "Kanit", sans-serif;
           font-size: 15px;
+          font-weight: 500;
           transition: border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
         }
 
         .field input:hover {
-          border-color: #bae6fd;
-          background: #ffffff;
+          border-color: #a9c7a6;
+          background: #f5f9f4;
         }
 
         .field input:focus {
-          border-color: #38bdf8;
-          background: #ffffff;
+          border-color: #4a9a2e;
+          background: #f7fbf6;
           box-shadow:
-            0 0 0 4px rgba(14,165,233,0.12),
-            0 10px 26px rgba(14,165,233,0.10);
+            0 0 0 4px rgba(74,154,46,0.14),
+            0 10px 24px rgba(74,154,46,0.10);
         }
 
         .field label {
           position: absolute;
-          left: 19px;
-          top: 17px;
-          color: #7b8aa0;
+          left: 54px;
+          top: 19px;
+          color: #78907a;
           font-size: 14px;
           line-height: 1.5;
           pointer-events: none;
-          transition: top 0.2s ease, font-size 0.2s ease, color 0.2s ease, letter-spacing 0.2s ease;
+          transition: top 0.2s ease, font-size 0.2s ease, color 0.2s ease;
         }
 
         .field input:focus + label,
         .field input:not(:placeholder-shown) + label,
         .field input:-webkit-autofill + label {
-          top: 6px;
+          top: 8px;
           font-size: 11px;
           font-weight: 600;
-          color: #0891b2;
+          color: #5f7a62;
+        }
+
+        .field input:focus + label {
+          color: #3b8a24;
+        }
+
+        /* ไอคอนนำหน้าในวงกลมสีอ่อน */
+        .field-icon {
+          position: absolute;
+          left: 12px;
+          top: 50%;
+          width: 34px;
+          height: 34px;
+          padding: 8px;
+          transform: translateY(-50%);
+          border-radius: 11px;
+          background: #e1ecdf;
+          color: #5f7a62;
+          pointer-events: none;
+          transition: background 0.25s ease, color 0.25s ease;
+        }
+
+        .field input:focus ~ .field-icon {
+          background: #d3e6cf;
+          color: #3b8a24;
         }
 
         /* เส้นไล่สีวิ่งออกที่ขอบล่างเมื่อโฟกัส */
         .field-line {
           position: absolute;
-          left: 16px;
-          right: 16px;
+          left: 18px;
+          right: 18px;
           bottom: 0;
           height: 2px;
           border-radius: 2px;
-          background: linear-gradient(90deg, #22d3ee, #3b82f6);
+          background: linear-gradient(90deg, #3b8a24, #9acd32);
           transform: scaleX(0);
           transform-origin: left;
           transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -760,13 +745,13 @@ export default function Login() {
         /* กัน autofill ของเบราว์เซอร์ทับสีช่อง */
         .field input:-webkit-autofill,
         .field input:-webkit-autofill:focus {
-          -webkit-text-fill-color: #0f172a;
-          -webkit-box-shadow: 0 0 0 100px #f6f9fd inset;
+          -webkit-text-fill-color: #14231a;
+          -webkit-box-shadow: 0 0 0 100px #f0f5ef inset;
           transition: background-color 9999s ease-out 0s;
         }
 
         .field.has-toggle input {
-          padding-right: 82px;
+          padding-right: 60px;
         }
 
         .password-toggle {
@@ -774,22 +759,29 @@ export default function Login() {
           right: 10px;
           top: 50%;
           transform: translateY(-50%);
-          height: 34px;
-          padding: 0 12px;
+          width: 40px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
           border: none;
-          border-radius: 9px;
+          border-radius: 12px;
           background: transparent;
-          color: #64748b;
-          font-family: "Kanit", sans-serif;
-          font-size: 12px;
-          font-weight: 600;
+          color: #78907a;
           cursor: pointer;
           transition: background 0.2s ease, color 0.2s ease;
         }
 
-        .password-toggle:hover {
-          background: #e0f2fe;
-          color: #0369a1;
+        .password-toggle svg {
+          width: 20px;
+          height: 20px;
+        }
+
+        .password-toggle:hover,
+        .password-toggle:focus-visible {
+          outline: none;
+          background: #e1ecdf;
+          color: #3b8a24;
         }
 
         /* เตือน Caps Lock */
@@ -811,12 +803,11 @@ export default function Login() {
 
         .error-message {
           margin-bottom: 18px;
-          padding: 12px 14px 12px 16px;
-          border: 1px solid #fecaca;
-          border-left: 4px solid #ef4444;
-          border-radius: 11px;
-          background: #fff5f5;
-          color: #b91c1c;
+          padding: 10px 13px;
+          border: 1px solid #e2a0ad;
+          border-radius: 8px;
+          background: #fff0f2;
+          color: #b52e4b;
           font-size: 13px;
           line-height: 1.6;
           animation: shake 0.45s ease both;
@@ -985,6 +976,11 @@ export default function Login() {
         }
 
         @media (max-width: 850px) {
+          .video-stage {
+            --target-x: 50vw;
+            --logo-scale: 0.6;
+          }
+
           .login-page {
             padding: 20px;
           }
@@ -1050,17 +1046,20 @@ export default function Login() {
       `}</style>
 
       <div className="login-page">
-        <video
-          ref={videoRef}
-          className="bg-video"
-          src="/background.mp4"
-          poster="/background-poster.jpg"
-          autoPlay
-          loop
-          playsInline
-          preload="auto"
-          aria-hidden="true"
-        />
+        <div className="video-stage" aria-hidden="true">
+          <div className="video-frame">
+            <video
+              ref={videoRef}
+              className="bg-video"
+              src="/background.mp4"
+              poster="/background-poster.jpg"
+              autoPlay
+              loop
+              playsInline
+              preload="auto"
+            />
+          </div>
+        </div>
 
         <button
           type="button"
@@ -1075,19 +1074,6 @@ export default function Login() {
         <div className="right-ambient" aria-hidden="true">
           <span className="ambient-blob blob-a" />
           <span className="ambient-blob blob-b" />
-        </div>
-
-        <div className="seam" aria-hidden="true">
-          <span className="seam-blur" />
-          <span className="seam-tint" />
-          <span className="seam-core" />
-          {SPARKS.map((sp, i) => (
-            <span
-              key={i}
-              className="seam-spark"
-              style={{ '--x': `${sp.x}px`, '--d': `${sp.d}s`, '--s': `${sp.s}px`, '--t': `${sp.t}s` }}
-            />
-          ))}
         </div>
 
         <div className="login-shell" ref={shellRef} onMouseMove={handleCardMove}>
@@ -1147,6 +1133,10 @@ export default function Login() {
                   />
                   <label htmlFor="email">อีเมล</label>
                   <span className="field-line" />
+                  <svg className="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="3" y="5" width="18" height="14" rx="3" />
+                    <path d="m4 8 8 5.5L20 8" />
+                  </svg>
                 </div>
               </div>
 
@@ -1166,6 +1156,10 @@ export default function Login() {
                   />
                   <label htmlFor="password">รหัสผ่าน</label>
                   <span className="field-line" />
+                  <svg className="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <rect x="4.5" y="10.5" width="15" height="10" rx="3" />
+                    <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+                  </svg>
 
                   <button
                     type="button"
@@ -1173,7 +1167,11 @@ export default function Login() {
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
                   >
-                    {showPassword ? 'ซ่อน' : 'แสดง'}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+                      <circle cx="12" cy="12" r="3" />
+                      {showPassword && <path d="M4 4l16 16" />}
+                    </svg>
                   </button>
                 </div>
 
@@ -1184,7 +1182,7 @@ export default function Login() {
 
               {error && (
                 <div className="error-message" role="alert">
-                  {error}
+                  ⚠️ {error}
                 </div>
               )}
 
