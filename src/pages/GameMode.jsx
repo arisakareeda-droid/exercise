@@ -22,18 +22,12 @@ const FIST_R = 38;
 // ---- รายการเกม: เพิ่มเกมใหม่ได้ที่นี่ (time = จำกัดเวลาเป็นวินาที, lives = จำนวนหัวใจ) ----
 const GAMES = {
   fruit: { id: 'fruit', emoji: '🍉', name: 'ชกผลไม้', desc: 'แบบคลาสสิก มีหัวใจ 3 ดวง โดนระเบิดเสียหัวใจ หมดแล้วเกมจบ', lives: MAX_LIVES, time: 0 },
-  // ชกหนีปีศาจ: target = คะแนนที่ต้องทำให้ได้ภายในเวลา (ปรับตัวเลขได้ที่นี่) ถ้าไม่ถึง ปีศาจตามทันและมาแกล้ง
-  time: { id: 'time', emoji: '👹', name: 'ชกหนีปีศาจ', desc: 'ชกให้ถึงเป้าหมาย 500 คะแนนใน 60 วินาทีเพื่อหนีปีศาจ ถ้าไม่ถึง ปีศาจจะตามมาแกล้ง! โดนระเบิดหักคะแนน 20', lives: 0, time: 60, target: 500 },
+  // ต่อยซอมบี้: ซอมบี้ตัวเท่าคนจริงบุกเข้าหา ต่อยด้วยหมัด เตะด้วยขา
+  // target = คะแนนที่ต้องทำให้ได้ภายในเวลา (ปรับตัวเลขได้ที่นี่) ถ้าไม่ถึงก็แพ้เลย (id เดิม 'time' เพื่อให้สถิติและแคลที่เคยบันทึกไว้ยังอยู่)
+  time: { id: 'time', emoji: '🧟', name: 'ต่อยซอมบี้', desc: 'ซอมบี้ตัวเท่าคนจริงยืนอยู่ฝั่งตรงข้าม! ต่อยด้วยหมัด เตะด้วยขา ให้ได้ 300 คะแนนใน 30 วินาที ถ้าไม่ถึงก็แพ้เลย ถ้าโดนซอมบี้ตะปบจะถูกหักคะแนน 30', lives: 0, time: 30, target: 300, zombie: true },
 };
 // ตัวเร่งความเร็วผลไม้ที่ตก (v = ตัวคูณความเร็ว และเป็นตัวคูณคะแนนด้วย ยิ่งเร็วยิ่งได้แต้มเยอะ)
 const SPEEDS = [{ v: 0.75, label: 'ช้า' }, { v: 1, label: 'ปกติ' }, { v: 1.5, label: 'เร็ว' }, { v: 2, label: 'เร็วมาก' }];
-const PRANKS = [
-  { ico: '🪮', text: 'ปีศาจแอบเอาผมคุณไปมัดจุกซะแล้ว!' },
-  { ico: '🥸', text: 'ปีศาจแปะหนวดปลอมให้คุณ เท่ไปอีกแบบ!' },
-  { ico: '🍪', text: 'ปีศาจขโมยขนมของคุณไปกินหมดแล้ว!' },
-  { ico: '🪶', text: 'ปีศาจเอาขนนกมาจั๊กจี้คุณไม่หยุด!' },
-  { ico: '🎭', text: 'ปีศาจสลับหน้ากากให้คุณ ตลกมาก!' },
-];
 const LIVE_MS = 330; // ส่งภาพการเล่นของเราให้เพื่อนทุกกี่ ms
 // บอทคู่แข่ง: rate = จำนวนครั้งที่ชกต่อวินาที, acc = โอกาสชกโดนผลไม้, bomb = โอกาสพลาดไปโดนระเบิด
 const BOTS = {
@@ -65,14 +59,43 @@ const HIT_DIST = FRUIT_R * 0.8 + FIST_R; // ระยะที่ถือว่
 const LOST_MS = 1200;       // มองไม่เห็นตัวนานเท่านี้ เกมจะหยุดชั่วคราว
 const READY_MS = 1000;      // ต้องยืนอยู่ในตำแหน่งที่ถูกต้องนิ่ง ๆ นานเท่านี้ก่อนเริ่มนับถอยหลัง
 
+// ---- โหมดต่อยซอมบี้: เกณฑ์เข้มกว่าโหมดผลไม้ (แค่เอามือแตะตัวซอมบี้ไม่พอ ต้องชกหมัดจริงที่เหยียดแขนสุด) ----
+const ZPUNCH_EXT = 135;     // มุมศอกที่ต้องเหยียดถึง (ผลไม้ใช้ PUNCH_EXT 110)
+const ZPUNCH_RISE = 30;     // ต้องเหยียดเพิ่มอย่างน้อยกี่องศาในช่วงสั้น ๆ (ผลไม้ 12)
+const ZPUNCH_WINDOW = 450;  // ms หลังชกที่หมัดนั้นยังทำให้ซอมบี้เจ็บได้ (ผลไม้ 800)
+const ZHIT_EXT = 125;       // ตอนมือแตะตัวซอมบี้ แขนต้องยังเหยียดอย่างน้อยกี่องศา (ผลไม้ 100)
+// เตะ: ดูมุมเข่า (สะโพก-เข่า-ข้อเท้า) ต้องเหยียดขาออกจากท่างอ และเท้าต้องยกพ้นพื้นพอ
+const KICK_EXT = 135;       // มุมเข่าที่ต้องเหยียดถึง
+const KICK_RISE = 35;       // ต้องเหยียดเพิ่มจากท่างอเข่าอย่างน้อยกี่องศา
+const KICK_LIFT = 0.72;     // ข้อเท้าต้องสูงพอ: (ระยะดิ่งสะโพก→ข้อเท้า) / ความยาวขา ต้องน้อยกว่าค่านี้ (ยืนปกติ ~0.97) ลดค่าลงถ้าอยากให้เตะต้องสูงขึ้น
+const KICK_WINDOW = 550;    // ms หลังเตะที่เตะนั้นยังทำให้ซอมบี้เจ็บได้
+const KICK_COOLDOWN = 450;  // ms ระยะห่างขั้นต่ำระหว่างเตะแต่ละครั้งของขาเดียวกัน
+// ค่าความยากของซอมบี้ ปรับตัวเลขได้ที่นี่
+const ZOM = {
+  HP: 100, HP_PER_KILL: 30,                  // พลังชีวิตซอมบี้ตัวแรก และที่เพิ่มขึ้นต่อตัวที่ล้ม
+  APPROACH: 0.075, APPROACH_PER_KILL: 0.012, // ความเร็วเดินเข้าหา (ระยะ/วินาที) ยิ่งล้มหลายตัวยิ่งเร็ว
+  WIND: 1.0, WIND_MIN: 0.5,                  // เวลาที่ซอมบี้ยกแขนง้างก่อนตะปบ (วินาที) ต้องต่อย/เตะให้ทันถึงจะขัดจังหวะได้
+  SIDE: 0.68, SWAY: 0.35,                    // ตำแหน่งซอมบี้บนจอ (0-1 จากซ้าย: 0.68 = ฝั่งขวา ผู้เล่นยืนฝั่งซ้าย / 0.32 = สลับเป็นซ้าย) และความกว้างที่เดินส่าย (สัดส่วนของค่าเดิม)
+  PENALTY: 30,                               // คะแนนที่เสียเมื่อโดนตะปบ
+  HITTABLE: 0.5,                             // ซอมบี้ต้องเดินเข้ามาใกล้ระดับนี้ (0-1) ก่อนถึงจะต่อยโดน
+  KILL_BONUS: 60,                            // โบนัสตอนล้มซอมบี้
+  PUNCH_MARGIN: 0.015, KICK_MARGIN: 0.1,     // ระยะเผื่อบริเวณที่โดน (สัดส่วนความสูงซอมบี้) หมัดเผื่อน้อยมาก เตะเผื่อมากกว่า
+  PUNCH: { head: [22, 20], body: [10, 10], legs: [6, 6] },  // [ความเสียหาย, คะแนน]
+  KICK: { head: [28, 35], body: [16, 18], legs: [8, 10] },
+};
+const lerp = (a, b, t) => a + (b - a) * t;
+const TAU = Math.PI * 2;
+
 const FRUITS = [
   ['🍎', '#ff4a4a'], ['🍊', '#ffa534'], ['🍉', '#ff5f7e'],
   ['🍌', '#ffe14a'], ['🍇', '#b073ff'], ['🍓', '#ff4f6d'], ['🍍', '#ffd24a'],
 ];
-const JOINTS = [11, 12, 13, 14, 15, 16, 23, 24]; // ไหล่ ศอก ข้อมือ สะโพก
-const BONES = [[11, 12, null], [11, 13, 0], [13, 15, 0], [12, 14, 1], [14, 16, 1], [11, 23, null], [12, 24, null], [23, 24, null]];
-const HUD0 = { score: 0, lives: MAX_LIVES, combo: 0, l: 0, r: 0, kcal: 0, t: 0 };
-const CHK0 = { sh: false, el: false, wr: false, dist: 'none', progress: 0 };
+const JOINTS = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]; // ไหล่ ศอก ข้อมือ สะโพก เข่า ข้อเท้า
+// ค่าตัวที่ 3 = แขน/ขาที่ใช้ไฮไลต์ตอนชก/เตะ (0,1 = แขนซ้าย,ขวา · 2,3 = ขาซ้าย,ขวา)
+const BONES = [[11, 12, null], [11, 13, 0], [13, 15, 0], [12, 14, 1], [14, 16, 1], [11, 23, null], [12, 24, null], [23, 24, null], [23, 25, 2], [25, 27, 2], [24, 26, 3], [26, 28, 3]];
+const limbOf = (s, side) => (side < 2 ? s.fists[side] : s.feet[side - 2]);
+const HUD0 = { score: 0, lives: MAX_LIVES, combo: 0, l: 0, r: 0, kcal: 0, t: 0, k: 0 };
+const CHK0 = { sh: false, el: false, wr: false, lg: false, dist: 'none', progress: 0 };
 
 const r3 = (n) => Math.round(n * 1000) / 1000;
 const JI = Object.fromEntries(JOINTS.map((id, i) => [id, i]));
@@ -100,14 +123,16 @@ const liveDoc = (code, uid) => doc(getFirestore(auth.app), ROOMS, `${code}-live-
 function packLive(s) {
   const j = [];
   JOINTS.forEach((i) => { const p = s.joints[i]; j.push(p ? r3(p.x / W) : -1, p ? r3(p.y / H) : -1); });
-  const f = [];
-  s.fists.forEach((ft) => f.push(ft.ok ? r3(ft.x / W) : -1, ft.ok ? r3(ft.y / H) : -1, ft.active ? 1 : 0));
+  const f = []; // กำปั้นซ้าย ขวา แล้วเท้าซ้าย ขวา ข้างละ 3 ค่า
+  [...s.fists, ...s.feet].forEach((ft) => f.push(ft.ok ? r3(ft.x / W) : -1, ft.ok ? r3(ft.y / H) : -1, ft.active ? 1 : 0));
   const o = []; // ผลไม้/ระเบิด ลูกละ 5 ค่า: ชนิด(-1=ระเบิด), x, y, ความเร็วตก, มุมหมุน
   s.objs.slice(0, 12).forEach((ob) => o.push(ob.bomb ? -1 : FRUITS.findIndex((fr) => fr[0] === ob.emoji), r3(ob.x / W), r3(ob.y / H), r3((ob.vy * s.speed) / H), r3(ob.rot)));
   const e = []; // เหตุการณ์ผลไม้แตก/โดนระเบิด เหตุการณ์ละ 6 ค่า: id, ชนิด(0=ผลไม้ 1=ระเบิด), x, y, คะแนน, ชนิดผลไม้
   s.evq.forEach((ev) => e.push(ev.id, ev.k, r3(ev.x / W), r3(ev.y / H), ev.v, ev.f));
+  const zz = s.z; // ซอมบี้ 12 ค่า: x, y(เท้า), สูง, เลือด, ท่ายกแขน, ท่าตะปบ, ท่าการ์ด, แฟลชโดนตี, ล้ม, เฟส, เลเวล, ทิศล้ม
+  const z = zz ? [r3(zz.x / W), r3(zz.y / H), r3(zz.h / H), r3(zz.hpf), r3(zz.pw), r3(zz.ps), r3(zz.pg), r3(zz.hit), r3(zz.fall), r3(zz.phase % TAU), zz.lvl, zz.fd || 1] : [];
   return {
-    j, f, o, e, ar: r3(W / H), sc: s.score, lv: s.lives, cb: s.combo, kc: Math.round(s.kcal * 10) / 10,
+    j, f, o, z, e, ar: r3(W / H), sc: s.score, lv: s.lives, cb: s.combo, kc: Math.round(s.kcal * 10) / 10,
     sp: s.speed, l: s.punches[0], r: s.punches[1], tm: s.cfg.time ? 1 : 0, q: Date.now(),
     t: s.cfg.time ? Math.max(0, Math.ceil(s.cfg.time - s.activeMs / 1000)) : 0,
   };
@@ -215,6 +240,12 @@ function renderOpp(canvas, v, now, done, rv, conn) {
         v.rings.push({ x: ex, y: ey, r: 14 * u, life: 0.5 });
         v.floats.push({ x: ex, y: ey, text: d.tm ? '-20' : '-1 ❤', color: '#ff6b81', life: 1 });
         v.flash = 1;
+      } else if (ev[i + 1] === 2) { // ต่อย/เตะโดนซอมบี้
+        oppSplash(v, ex, ey, '#b01010', 16, u); oppSplash(v, ex, ey, '#5c0606', 8, u);
+        v.floats.push({ x: ex, y: ey, text: `+${ev[i + 4]}`, color: ev[i + 5] === 1 ? '#ffd24a' : '#ff9a3c', life: 0.8 });
+      } else if (ev[i + 1] === 3) { // โดนซอมบี้ตะปบ
+        v.floats.push({ x: ex, y: ey, text: `-${ev[i + 4]}`, color: '#ff3b4f', life: 1 });
+        v.flash = 1;
       } else {
         oppSplash(v, ex, ey, FRUITS[ev[i + 5]]?.[1] || '#c6ff38', 14, u);
         v.floats.push({ x: ex, y: ey, text: `+${ev[i + 4]}`, color: '#c6ff38', life: 0.8 });
@@ -234,6 +265,12 @@ function renderOpp(canvas, v, now, done, rv, conn) {
   ctx.rect(ox, oy, rw, rh);
   ctx.clip();
   ctx.lineCap = 'round';
+  if (!done && d.z && d.z.length >= 12) { // ซอมบี้ฝั่งเพื่อน
+    const q = d.z;
+    const zo = { x: ox + q[0] * rw, y: oy + q[1] * rh, h: q[2] * rh, hpf: q[3], pw: q[4], ps: q[5], pg: q[6], hit: q[7], fall: q[8], phase: q[9], lvl: q[10], fd: q[11] };
+    drawZombie(ctx, zo, now);
+    drawZombieHud(ctx, zo, now);
+  }
   BONES.forEach(([p, q, side]) => {
     const i = JI[p] * 2;
     const j = JI[q] * 2;
@@ -299,13 +336,14 @@ function renderOpp(canvas, v, now, done, rv, conn) {
     ctx.fillText(f.text, f.x, f.y - 50 * u);
   });
   ctx.globalAlpha = 1;
-  for (let i = 0; i < 6; i += 3) {
+  for (let i = 0; i < v.curF.length; i += 3) {
     if (v.curF[i] < 0) continue;
+    const foot = i >= 6; // 2 ชุดหลังคือเท้า วาดสีส้ม
     ctx.beginPath();
     ctx.arc(ox + v.curF[i] * rw, oy + v.curF[i + 1] * rh, FIST_R * u, 0, Math.PI * 2);
     ctx.lineWidth = Math.max(2, (v.curF[i + 2] ? 8 : 4) * u);
-    ctx.strokeStyle = v.curF[i + 2] ? '#e9ffb0' : '#7cff31';
-    ctx.shadowColor = '#7cff31';
+    ctx.strokeStyle = foot ? (v.curF[i + 2] ? '#ffe2b0' : '#ffa534') : (v.curF[i + 2] ? '#e9ffb0' : '#7cff31');
+    ctx.shadowColor = foot ? '#ffa534' : '#7cff31';
     ctx.shadowBlur = 12 * Math.max(0.5, u);
     ctx.stroke();
     ctx.shadowBlur = 0;
@@ -342,7 +380,7 @@ const syncBurn = (s) => {
 
 const newFist = () => ({ ok: false, x: 0, y: 0, v: 0, t: 0, trail: [], ext: null, hist: [], punchAt: -1e9, active: false });
 const newBot = (lvl) => ({ p: BOTS[lvl] || BOTS.mid, score: 0, lives: MAX_LIVES, combo: 0, t: 0, next: 1, done: false });
-const newGame = (o = {}) => ({
+const newGame = (o = {}, seed = o.seed ?? newSeed()) => ({
   objs: [], parts: [], floats: [], rings: [],
   score: 0, lives: GAMES[o.game]?.lives || MAX_LIVES, combo: 0, maxCombo: 0, hits: 0, bombs: 0,
   spawned: 0, bombStreak: 0, spawnIn: 700, flash: 0, shake: 0, evId: 0, evq: [],
@@ -351,8 +389,10 @@ const newGame = (o = {}) => ({
   view: { sh: false, el: false, wr: false, dist: 'none' },
   punches: [0, 0], // จำนวนหมัดที่นับได้ [ซ้าย, ขวา]
   fists: [newFist(), newFist()],
+  feet: [newFist(), newFist()], kicks: [0, 0], // เท้าซ้าย ขวา และจำนวนเตะที่นับได้ (ใช้ในโหมดซอมบี้)
+  z: null, zN: 0, zSpawnIn: 900, kills: 0, smears: [], sh: 0, // ซอมบี้ตัวปัจจุบัน / จำนวนตัวที่เกิดแล้ว / ตัวที่ล้ม / คราบเลือดบนจอ / ความกว้างไหล่(px)
   cfg: GAMES[o.game] || GAMES.fruit, mode: o.mode || 'solo',
-  rng: mulberry(o.seed ?? newSeed()), speed: o.speed || 1,
+  rng: mulberry(seed), seed, speed: o.speed || 1,
   weight: o.weight || 60, kcal: 0,
   bot: o.mode === 'bot' ? newBot(o.botLvl) : null, syncAt: 0, sent: '', liveAt: 0, dcAt: 0,
 });
@@ -377,11 +417,15 @@ function angle3(a, b, c) {
 
 function trackFists(s, video, landmarker, now) {
   let pts = [null, null];
+  let fpts = [null, null]; // ตำแหน่งเท้า
   let shoulder = 240;
-  const ang = [null, null];
+  const ang = [null, null];  // มุมศอก
+  const kang = [null, null]; // มุมเข่า
+  const lift = [null, null]; // ข้อเท้ายกสูงแค่ไหน (สัดส่วนความยาวขา)
+  const hard = !!s.cfg.zombie; // โหมดซอมบี้ใช้เกณฑ์ตรวจหมัดที่เข้มกว่า
   s.joints = {};
   s.bodyOk = false;
-  s.view = { sh: false, el: false, wr: false, dist: 'none' };
+  s.view = { sh: false, el: false, wr: false, lg: false, dist: 'none' };
 
   if (landmarker && video && video.readyState >= 2 && video.currentTime !== s.lastVideoTime) {
     s.lastVideoTime = video.currentTime;
@@ -402,13 +446,15 @@ function trackFists(s, video, landmarker, now) {
       const b = mapPoint(lm[12], video);
       const raw = Math.hypot(a.x - b.x, a.y - b.y);
       shoulder = Math.max(80, raw);
+      s.sh = s.sh ? s.sh * 0.92 + shoulder * 0.08 : shoulder; // ความกว้างไหล่แบบเฉลี่ย ใช้กำหนดขนาดซอมบี้ให้ตัวเท่าเรา
       // วัดระยะห่างจากกล้องเป็นสัดส่วนของภาพวิดีโอ (ไม่ขึ้นกับการครอปตามขนาดจอ)
       const rawN = Math.hypot((lm[11].x - lm[12].x) * (video.videoWidth || 4), (lm[11].y - lm[12].y) * (video.videoHeight || 3)) / (video.videoWidth || 4);
       s.view = {
         sh: seen(11, 0.5) && seen(12, 0.5),
         el: seen(13, 0.5) && seen(14, 0.5),
         wr: seen(15, 0.5) && seen(16, 0.5),
-        dist: rawN < 0.10 ? 'far' : rawN > 0.40 ? 'near' : 'ok',
+        lg: seen(25, 0.5) && seen(26, 0.5), // เห็นเข่าทั้งสองข้าง (โหมดซอมบี้ต้องใช้เตะ)
+        dist: rawN < (hard ? 0.07 : 0.10) ? 'far' : rawN > 0.40 ? 'near' : 'ok',
       };
     }
     pts = [[15, 19], [16, 20]].map(([wrist, index]) => {
@@ -418,16 +464,32 @@ function trackFists(s, video, landmarker, now) {
       const f = mapPoint(lm[index], video);
       return { x: (w.x + f.x) / 2, y: (w.y + f.y) / 2 };
     });
+    fpts = [[27, 31], [28, 32]].map(([ankle, toe]) => {
+      if (!seen(ankle, 0.4)) return null;
+      const w = mapPoint(lm[ankle], video);
+      if (!seen(toe)) return w;
+      const f = mapPoint(lm[toe], video);
+      return { x: (w.x + f.x) / 2, y: (w.y + f.y) / 2 };
+    });
     const wl = s.world;
     if (wl) {
       [0, 1].forEach((i) => {
         if (seen(11 + i) && seen(13 + i) && seen(15 + i) && wl[11 + i] && wl[13 + i] && wl[15 + i]) {
           ang[i] = angle3(wl[11 + i], wl[13 + i], wl[15 + i]);
         }
+        const hp = wl[23 + i]; const kn = wl[25 + i]; const an = wl[27 + i];
+        if (seen(23 + i, 0.4) && seen(25 + i, 0.4) && seen(27 + i, 0.4) && hp && kn && an) {
+          kang[i] = angle3(hp, kn, an);
+          const len = Math.hypot(hp.x - kn.x, hp.y - kn.y, hp.z - kn.z) + Math.hypot(kn.x - an.x, kn.y - an.y, kn.z - an.z);
+          lift[i] = len ? (an.y - hp.y) / len : null; // world landmarks แกน y ชี้ลง: ยืนปกติ ~0.97 ยิ่งเตะสูงยิ่งน้อย
+        }
       });
     }
   }
 
+  const pExt = hard ? ZPUNCH_EXT : PUNCH_EXT;
+  const pRise = hard ? ZPUNCH_RISE : PUNCH_RISE;
+  const pWin = hard ? ZPUNCH_WINDOW : PUNCH_WINDOW;
   s.fists.forEach((f, i) => {
     const p = pts[i];
     if (!p) { f.ok = false; f.v = 0; f.trail.length = 0; f.ext = null; f.hist.length = 0; f.active = false; return; }
@@ -452,12 +514,36 @@ function trackFists(s, video, landmarker, now) {
       f.hist.push({ t: now, a: f.ext });
       while (f.hist.length && now - f.hist[0].t > 600) f.hist.shift();
       const lowest = Math.min(...f.hist.map((h) => h.a));
-      if (f.ext >= PUNCH_EXT && f.ext - lowest >= PUNCH_RISE && now - f.punchAt > PUNCH_COOLDOWN) {
+      if (f.ext >= pExt && f.ext - lowest >= pRise && now - f.punchAt > PUNCH_COOLDOWN) {
         f.punchAt = now;
         s.punches[i] += 1;
       }
     }
-    f.active = now - f.punchAt < PUNCH_WINDOW;
+    f.active = now - f.punchAt < pWin;
+  });
+
+  // เท้า: นับเป็น "เตะ" เมื่อเข่าเหยียดออกจากท่างอ และข้อเท้ายกพ้นพื้น (ใช้เฉพาะโหมดซอมบี้)
+  s.feet.forEach((f, i) => {
+    const p = hard ? fpts[i] : null;
+    if (!p) { f.ok = false; f.v = 0; f.trail.length = 0; f.ext = null; f.hist.length = 0; f.active = false; return; }
+    f.ok = true; f.x = p.x; f.y = p.y;
+    f.trail.push({ x: p.x, y: p.y });
+    if (f.trail.length > 6) f.trail.shift();
+    const a = kang[i];
+    if (a == null) {
+      f.ext = null; f.hist.length = 0;
+    } else {
+      f.ext = f.ext == null ? a : f.ext * 0.4 + a * 0.6;
+      f.hist.push({ t: now, a: f.ext });
+      while (f.hist.length && now - f.hist[0].t > 700) f.hist.shift();
+      const lowest = Math.min(...f.hist.map((h) => h.a));
+      const high = lift[i] != null && lift[i] < KICK_LIFT;
+      if (f.ext >= KICK_EXT && f.ext - lowest >= KICK_RISE && high && now - f.punchAt > KICK_COOLDOWN) {
+        f.punchAt = now;
+        s.kicks[i] += 1;
+      }
+    }
+    f.active = now - f.punchAt < KICK_WINDOW;
   });
 }
 
@@ -487,14 +573,388 @@ function botTick(b, dt, cfg) {
     const r = Math.random();
     if (r < b.p.bomb) {
       b.combo = 0;
-      if (cfg.time) b.score = Math.max(0, b.score - 20); else b.lives -= 1;
+      if (cfg.zombie) b.score = Math.max(0, b.score - ZOM.PENALTY); else if (cfg.time) b.score = Math.max(0, b.score - 20); else b.lives -= 1;
     } else if (r < b.p.bomb + b.p.acc * (1 - b.p.bomb)) {
       b.combo += 1;
-      b.score += 10 * Math.min(4, 1 + Math.floor(b.combo / 5));
+      b.score += cfg.zombie ? 8 * Math.min(2, 1 + Math.floor(b.combo / 8)) : 10 * Math.min(4, 1 + Math.floor(b.combo / 5));
     } else b.combo = 0;
     if (!cfg.time && b.lives <= 0) b.done = true;
   }
   if ((cfg.time && b.t >= cfg.time) || b.t >= 180) b.done = true;
+}
+
+// อัปเดตเอฟเฟกต์ (เศษ ตัวเลขลอย วงระเบิด คราบเลือด แฟลช สั่น) ใช้ร่วมกันทุกโหมด
+function fx(s, dt) {
+  s.parts.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 900 * dt; p.life -= dt; });
+  s.parts = s.parts.filter((p) => p.life > 0);
+  s.floats.forEach((f) => { f.y -= 70 * dt; f.life -= dt; });
+  s.floats = s.floats.filter((f) => f.life > 0);
+  s.rings.forEach((r) => { r.r += 520 * dt; r.life -= dt; });
+  s.rings = s.rings.filter((r) => r.life > 0);
+  s.smears.forEach((m) => { m.life -= dt; m.y += m.vy * dt; });
+  s.smears = s.smears.filter((m) => m.life > 0);
+  s.flash = Math.max(0, s.flash - dt * 2.5);
+  s.shake = Math.max(0, s.shake - dt);
+}
+
+// ===================== ซอมบี้ =====================
+function spawnZombie(s) {
+  const n = s.zN;
+  s.zN += 1;
+  const r = mulberry((s.seed | 0) + n * 7919); // สุ่มจาก seed ห้อง ให้ผู้เล่นสองคนเจอซอมบี้นิสัยเดียวกัน
+  const hp = ZOM.HP + s.kills * ZOM.HP_PER_KILL;
+  s.z = {
+    n, lvl: s.kills, d: 0.32, hp, maxHp: hp, hpf: 1, state: 'walk', t: 0, windDur: 1, stagDur: 0.5,
+    guard: 0, hit: 0, fall: 0, fd: n % 2 ? 1 : -1, phase: r() * TAU, swayAmp: 0.13 + r() * 0.09, swayPh: r() * TAU,
+    pw: 0, ps: 0, pg: 0, hitsTaken: 0, x: W * ZOM.SIDE, y: H, h: H * 0.5,
+  };
+  s.floats.push({ x: W * ZOM.SIDE, y: H * 0.3, text: `ซอมบี้ตัวที่ ${n + 1} โผล่มาแล้ว!`, color: '#ff6b6b', life: 1.6, size: 32 });
+}
+
+// บริเวณที่โดนซอมบี้ (พิกัดสัมพัทธ์: u = ซ้าย-ขวาจากกลางตัว, v = บนสุด 0 → เท้า 1) m = ระยะเผื่อ
+function zoneAt(z, px, py, m) {
+  const u = (px - z.x) / z.h;
+  const v = (py - (z.y - z.h)) / z.h;
+  if (Math.hypot(u, v - 0.095) < 0.085 + m) return 'head';
+  if (Math.abs(u) < 0.26 + m && v > 0.16 - m && v < 0.52 + m) return 'body';
+  if (Math.abs(u) < 0.17 + m && v >= 0.52 - m && v <= 1.02 + m) return 'legs';
+  return null;
+}
+
+const vib = (p) => { try { navigator.vibrate?.(p); } catch { /* ไม่รองรับก็ข้าม */ } };
+const pushEv = (s, k, x, y, v, f) => { s.evId += 1; s.evq.push({ id: s.evId, k, x, y, v, f }); if (s.evq.length > 6) s.evq.shift(); };
+const stagger = (z, dur) => { z.state = 'stagger'; z.t = 0; z.stagDur = dur; };
+
+function killZombie(s, z) {
+  z.state = 'down'; z.t = 0; z.fall = 0; z.guard = 0; z.hpf = 0;
+  s.kills += 1;
+  s.score += ZOM.KILL_BONUS;
+  const cx = z.x; const cy = z.y - z.h * 0.6;
+  splash(s, { x: cx, y: cy }, '#b01010', 40); splash(s, { x: cx, y: cy }, '#5c0606', 22); splash(s, { x: cx, y: cy }, '#7f9569', 10);
+  s.floats.push({ x: cx, y: cy - 40, text: `ซอมบี้ล้ม! +${ZOM.KILL_BONUS}`, color: '#c6ff38', life: 1.4, size: 46 });
+  s.shake = 0.5;
+  vib([60, 40, 90]);
+}
+
+// ต่อย/เตะโดนซอมบี้ที่จุด p
+function landHit(s, z, zone, kick, p) {
+  const [dmg, base] = (kick ? ZOM.KICK : ZOM.PUNCH)[zone];
+  if (zone === 'head' && z.guard > 0) { // ซอมบี้ยกแขนการ์ดหัวอยู่ ตีหัวไม่เข้า ต้องตีตัวหรือขา
+    s.combo = 0;
+    splash(s, p, '#cfd8ff', 8);
+    s.floats.push({ x: p.x, y: p.y, text: 'บล็อก! ตีตัวหรือขา', color: '#9fb4ff', life: 1, size: 34 });
+    return;
+  }
+  s.combo += 1; s.maxCombo = Math.max(s.maxCombo, s.combo); s.hits += 1;
+  const mult = Math.min(3, 1 + Math.floor(s.combo / 8)); // โหมดซอมบี้ คอมโบคูณช้ากว่าและสูงสุด x3
+  const pts = Math.round(base * mult * s.speed);
+  s.score += pts;
+  z.hp -= dmg; z.hit = 1; z.hitsTaken += 1;
+  const head = zone === 'head';
+  splash(s, p, '#b01010', 18); splash(s, p, '#5c0606', 10); splash(s, p, '#7f9569', 4);
+  s.smears.push({ x: p.x, y: p.y, r: 8 + Math.random() * 10, life: 2.2, max: 2.2, vy: 16, color: '#7a0a0a' });
+  s.floats.push({ x: p.x, y: p.y, text: `${head ? (kick ? 'เตะหัว! ' : 'HEADSHOT! ') : kick ? 'เตะ! ' : ''}+${pts}`, color: head ? '#ffd24a' : '#ff9a3c', life: 0.9, size: head ? 40 : 34 });
+  pushEv(s, 2, p.x, p.y, pts, head ? 1 : 0);
+  s.shake = Math.max(s.shake, head || kick ? 0.22 : 0.12);
+  vib(40);
+  z.guard = 0; // โดนตีเข้าแล้ว การ์ดหลุด
+  if (z.hp <= 0) { killZombie(s, z); return; }
+  if (z.state === 'wind') { // ตีทันตอนซอมบี้ง้างแขน → ขัดจังหวะ ซอมบี้เซถอยหลัง
+    stagger(z, 0.9); z.d = Math.max(0.55, z.d - 0.3);
+    s.floats.push({ x: z.x, y: z.y - z.h * 1.02, text: 'ขัดจังหวะ!', color: '#c6ff38', life: 1, size: 38 });
+  } else if (z.state !== 'strike') {
+    z.d = Math.max(0.3, z.d - (kick ? 0.16 : 0.09));
+    if (head || kick) stagger(z, 0.45);
+    const roll = mulberry((s.seed | 0) + z.n * 131 + z.hitsTaken * 17)(); // ซอมบี้ตัวเดียวกันจะยกการ์ดจังหวะเดียวกันทุกคน
+    if (roll < Math.min(0.65, 0.3 + s.kills * 0.05)) z.guard = 1.3;
+  }
+}
+
+// ซอมบี้ตะปบโดนผู้เล่น
+function hurtPlayer(s) {
+  s.bombs += 1; s.combo = 0; s.flash = 1; s.shake = 0.6;
+  s.score = Math.max(0, s.score - ZOM.PENALTY);
+  s.floats.push({ x: Math.max(170, W * (1 - ZOM.SIDE)), y: H * 0.45, text: `ซอมบี้ตะปบ! -${ZOM.PENALTY}`, color: '#ff3b4f', life: 1.3, size: 46 });
+  for (let i = 0; i < 12; i++) s.smears.push({ x: Math.random() * W, y: Math.random() * H * 0.7, r: 10 + Math.random() * 26, life: 2.6, max: 2.6, vy: 22 + Math.random() * 30, color: '#6e0707' });
+  pushEv(s, 3, Math.max(170, W * (1 - ZOM.SIDE)), H * 0.5, ZOM.PENALTY, -1);
+  vib([140, 60, 140]);
+}
+
+function stepZombie(s, dt, now) {
+  const sp = s.speed;
+  const t = s.activeMs / 1000;
+  if (!s.z) {
+    s.zSpawnIn -= dt * 1000;
+    if (s.zSpawnIn <= 0) spawnZombie(s);
+    if (!s.z) return;
+  }
+  const z = s.z;
+  z.t += dt;
+  z.phase += dt * (3 + sp * 1.5) * (z.state === 'walk' ? 1 : 0.35);
+  z.hit = Math.max(0, z.hit - dt * 4);
+  if (z.guard > 0) z.guard = Math.max(0, z.guard - dt);
+  const ease = (k, v, rate) => { z[k] += (v - z[k]) * Math.min(1, dt * rate); };
+  ease('pw', z.state === 'wind' || z.state === 'strike' ? 1 : 0, 9);
+  ease('ps', z.state === 'strike' ? 1 : 0, 16);
+  ease('pg', z.guard > 0 ? 1 : 0, 10);
+
+  if (z.state === 'walk') {
+    z.d = Math.min(1, z.d + (ZOM.APPROACH + s.kills * ZOM.APPROACH_PER_KILL) * sp * dt);
+    if (z.d >= 0.97) { z.state = 'wind'; z.t = 0; z.windDur = Math.max(ZOM.WIND_MIN, ZOM.WIND - s.kills * 0.06) / Math.sqrt(sp); }
+  } else if (z.state === 'wind') {
+    if (z.t >= z.windDur) { z.state = 'strike'; z.t = 0; hurtPlayer(s); } // ไม่มีใครขัดจังหวะทัน → ตะปบโดน
+  } else if (z.state === 'strike') {
+    if (z.t >= 0.35) { z.state = 'walk'; z.t = 0; z.d = 0.62; } // ตะปบเสร็จถอยไปตั้งหลักแล้วเดินเข้ามาใหม่
+  } else if (z.state === 'stagger') {
+    if (z.t >= z.stagDur) { z.state = 'walk'; z.t = 0; }
+  } else if (z.state === 'down') {
+    z.fall = Math.min(1, z.fall + dt / 0.9);
+    if (z.t > 1.5) { s.z = null; s.zSpawnIn = 900 / sp; return; }
+  }
+
+  // ตำแหน่งและขนาดบนจอ: ตัวเท่าคนจริง (ประมาณจากความกว้างไหล่ของผู้เล่น) ยิ่งเข้าใกล้ยิ่งใหญ่
+  const body = Math.min(H * 0.92, W * 0.95, Math.max(H * 0.55, (s.sh || 220) * 4.4)); // จำกัดไม่ให้กว้างเกินจอ เพราะซอมบี้อยู่ชิดฝั่งหนึ่ง
+  const lunge = z.state === 'strike' ? Math.sin(Math.min(1, z.t / 0.35) * Math.PI) : 0;
+  z.h = body * (0.5 + 0.5 * z.d) * (1 + 0.14 * lunge);
+  z.x = W * (ZOM.SIDE + z.swayAmp * ZOM.SWAY * Math.sin(z.swayPh + t * 0.9)) + (z.state === 'stagger' ? Math.sin(z.t * 40) * 6 : 0);
+  z.y = H * (0.985 - 0.1 * (1 - z.d));
+  if (z.state !== 'down') z.hpf = Math.max(0, z.hp / z.maxHp);
+  if (z.state === 'down') return;
+
+  const limbs = [...s.fists.map((f) => [f, false]), ...s.feet.map((f) => [f, true])];
+  for (const [f, kick] of limbs) {
+    if (!f.ok) continue;
+    const m = kick ? ZOM.KICK_MARGIN : ZOM.PUNCH_MARGIN;
+    const pv = f.trail.length > 1 ? f.trail[f.trail.length - 2] : null;
+    const near = pv && Math.hypot(f.x - pv.x, f.y - pv.y) < 260;
+    const probes = near ? [pv, { x: (pv.x + f.x) / 2, y: (pv.y + f.y) / 2 }, f] : [f]; // รวมเส้นทางที่เพิ่งผ่าน กันมือเร็วทะลุ
+    let zone = null; let at = f;
+    probes.forEach((p) => { const zn = zoneAt(z, p.x, p.y, m); if (zn && (!zone || zn === 'head')) { zone = zn; at = p; } });
+    if (!zone) continue;
+    const real = f.active && (kick || (f.ext != null && f.ext >= ZHIT_EXT));
+    const hint = (text) => { if (now - s.lastHint > 1600) { s.lastHint = now; s.floats.push({ x: Math.max(150, Math.min(W - 150, f.x)), y: f.y, text, color: '#ffd24a', life: 1, size: 30 }); } };
+    if (!real) { if (!kick && f.v > 0.5) hint('ต้องชกหมัดจริง!'); continue; } // แค่เอามือไปแตะ ไม่นับ
+    if (z.d < ZOM.HITTABLE) { hint('ซอมบี้ยังไกลอยู่ รอให้เข้ามาใกล้'); continue; }
+    landHit(s, z, zone, kick, at);
+    f.active = false; f.punchAt = -1e9; f.v = 0; // หนึ่งหมัด/เตะ โดนได้ครั้งเดียว
+    if (z.state === 'down') break;
+  }
+}
+
+// ---------- วาดซอมบี้ (ภาพเวกเตอร์มองจากด้านข้าง หน้าหันไปทางผู้เล่น สูง 1 หน่วย = ความสูงตัว, เท้าอยู่ y=0) ----------
+function drawZombie(ctx, z, now) {
+  const hz = z.h;
+  if (!(hz > 24)) return;
+  const t = now / 1000;
+  const pw = z.pw || 0; const ps = z.ps || 0; const pg = z.pg || 0; const fall = z.fall || 0;
+  const ph = z.phase || 0;
+  const growl = Math.max(pw, 0.3 + 0.3 * Math.sin(t * 4 + ph));
+  const C = { skin: '#7f9569', skinD: '#4e603f', skinL: '#a9bb8c', skinF: '#566a47', blood: '#7b0808', bloodB: '#c8141c', bone: '#e6ddc0', cloth: '#4b4238', clothD: '#2a241e', clothF: '#352e27', pants: '#262b36', pantsF: '#191d26' };
+  ctx.save();
+  ctx.translate(z.x, z.y);
+  ctx.scale(hz, hz);
+  ctx.scale(ZOM.SIDE < 0.5 ? -1 : 1, 1); // วาดหันข้างโดยหน้าหันไปทางซ้าย (หาผู้เล่น) ถ้าซอมบี้อยู่ฝั่งซ้ายให้กลับด้าน
+  ctx.globalAlpha = 0.95 * (1 - fall * 0.6);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (pw > 0.05) { // ออร่าแดงตอนง้างแขน เตือนให้รีบตีขัดจังหวะ
+    const au = ctx.createRadialGradient(0, -0.55, 0.05, 0, -0.55, 0.75);
+    au.addColorStop(0, `rgba(255,30,30,${0.38 * pw})`);
+    au.addColorStop(1, 'rgba(255,30,30,0)');
+    ctx.fillStyle = au;
+    ctx.fillRect(-1, -1.4, 2, 1.8);
+  }
+  ctx.fillStyle = 'rgba(0,0,0,.5)';
+  ctx.beginPath(); ctx.ellipse(-0.01, 0.006, 0.2, 0.03, 0, 0, TAU); ctx.fill();
+  ctx.rotate(Math.sin(t * 1.7 + ph) * 0.02 - 0.06 + 0.07 * pw + fall * 1.45); // โน้มตัวไปข้างหน้า ตอนง้างแขนแอ่นหลัง ตอนตายล้มหงายไปข้างหลัง
+  const seg = (x1, y1, x2, y2, w, col) => { ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); };
+
+  // ขา (มองข้าง): ขาไกลวาดก่อน ขาใกล้วาดทีหลัง สลับก้าวเดิน
+  const walk = z.state === 'walk' ? 1 : 0.25;
+  [1, 0].forEach((i) => {
+    const far = i === 1;
+    const a = Math.sin(ph + i * Math.PI) * 0.38 * walk;
+    const hx = 0.01; const hy = -0.5;
+    const kx = hx + Math.sin(a) * 0.23; const ky = hy + Math.cos(a) * 0.23;
+    const b = a * 0.5 + Math.max(0, a) * 0.6;
+    const fx = kx + Math.sin(b) * 0.26; const fy = Math.min(-0.006, ky + Math.cos(b) * 0.26 - Math.max(0, -a) * 0.03);
+    seg(hx, hy, kx, ky, 0.095, far ? C.pantsF : C.pants);
+    seg(kx, ky + 0.01, fx, fy - 0.012, 0.058, far ? C.skinF : C.skinD);
+    if (!far) seg(kx, ky + 0.02, fx, fy - 0.012, 0.032, C.skin);
+    ctx.fillStyle = far ? C.pantsF : C.pants; // ชายกางเกงขาดเป็นแฉก
+    ctx.beginPath(); ctx.moveTo(kx - 0.05, ky - 0.02);
+    for (let k = 0; k < 4; k += 1) ctx.lineTo(kx - 0.05 + k * 0.033, ky + (k % 2 ? 0.075 : 0.02));
+    ctx.lineTo(kx + 0.05, ky - 0.02); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = far ? C.skinF : C.skinD; // เท้า ชี้ไปข้างหน้า
+    ctx.beginPath(); ctx.ellipse(fx - 0.035, fy - 0.008, 0.06, 0.022, 0, 0, TAU); ctx.fill();
+    if (!far) {
+      ctx.fillStyle = 'rgba(123,8,8,.75)'; // เลือดและกระดูกแข้งโผล่
+      ctx.beginPath(); ctx.ellipse(lerp(kx, fx, 0.55), lerp(ky, fy, 0.55), 0.02, 0.04, 0, 0, TAU); ctx.fill();
+      seg(lerp(kx, fx, 0.35), lerp(ky, fy, 0.35), lerp(kx, fx, 0.6), lerp(ky, fy, 0.6), 0.03, C.bloodB);
+      seg(lerp(kx, fx, 0.35), lerp(ky, fy, 0.35), lerp(kx, fx, 0.6), lerp(ky, fy, 0.6), 0.013, C.bone);
+    }
+  });
+
+  // แขน/มือ: ซอมบี้หันข้าง แขนยื่นไปข้างหน้า (ทางซ้าย) เอื้อมหาผู้เล่น / ยกสูงตอนง้าง / ตะปบลง / ยกกันหน้า
+  const hand = (x, y, sc, ang, far) => {
+    ctx.fillStyle = far ? C.skinF : C.skin;
+    ctx.beginPath(); ctx.ellipse(x, y, 0.036 * sc, 0.028 * sc, ang, 0, TAU); ctx.fill();
+    for (let k = 0; k < 4; k += 1) {
+      const a = ang + (k - 1.5) * 0.42 + Math.sin(t * 5 + k + ph) * 0.05;
+      const bx = x + Math.cos(a) * 0.03 * sc; const by = y + Math.sin(a) * 0.03 * sc;
+      const tx = x + Math.cos(a) * 0.085 * sc; const ty = y + Math.sin(a) * 0.085 * sc;
+      seg(bx, by, tx, ty, 0.012 * sc, C.skinD);
+      seg(tx, ty, tx + Math.cos(a) * 0.016 * sc, ty + Math.sin(a) * 0.016 * sc, 0.009 * sc, '#15110c'); // เล็บดำแหลม
+    }
+  };
+  const arm = (far) => {
+    const sx = -0.01; const sy = -0.765;
+    const w = Math.sin(ph * 0.5 + (far ? 1.2 : 0)) * 0.02;
+    const up = far ? -0.035 : 0; const fw = far ? -0.025 : 0;
+    let ex = -0.1 + fw * 0.5; let ey = -0.68 + up * 0.5 + w * 0.5; let hx = -0.21 + fw; let hy = -0.7 + up + w;
+    ex = lerp(ex, 0.05, pw); ey = lerp(ey, -0.95, pw); hx = lerp(hx, far ? 0.0 : -0.04, pw); hy = lerp(hy, -1.09, pw);
+    ex = lerp(ex, -0.13, ps); ey = lerp(ey, -0.62, ps); hx = lerp(hx, -0.29 + fw, ps); hy = lerp(hy, -0.4, ps);
+    ex = lerp(ex, -0.1, pg); ey = lerp(ey, -0.8, pg); hx = lerp(hx, -0.1 + fw, pg); hy = lerp(hy, -0.93, pg);
+    seg(sx, sy, ex, ey, 0.065, far ? C.clothF : C.cloth); // แขนเสื้อ
+    seg(ex, ey, hx, hy, 0.05, far ? C.skinF : C.skinD); // ท่อนแขนเปื่อย
+    if (!far) seg(ex, ey, hx, hy, 0.032, C.skin);
+    ctx.fillStyle = 'rgba(123,8,8,.8)';
+    ctx.beginPath(); ctx.ellipse((ex + hx) / 2, (ey + hy) / 2, 0.022, 0.03, 0.5, 0, TAU); ctx.fill();
+    if (!far) { seg(lerp(ex, hx, 0.35), lerp(ey, hy, 0.35), lerp(ex, hx, 0.6), lerp(ey, hy, 0.6), 0.012, C.bone); } // กระดูกแขนโผล่
+    hand(hx, hy, 1.15 + 0.5 * ps, Math.atan2(hy - ey, hx - ex), far);
+  };
+  arm(true); // แขนไกลอยู่หลังลำตัว
+
+  // ลำตัว (มองข้าง): เสื้อขาดวิ่น ท้องแหกด้านหน้า เห็นซี่โครงและไส้
+  const tg = ctx.createLinearGradient(0, -0.8, 0, -0.48);
+  tg.addColorStop(0, C.cloth); tg.addColorStop(1, C.clothD);
+  ctx.fillStyle = tg;
+  ctx.beginPath();
+  ctx.moveTo(0.075, -0.77); ctx.quadraticCurveTo(0.098, -0.64, 0.07, -0.52);
+  for (let k = 0; k <= 5; k += 1) ctx.lineTo(0.07 - k * 0.028, -0.5 + (k % 2 ? 0.035 : -0.005));
+  ctx.lineTo(-0.09, -0.6); ctx.quadraticCurveTo(-0.108, -0.7, -0.075, -0.775); ctx.quadraticCurveTo(0, -0.81, 0.075, -0.77); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(110,8,8,.8)'; // คราบเลือดบนเสื้อ
+  [[0.03, -0.71, 0.035, 0.045], [0.045, -0.57, 0.025, 0.04], [-0.02, -0.53, 0.025, 0.03]].forEach(([x, y, rx, ry]) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0.3, 0, TAU); ctx.fill(); });
+  ctx.fillStyle = '#3a0505'; // แผลที่ท้อง
+  ctx.beginPath(); ctx.ellipse(-0.07, -0.62, 0.034, 0.075, 0.1, 0, TAU); ctx.fill();
+  ctx.strokeStyle = C.blood; ctx.lineWidth = 0.011;
+  ctx.beginPath(); ctx.ellipse(-0.07, -0.62, 0.034, 0.075, 0.1, 0, TAU); ctx.stroke();
+  for (let k = 0; k < 4; k += 1) seg(-0.098, -0.67 + k * 0.034, -0.045, -0.668 + k * 0.034, 0.011, C.bone);
+  const gs = Math.sin(t * 3 + ph) * 0.02;
+  ctx.strokeStyle = '#b8505f'; ctx.lineWidth = 0.022;
+  ctx.beginPath(); ctx.moveTo(-0.075, -0.58); ctx.bezierCurveTo(-0.1 + gs, -0.52, -0.06 - gs, -0.47, -0.09 + gs * 0.5, -0.4); ctx.stroke();
+  ctx.strokeStyle = '#8a2a38'; ctx.lineWidth = 0.012;
+  ctx.beginPath(); ctx.moveTo(-0.06, -0.58); ctx.bezierCurveTo(-0.04 - gs, -0.53, -0.1 + gs, -0.46, -0.05 + gs, -0.38); ctx.stroke();
+  ctx.fillStyle = C.bone; // กระดูกสันหลังโผล่ที่หลัง
+  for (let k = 0; k < 3; k += 1) { ctx.beginPath(); ctx.ellipse(0.085, -0.72 + k * 0.045, 0.012, 0.016, 0, 0, TAU); ctx.fill(); }
+
+  // หัว (มองข้าง หน้าหันไปทางซ้าย)
+  ctx.save();
+  ctx.translate(0, -0.8); ctx.rotate(-0.12 + 0.08 * Math.sin(t * 1.3 + ph) + 0.3 * pw); ctx.translate(0, 0.8); // คอห้อยโน้มไปข้างหน้า ตอนง้างเงยหน้า
+  seg(0.005, -0.78, -0.008, -0.85, 0.05, C.skinD);
+  const hc = -0.905 + Math.sin(ph * 2) * 0.004; const hx0 = -0.012;
+  const fg = ctx.createRadialGradient(hx0 - 0.02, hc - 0.02, 0.01, hx0, hc, 0.1);
+  fg.addColorStop(0, C.skinL); fg.addColorStop(0.65, C.skin); fg.addColorStop(1, C.skinD);
+  ctx.fillStyle = fg;
+  ctx.beginPath(); ctx.ellipse(hx0, hc, 0.074, 0.088, 0, 0, TAU); ctx.fill();
+  ctx.save();
+  ctx.beginPath(); ctx.ellipse(hx0, hc, 0.074, 0.088, 0, 0, TAU); ctx.clip();
+  ctx.fillStyle = '#1b1712'; // ผมหลุดเป็นหย่อมที่ท้ายทอย
+  ctx.beginPath(); ctx.ellipse(0.05, hc - 0.03, 0.045, 0.075, 0.2, 0, TAU); ctx.fill();
+  ctx.fillStyle = C.blood; // กะโหลกแตก เห็นกระดูกกับสมอง
+  ctx.beginPath(); ctx.ellipse(0.012, hc - 0.07, 0.036, 0.026, 0.3, 0, TAU); ctx.fill();
+  ctx.fillStyle = C.bone;
+  ctx.beginPath(); ctx.ellipse(0.016, hc - 0.072, 0.021, 0.013, 0.3, 0, TAU); ctx.fill();
+  ctx.strokeStyle = '#d9788a'; ctx.lineWidth = 0.004;
+  ctx.beginPath(); ctx.moveTo(0.003, hc - 0.072); ctx.quadraticCurveTo(0.014, hc - 0.08, 0.026, hc - 0.068); ctx.stroke();
+  ctx.fillStyle = 'rgba(70,50,95,.45)'; // รอยช้ำที่แก้ม
+  ctx.beginPath(); ctx.ellipse(-0.03, hc + 0.03, 0.026, 0.02, 0.4, 0, TAU); ctx.fill();
+  ctx.restore();
+  ctx.fillStyle = C.skinD; // หู
+  ctx.beginPath(); ctx.ellipse(0.025, hc + 0.008, 0.014, 0.022, 0.1, 0, TAU); ctx.fill();
+  ctx.fillStyle = C.skin; // จมูกแหว่ง ยื่นไปข้างหน้า
+  ctx.beginPath(); ctx.moveTo(-0.066, hc - 0.01); ctx.lineTo(-0.1, hc + 0.024); ctx.lineTo(-0.064, hc + 0.03); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#1c0d0d';
+  ctx.beginPath(); ctx.ellipse(-0.082, hc + 0.024, 0.008, 0.006, 0.3, 0, TAU); ctx.fill();
+  // ตา: เบ้าลึก แสงเรืองในเบ้า
+  const eyeCol = pw > 0.4 ? '#ff2a2a' : '#ffd84a';
+  const glow = 0.6 + 0.4 * Math.sin(t * 6 + ph);
+  ctx.fillStyle = '#0a0606';
+  ctx.beginPath(); ctx.ellipse(-0.04, hc - 0.014, 0.02, 0.024, -0.2, 0, TAU); ctx.fill();
+  ctx.save();
+  ctx.shadowColor = eyeCol; ctx.shadowBlur = hz * 0.05 * (0.6 + glow * 0.8);
+  ctx.fillStyle = eyeCol;
+  ctx.beginPath(); ctx.arc(-0.043, hc - 0.012, 0.0085 + 0.003 * pw, 0, TAU); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = C.blood; ctx.lineWidth = 0.011; // แผลฉีกที่แก้ม
+  ctx.beginPath(); ctx.moveTo(-0.02, hc + 0.012); ctx.lineTo(0.005, hc + 0.05); ctx.stroke();
+  ctx.strokeStyle = '#3a2a2a'; ctx.lineWidth = 0.004; // รอยเย็บ
+  for (let k = 0; k < 4; k += 1) { ctx.beginPath(); ctx.moveTo(-0.026 + k * 0.007, hc + 0.015 + k * 0.01); ctx.lineTo(-0.012 + k * 0.007, hc + 0.025 + k * 0.01); ctx.stroke(); }
+  // ปาก: อ้ากว้างไปข้างหน้า ฟันแหลมเหลือง เลือดไหลย้อย
+  const open = 0.018 + 0.03 * growl;
+  const my = hc + 0.048;
+  ctx.fillStyle = '#2a0404';
+  ctx.beginPath(); ctx.ellipse(-0.045, my + open * 0.5, 0.036, 0.012 + open * 0.9, 0.1, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#dcd2a6';
+  for (let k = 0; k < 5; k += 1) { const tx = -0.078 + k * 0.0145; ctx.beginPath(); ctx.moveTo(tx, my - 0.005); ctx.lineTo(tx + 0.0125, my - 0.005); ctx.lineTo(tx + 0.006, my + 0.014 + (k % 3) * 0.004); ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle = C.skin; // คางล่างที่ห้อยลงตามปากที่อ้า
+  ctx.beginPath(); ctx.ellipse(-0.04, my + open + 0.027, 0.046, 0.028, 0.15, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#cfc59a';
+  for (let k = 0; k < 4; k += 1) { const tx = -0.074 + k * 0.016; ctx.beginPath(); ctx.moveTo(tx, my + open + 0.006); ctx.lineTo(tx + 0.012, my + open + 0.006); ctx.lineTo(tx + 0.006, my + open - 0.012 - (k % 2) * 0.004); ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle = 'rgba(123,8,8,.85)';
+  ctx.beginPath(); ctx.ellipse(-0.04, my + open + 0.026, 0.036, 0.015, 0.15, 0, TAU); ctx.fill();
+  ctx.strokeStyle = C.bloodB; ctx.lineWidth = 0.008;
+  [-0.06, -0.035, -0.012].forEach((x) => { const len = 0.03 + (Math.sin(t * 2 + x * 40) + 1) * 0.02; ctx.beginPath(); ctx.moveTo(x, my + open + 0.024); ctx.lineTo(x, my + open + 0.024 + len); ctx.stroke(); });
+  ctx.restore();
+
+  arm(false); // แขนใกล้อยู่หน้าลำตัวและหัว (ตอนยกกันหน้าจะบังหน้า)
+
+  if (z.hit > 0.02) { // แฟลชแดงตอนโดนตี
+    ctx.globalAlpha = z.hit * 0.4;
+    ctx.fillStyle = '#ff2a2a';
+    ctx.beginPath(); ctx.ellipse(-0.012, -0.905, 0.078, 0.092, 0, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -0.65, 0.12, 0.15, 0, 0, TAU); ctx.fill();
+    ctx.strokeStyle = '#ff2a2a'; ctx.lineWidth = 0.09;
+    ctx.beginPath(); ctx.moveTo(0.01, -0.5); ctx.lineTo(0.02, -0.26); ctx.lineTo(0.03, -0.03); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// แถบเลือดและข้อความเตือนเหนือหัวซอมบี้
+function drawZombieHud(ctx, z, now) {
+  const hz = z.h;
+  if (!(hz > 24) || (z.fall || 0) > 0.05) return;
+  const k = Math.max(0.5, Math.min(1.4, hz / 600));
+  const bw = Math.max(90, hz * 0.5); const bh = 12 * k;
+  const x = z.x - bw / 2; const y = Math.max(34 * k, z.y - hz - 22 * k);
+  const fs = (n) => Math.max(10, Math.round(n * k));
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(x - 2, y - 2, bw + 4, bh + 4);
+  ctx.fillStyle = z.hpf > 0.3 ? '#c8141c' : '#ff6a00'; ctx.fillRect(x, y, bw * Math.max(0, z.hpf), bh);
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.strokeRect(x - 2, y - 2, bw + 4, bh + 4);
+  ctx.font = `600 ${fs(15)}px Kanit, sans-serif`; ctx.fillStyle = '#ffd0d0';
+  ctx.fillText(`🧟 ซอมบี้ LV ${(z.lvl || 0) + 1}`, z.x, y - 12 * k);
+  if ((z.pw || 0) > 0.5 && (z.ps || 0) < 0.5 && Math.sin(now / 70) > 0) {
+    ctx.font = `700 ${fs(38)}px Kanit, sans-serif`; ctx.fillStyle = '#ff3030';
+    ctx.fillText('ระวัง! ต่อยหรือเตะขัดจังหวะ!', z.x, y + bh + 34 * k);
+  } else if ((z.pg || 0) > 0.5) {
+    ctx.font = `600 ${fs(26)}px Kanit, sans-serif`; ctx.fillStyle = '#9fb4ff';
+    ctx.fillText('ยกแขนการ์ดหัว! ตีตัวหรือขา', z.x, y + bh + 28 * k);
+  }
+  ctx.restore();
+}
+
+// ฉากซอมบี้ของเรา: ขอบจอมืดแดงทึบ + ตัวซอมบี้ + แถบเลือด
+function drawZombieScene(ctx, s, now) {
+  const z = s.z;
+  const near = z ? Math.min(1, z.d) : 0;
+  const vg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75);
+  vg.addColorStop(0, 'rgba(10,0,0,0)');
+  vg.addColorStop(1, `rgba(40,0,0,${0.35 + near * 0.3})`);
+  ctx.fillStyle = vg;
+  ctx.fillRect(-20, -20, W + 40, H + 40);
+  if (z) { drawZombie(ctx, z, now); drawZombieHud(ctx, z, now); }
 }
 
 function step(s, dt, now) {
@@ -502,9 +962,10 @@ function step(s, dt, now) {
   const level = 1 + Math.floor((s.mode === 'real' ? s.spawned / 10 : s.hits / 8));
   s.activeMs += dt * 1000;
   // แคลอรี่ = MET × น้ำหนัก(กก.) × ชั่วโมง ; MET เพิ่มตามความถี่หมัด (4 → 9)
-  const ppm = (s.punches[0] + s.punches[1]) / Math.max(0.5, s.activeMs / 60000);
+  const ppm = (s.punches[0] + s.punches[1] + (s.kicks[0] + s.kicks[1]) * 1.3) / Math.max(0.5, s.activeMs / 60000); // เตะเผาผลาญมากกว่าหมัดเล็กน้อย
   s.kcal += (Math.min(9, 4 + ppm / 12) * s.weight * dt) / 3600;
   if (s.bot) botTick(s.bot, dt, s.cfg);
+  if (s.cfg.zombie) { stepZombie(s, dt, now); fx(s, dt); return; } // โหมดซอมบี้ไม่มีผลไม้ตก
 
   s.spawnIn -= dt * 1000 * s.speed;
   if (s.spawnIn <= 0) {
@@ -571,14 +1032,7 @@ function step(s, dt, now) {
     }
   });
 
-  s.parts.forEach((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 900 * dt; p.life -= dt; });
-  s.parts = s.parts.filter((p) => p.life > 0);
-  s.floats.forEach((f) => { f.y -= 70 * dt; f.life -= dt; });
-  s.floats = s.floats.filter((f) => f.life > 0);
-  s.rings.forEach((r) => { r.r += 520 * dt; r.life -= dt; });
-  s.rings = s.rings.filter((r) => r.life > 0);
-  s.flash = Math.max(0, s.flash - dt * 2.5);
-  s.shake = Math.max(0, s.shake - dt);
+  fx(s, dt);
 }
 
 function render(ctx, s, now) {
@@ -588,13 +1042,24 @@ function render(ctx, s, now) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
+  if (s.cfg.zombie) { // ซอมบี้อยู่หลังโครงร่างและกำปั้น เพื่อให้เรายังเห็นแขนขาตัวเอง
+    drawZombieScene(ctx, s, now);
+    s.smears.forEach((m) => {
+      ctx.globalAlpha = Math.min(0.75, m.life / m.max);
+      ctx.fillStyle = m.color;
+      ctx.beginPath(); ctx.ellipse(m.x, m.y, m.r, m.r * 1.25, 0, 0, TAU); ctx.fill();
+      ctx.fillRect(m.x - m.r * 0.18, m.y, m.r * 0.36, m.r * 1.8 * (1 - m.life / m.max) + m.r * 0.5);
+    });
+    ctx.globalAlpha = 1;
+  }
+
   // โครงร่างร่างกายที่ระบบตรวจจับได้ ให้ผู้เล่นเห็นว่าท่าทางถูกอ่านอยู่
   ctx.lineCap = 'round';
   BONES.forEach(([a, b, side]) => {
     const p = s.joints[a];
     const q = s.joints[b];
     if (!p || !q) return;
-    const hot = side != null && s.fists[side].active;
+    const hot = side != null && limbOf(s, side).active;
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
     ctx.lineTo(q.x, q.y);
@@ -663,6 +1128,17 @@ function render(ctx, s, now) {
     ctx.strokeStyle = f.active ? '#e9ffb0' : '#7cff31';
     ctx.shadowColor = '#7cff31';
     ctx.shadowBlur = 16;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  });
+  s.feet.forEach((f) => { // เท้า (โหมดซอมบี้) วงสีส้ม
+    if (!f.ok) return;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, FIST_R * 0.9, 0, Math.PI * 2);
+    ctx.lineWidth = f.active ? 8 : 4;
+    ctx.strokeStyle = f.active ? '#ffe2b0' : '#ffa534';
+    ctx.shadowColor = '#ffa534';
+    ctx.shadowBlur = 14;
     ctx.stroke();
     ctx.shadowBlur = 0;
   });
@@ -1167,13 +1643,13 @@ export default function GameMode() {
     const top = Math.max(readBest(id), s.score);
     try { localStorage.setItem(`${BEST_KEY}-${id}`, String(top)); } catch { /* storage optional */ }
     setBests((b) => ({ ...b, [id]: top }));
-    const total = s.punches[0] + s.punches[1];
+    const total = s.punches[0] + s.punches[1] + s.kicks[0] + s.kicks[1];
     const res = {
       game: id, score: s.score, hits: s.hits, bombs: s.bombs, maxCombo: s.maxCombo,
-      left: s.punches[0], right: s.punches[1], secs: Math.round(s.activeMs / 1000),
+      left: s.punches[0], right: s.punches[1], kicksL: s.kicks[0], kicksR: s.kicks[1], kills: s.kills, secs: Math.round(s.activeMs / 1000),
       kcal: s.kcal, ppm: Math.round(total / Math.max(1 / 60, s.activeMs / 60000)),
       weight: s.weight, record: s.score > 0 && s.score >= top, opp: null,
-      target: s.cfg.target || 0, escaped: !s.cfg.target || s.score >= s.cfg.target, prank: Math.floor(Math.random() * PRANKS.length),
+      target: s.cfg.target || 0, escaped: !s.cfg.target || s.score >= s.cfg.target,
     };
     if (s.mode === 'bot') {
       // ให้บอทเล่นต่อจนจบ เพื่อเทียบผลสุดท้ายอย่างยุติธรรม
@@ -1239,9 +1715,9 @@ export default function GameMode() {
       if (status === 'check') {
         // ขั้นตรวจท่าทาง: ต้องเห็นไหล่ ศอก มือทั้งสองข้าง และยืนในระยะที่เหมาะสมนิ่ง ๆ ก่อนเริ่ม
         const v = s.view;
-        const ok = v.sh && v.el && v.wr && v.dist === 'ok';
+        const ok = v.sh && v.el && v.wr && v.dist === 'ok' && (!s.cfg.zombie || v.lg); // โหมดซอมบี้ต้องเห็นเข่าด้วย เพราะต้องใช้เตะ
         s.readyMs = ok ? s.readyMs + dt * 1000 : 0;
-        const key = `${+v.sh}${+v.el}${+v.wr}${v.dist}${Math.floor(s.readyMs / 150)}`;
+        const key = `${+v.sh}${+v.el}${+v.wr}${+v.lg}${v.dist}${Math.floor(s.readyMs / 150)}`;
         if (key !== shownChk) {
           shownChk = key;
           setChk({ ...v, progress: Math.min(1, s.readyMs / READY_MS) });
@@ -1261,8 +1737,8 @@ export default function GameMode() {
         const kcal = Math.round(s.kcal * 10) / 10;
         if (kcal !== shown.kcal) syncBurn(s); // ส่งแคลที่ลดไปให้ Dashboard ทันทีที่ค่าเปลี่ยน
         if (s.score !== shown.score || s.lives !== shown.lives || s.combo !== shown.combo
-          || s.punches[0] !== shown.l || s.punches[1] !== shown.r || kcal !== shown.kcal || t !== shown.t) {
-          shown = { score: s.score, lives: s.lives, combo: s.combo, l: s.punches[0], r: s.punches[1], kcal, t };
+          || s.punches[0] !== shown.l || s.punches[1] !== shown.r || kcal !== shown.kcal || t !== shown.t || s.kills !== shown.k) {
+          shown = { score: s.score, lives: s.lives, combo: s.combo, l: s.punches[0], r: s.punches[1], kcal, t, k: s.kills };
           setHud(shown);
         }
         if (s.bot) {
@@ -1294,6 +1770,8 @@ export default function GameMode() {
   }, [status]);
 
   const game = GAMES[setup.game];
+  const zom = !!game?.zombie; // โหมดต่อยซอมบี้
+  const noun = zom ? 'ซอมบี้' : 'ผลไม้';
   const versus = setup.mode !== 'solo';
   const playing = status === 'playing';
   const camOn = status !== 'menu' && status !== 'idle';
@@ -1320,16 +1798,10 @@ export default function GameMode() {
   const diff = result ? Math.abs(result.left - result.right) : 0;
   const total = result ? result.left + result.right : 0;
   const weaker = result && total >= 10 && diff / total > 0.3 ? (result.left > result.right ? 'ขวา' : 'ซ้าย') : null;
-  const chase = game?.target ? (() => { // ข้อมูลแถบไล่ล่า: ตำแหน่งเรา ตำแหน่งปีศาจ (0 = จุดเริ่ม, 1 = ประตูหนี)
-    const p = Math.min(1, Math.max(0, hud.score / game.target));
-    const e = hud.t > 0 ? 1 - hud.t / game.time : 0;
-    const raw = -0.22 + 1.22 * e; // ปีศาจเริ่มวิ่งตามจากด้านหลังจุดเริ่ม และไปถึงประตูพอดีเมื่อหมดเวลา
-    const escaped = hud.score >= game.target;
-    const d = escaped ? 0 : Math.min(p, Math.max(0, raw));
-    return { p, d, escaped, danger: !escaped && hud.t > 0 && p - raw < 0.08, left: Math.max(0, game.target - hud.score) };
-  })() : null;
+  const goal = game?.target ? { p: Math.min(1, Math.max(0, hud.score / game.target)), done: hud.score >= game.target, left: Math.max(0, game.target - hud.score) } : null; // แถบเป้าหมายคะแนน
   const vs = result?.opp ? (result.outcome || (result.score > result.opp.score ? 'win' : result.score < result.opp.score ? 'lose' : 'draw')) : null;
-  const caught = !!result && !!game?.target && (vs ? vs === 'lose' : !result.escaped); // ใครแพ้/ชกไม่ถึงเป้า ปีศาจมาแกล้ง
+  const defeated = !!result && !!game?.target && (vs ? vs === 'lose' : !result.escaped); // แพ้ (คะแนนไม่ถึงเป้า หรือแพ้คู่แข่ง) = แพ้เลย
+  const tone = vs || (game?.target && result ? (defeated ? 'lose' : 'win') : '');
   const modeLabel = setup.mode === 'solo' ? 'เล่นคนเดียว'
     : setup.mode === 'bot' ? `แข่งกับ ${BOTS[setup.botLvl].name}`
       : `แข่งกับเพื่อน · ห้อง ${room?.code || ''} · ${room?.joined ? room.oppName : 'กำลังรอเพื่อนเข้าห้อง...'}`;
@@ -1337,7 +1809,8 @@ export default function GameMode() {
     : chk.dist === 'far' ? 'ขยับเข้าใกล้กล้องอีกนิด'
       : chk.dist === 'near' ? 'ถอยห่างจากกล้องอีกหน่อย'
         : !(chk.el && chk.wr) ? 'ให้เห็นข้อศอกและมือทั้งสองข้างด้วย'
-          : 'ดีมาก! ยืนนิ่ง ๆ สักครู่...';
+          : zom && !chk.lg ? 'ถอยหลังให้เห็นเข่าและขาทั้งสองข้างด้วย (ต้องใช้เตะ)'
+            : 'ดีมาก! ยืนนิ่ง ๆ สักครู่...';
 
   return (
     <div className="gm-page">
@@ -1385,25 +1858,18 @@ export default function GameMode() {
           </div>
         )}
 
-        {playing && chase && (
-          <div className={`gm-chase${chase.danger ? ' danger' : ''}${chase.escaped ? ' safe' : ''}`} role="status" aria-live="polite">
-            <div className="gm-chase-track">
-              <span className="gm-chase-fill" style={{ width: `${chase.p * 100}%` }} />
-              <span className="gm-chase-demon" style={{ left: `${chase.d * 100}%` }} aria-hidden="true">{chase.escaped ? '😵' : '👹'}</span>
-              <span className="gm-chase-me" style={{ left: `${chase.p * 100}%` }} aria-hidden="true">🏃</span>
-              <span className="gm-chase-door" aria-hidden="true">🚪</span>
-            </div>
-            <div className="gm-chase-msg">
-              {chase.escaped ? 'หนีรอดแล้ว! ชกต่อเพื่อทำคะแนนให้สูงขึ้น'
-                : chase.danger ? 'ปีศาจจะจับคุณแล้ว! ชกให้เร็วขึ้น!'
-                  : `ชกอีก ${chase.left} คะแนนเพื่อหนีปีศาจ`}
+        {playing && goal && (
+          <div className={`gm-goal${goal.done ? ' done' : ''}`} role="status" aria-live="polite">
+            <div className="gm-goal-track"><span className="gm-goal-fill" style={{ width: `${goal.p * 100}%` }} /></div>
+            <div className="gm-goal-msg">
+              {goal.done ? 'ถึงเป้าแล้ว! ต่อยเตะต่อเพื่อทำคะแนนให้สูงขึ้น'
+                : `เป้าหมาย ${hud.score}/${game.target} · อีก ${goal.left} คะแนน · ซอมบี้ล้มแล้ว ${hud.k} ตัว`}
             </div>
           </div>
         )}
-        {playing && chase?.danger && <div className="gm-danger" aria-hidden="true" />}
 
         {playing && (
-          <div className="gm-speed" role="group" aria-label="ความเร็วผลไม้ที่ตก (คะแนนคูณตามความเร็ว)">
+          <div className="gm-speed" role="group" aria-label={`ความเร็ว${zom ? 'ของซอมบี้' : 'ผลไม้ที่ตก'} (คะแนนคูณตามความเร็ว)`}>
             <span>ความเร็ว</span>
             {SPEEDS.map((sp, i) => (
               <button key={sp.v} type="button" className={i === speedIdx ? 'on' : ''} aria-pressed={i === speedIdx} onClick={() => changeSpeed(i)}>×{sp.v}</button>
@@ -1576,8 +2042,8 @@ export default function GameMode() {
           <div className="gm-overlay">
             <h2>พร้อมออกกำลังกายหรือยัง?</h2>
             <p className="gm-sub">{game.emoji} {game.name} · {modeLabel}</p>
-            <div className="gm-pick" role="group" aria-label="ระดับความเร็วผลไม้">
-              <span>เลือกความเร็วผลไม้ก่อนเริ่ม (ยิ่งเร็ว คะแนนคูณตามความเร็ว)</span>
+            <div className="gm-pick" role="group" aria-label={`ระดับความเร็ว${noun}`}>
+              <span>เลือกความเร็ว{noun}ก่อนเริ่ม (ยิ่งเร็ว คะแนนคูณตามความเร็ว)</span>
               <div className="gm-row">
                 {SPEEDS.map((sp, i) => (
                   <button key={sp.v} type="button" aria-pressed={i === speedIdx} className={`gm-btn small${i === speedIdx ? ' primary' : ''}`} onClick={() => changeSpeed(i)}>{sp.label} ×{sp.v}</button>
@@ -1585,17 +2051,27 @@ export default function GameMode() {
               </div>
             </div>
             <ul className="gm-rules">
-              <li>ยืนห่างกล้องประมาณ 1.5–2 เมตร ให้เห็นตั้งแต่ศีรษะถึงเอว และเห็นแขนทั้งสองข้าง</li>
-              <li>ต้องชกหมัดจริง งอแขนแล้วชกออกไปให้เหยียดตรง ผลไม้ถึงจะแตก (แค่เอามือไปโดนหรือปัดมือไม่แตก) ได้ 10 คะแนน ต่อเนื่องจะได้คะแนนคูณ</li>
-              {game.time
-                ? <li>ชกให้ได้ {game.target} คะแนนภายใน {game.time} วินาทีเพื่อหนีปีศาจ 👹 ถ้าไม่ถึง ปีศาจจะตามทันและมาแกล้ง ห้ามต่อยโดนระเบิด 💣 โดนแล้วถูกหักคะแนน 20</li>
-                : <li>ห้ามต่อยโดนระเบิด 💣 โดนแล้วเสียหัวใจ 1 ดวง (มี {MAX_LIVES} ดวง) หมดเมื่อไหร่เกมจบทันที</li>}
-              <li>ระหว่างเล่นกดปุ่ม ×0.75 – ×2 (หรือลูกศรขึ้น/ลง) เพื่อเร่งความเร็วผลไม้ ยิ่งเร็วยิ่งได้คะแนนคูณ และเผาผลาญมากขึ้น</li>
-              <li>ระบบจะนับแคลอรี่ที่เผาผลาญให้ตามน้ำหนักตัว {clampW(setup.weight)} กก. และความถี่ของหมัด</li>
-              {versus && <li>แข่งกับ{setup.mode === 'bot' ? 'บอท' : 'เพื่อน'}: ใครได้คะแนนรวมมากกว่าชนะ{setup.mode === 'real' ? ' ผลไม้และระเบิดเรียงเหมือนกันทั้งสองฝั่ง' : ''}{game.target ? ' ส่วนคนแพ้จะโดนปีศาจแกล้ง 😈' : ''}</li>}
+              <li>{zom ? 'ยืนห่างกล้องประมาณ 2–2.5 เมตร ให้เห็นตั้งแต่ศีรษะถึงเข่าทั้งสองข้าง และเห็นแขนทั้งสองข้าง (ต้องเห็นขาเพื่อใช้เตะ)' : 'ยืนห่างกล้องประมาณ 1.5–2 เมตร ให้เห็นตั้งแต่ศีรษะถึงเอว และเห็นแขนทั้งสองข้าง'}</li>
+              {zom ? (
+                <>
+                  <li>ซอมบี้ยืนอยู่ฝั่งขวาของจอ ให้คุณยืนฝั่งซ้าย แล้วชกหรือเตะไปทางซอมบี้</li>
+                  <li>ซอมบี้ตัวเท่าคนจริงจะเดินเข้าหาคุณ ต้องชกหมัดจริงให้แขนเหยียดสุด หรือเตะให้ขาเหยียดออก ถึงจะโดน (แค่เอามือไปแตะตัวมันไม่นับ) เมื่อมันเดินเข้ามาใกล้พอแล้วเท่านั้น</li>
+                  <li>ตีหัวได้คะแนนและความเสียหายมากกว่า เตะแรงกว่าหมัด แต่ถ้าซอมบี้ยกแขนการ์ดหัว ให้ตีที่ตัวหรือขาแทน</li>
+                  <li>เมื่อซอมบี้ยกแขนง้างขึ้นสูง ให้รีบต่อยหรือเตะให้ทันเพื่อขัดจังหวะ ถ้าไม่ทันมันจะตะปบโดนคุณและถูกหักคะแนน {ZOM.PENALTY}</li>
+                  <li>ทำให้ได้ {game.target} คะแนนภายใน {game.time} วินาที ถ้าไม่ถึงก็แพ้เลย</li>
+                </>
+              ) : (
+                <>
+                  <li>ต้องชกหมัดจริง งอแขนแล้วชกออกไปให้เหยียดตรง ผลไม้ถึงจะแตก (แค่เอามือไปโดนหรือปัดมือไม่แตก) ได้ 10 คะแนน ต่อเนื่องจะได้คะแนนคูณ</li>
+                  <li>ห้ามต่อยโดนระเบิด 💣 โดนแล้วเสียหัวใจ 1 ดวง (มี {MAX_LIVES} ดวง) หมดเมื่อไหร่เกมจบทันที</li>
+                </>
+              )}
+              <li>ระหว่างเล่นกดปุ่ม ×0.75 – ×2 (หรือลูกศรขึ้น/ลง) เพื่อเร่งความเร็ว{noun} ยิ่งเร็วยิ่งได้คะแนนคูณ และเผาผลาญมากขึ้น</li>
+              <li>ระบบจะนับแคลอรี่ที่เผาผลาญให้ตามน้ำหนักตัว {clampW(setup.weight)} กก. และความถี่ของหมัด{zom ? 'และการเตะ' : ''}</li>
+              {versus && <li>แข่งกับ{setup.mode === 'bot' ? 'บอท' : 'เพื่อน'}: ใครได้คะแนนรวมมากกว่าชนะ{setup.mode === 'real' ? (zom ? ' ซอมบี้ของทั้งสองฝั่งมาแบบเดียวกัน' : ' ผลไม้และระเบิดเรียงเหมือนกันทั้งสองฝั่ง') : ''}</li>}
               {setup.mode === 'real' && !game.time && <li>ถ้าใครหัวใจหมดก่อน คนนั้นแพ้ทันที เกมจบ และอีกฝั่งชนะเลยโดยไม่ต้องรอ</li>}
-              <li>ก้าวเท้าซ้าย-ขวาตามตำแหน่งผลไม้ และสลับแขนให้สมดุลกัน</li>
-              <li>วอร์มไหล่และแขนก่อนเล่น หากรู้สึกเจ็บหรือเวียนศีรษะให้หยุดพักทันที</li>
+              <li>{zom ? 'ขยับตัวและก้าวเท้าให้ตรงกับตำแหน่งซอมบี้ที่เดินส่ายไปมาเล็กน้อย สลับแขนและขาให้สมดุลกัน' : 'ก้าวเท้าซ้าย-ขวาตามตำแหน่งผลไม้ และสลับแขนให้สมดุลกัน'}</li>
+              <li>วอร์มไหล่ แขน และขาก่อนเล่น หากรู้สึกเจ็บหรือเวียนศีรษะให้หยุดพักทันที</li>
               <li>ภาพจากกล้องถูกประมวลผลบนเครื่องของคุณเท่านั้น{setup.mode === 'real' ? ' แต่ตอนแข่งกับเพื่อนตัวจริง ภาพกล้องของคุณจะถูกส่งตรงไปให้เพื่อนในห้องดูด้วย (และคุณก็เห็นกล้องเพื่อน)' : ''}</li>
             </ul>
             {message && <p className="gm-msg" role="alert">{message}</p>}
@@ -1615,6 +2091,7 @@ export default function GameMode() {
               <span className={`gm-chip${chk.sh ? ' ok' : ''}`}>{chk.sh ? '✓' : '○'} ไหล่</span>
               <span className={`gm-chip${chk.el ? ' ok' : ''}`}>{chk.el ? '✓' : '○'} ข้อศอก</span>
               <span className={`gm-chip${chk.wr ? ' ok' : ''}`}>{chk.wr ? '✓' : '○'} มือ</span>
+              {zom && <span className={`gm-chip${chk.lg ? ' ok' : ''}`}>{chk.lg ? '✓' : '○'} เข่า/ขา</span>}
               <span className={`gm-chip${chk.dist === 'ok' ? ' ok' : ''}`}>{chk.dist === 'ok' ? '✓' : '○'} ระยะห่าง</span>
             </div>
             <div className="gm-bar" aria-hidden="true"><i style={{ width: `${Math.round(chk.progress * 100)}%` }} /></div>
@@ -1632,7 +2109,7 @@ export default function GameMode() {
         )}
 
         {status === 'countdown' && (
-          <div className="gm-overlay dim"><div className="gm-count" key={count}>{count}</div><p>ยกการ์ดขึ้น แล้วชกให้สุดแขน!</p></div>
+          <div className="gm-overlay dim"><div className="gm-count" key={count}>{count}</div><p>{zom ? 'ซอมบี้กำลังมา! ชกให้สุดแขน เตะให้สุดขา!' : 'ยกการ์ดขึ้น แล้วชกให้สุดแขน!'}</p></div>
         )}
 
         {status === 'waitend' && result && (
@@ -1646,25 +2123,10 @@ export default function GameMode() {
 
         {status === 'over' && result && (
           <div className="gm-overlay gm-overlay-result">
-            {caught && (
-              <div className="gm-demons" aria-hidden="true">
-                {['👹', '😈', '👺', '😈', '👹', '👺'].map((d, i) => <span key={i} style={{ '--i': i }}>{d}</span>)}
-              </div>
-            )}
-            <div className={`gm-panel${vs ? ` ${vs}` : ''}${caught ? ' caught' : ''}`}>
-              <h2 className="gm-result-title">{game.target && !vs ? (result.escaped ? '🚪 หนีปีศาจสำเร็จ!' : '👹 ปีศาจจับได้แล้ว!') : vs === 'win' ? '🏆 คุณชนะ!' : vs === 'lose' ? 'คุณแพ้ในรอบนี้' : vs === 'draw' ? '🤝 เสมอกัน' : 'จบเกม'}</h2>
-              {game.target > 0 && (
-                caught ? (
-                  <div className="gm-prank" role="status">
-                    <span className="gm-prank-ico">{PRANKS[result.prank % PRANKS.length].ico}</span>
-                    <div><b>😈 ปีศาจมาแกล้งแล้ว!</b><small>{PRANKS[result.prank % PRANKS.length].text}{!vs ? ` (ทำได้ ${result.score} จากเป้า ${result.target})` : ''}</small></div>
-                  </div>
-                ) : (
-                  <div className="gm-prank safe" role="status">
-                    <span className="gm-prank-ico">🛡️</span>
-                    <div><b>ปีศาจตามไม่ทัน</b><small>{vs ? 'คุณรอดจากการถูกแกล้งในรอบนี้' : `ทำได้ ${result.score} คะแนน ผ่านเป้า ${result.target}`}</small></div>
-                  </div>
-                )
+            <div className={`gm-panel${tone ? ` ${tone}` : ''}`}>
+              <h2 className="gm-result-title">{game.target && !vs ? (result.escaped ? '💪 ปราบซอมบี้สำเร็จ!' : '💀 แพ้แล้ว!') : vs === 'win' ? '🏆 คุณชนะ!' : vs === 'lose' ? 'คุณแพ้ในรอบนี้' : vs === 'draw' ? '🤝 เสมอกัน' : 'จบเกม'}</h2>
+              {game.target > 0 && !vs && (
+                <p className="gm-sub">{result.escaped ? `ทำได้ ${result.score} คะแนน ผ่านเป้า ${result.target}` : `ทำได้ ${result.score} คะแนน ไม่ถึงเป้า ${result.target}`}</p>
               )}
               <div className="gm-final">{result.score}</div>
               <p className="gm-final-label">คะแนนของคุณ</p>
@@ -1679,12 +2141,15 @@ export default function GameMode() {
               <p className="gm-sub">{result.record ? '🎉 สถิติใหม่!' : `สถิติสูงสุด ${bests[result.game] || 0}`}</p>
               <div className="gm-stats">
                 <div className="hot"><b>{result.kcal.toFixed(1)}</b><span>แคลอรี่ที่เผาผลาญ (kcal)</span></div>
-                <div><b>{result.hits}</b><span>ผลไม้ที่ต่อยแตก</span></div>
+                <div><b>{result.hits}</b><span>{result.game === 'time' ? 'ครั้งที่ต่อย/เตะโดนซอมบี้' : 'ผลไม้ที่ต่อยแตก'}</span></div>
                 <div><b>{result.left}</b><span>หมัดซ้าย</span></div>
                 <div><b>{result.right}</b><span>หมัดขวา</span></div>
+                {result.game === 'time' && <div><b>{result.kicksL}</b><span>เตะซ้าย</span></div>}
+                {result.game === 'time' && <div><b>{result.kicksR}</b><span>เตะขวา</span></div>}
+                {result.game === 'time' && <div><b>{result.kills}</b><span>ซอมบี้ที่ล้ม</span></div>}
                 <div><b>{result.ppm}</b><span>หมัดต่อนาที</span></div>
                 <div><b>{result.maxCombo}</b><span>คอมโบสูงสุด</span></div>
-                <div><b>{result.bombs}</b><span>โดนระเบิด</span></div>
+                <div><b>{result.bombs}</b><span>{result.game === 'time' ? 'โดนซอมบี้ตะปบ' : 'โดนระเบิด'}</span></div>
                 <div><b>{result.secs}</b><span>วินาทีที่ออกกำลัง</span></div>
               </div>
               {result.kcal > 0 && <p className="gm-note">✓ ส่งเข้าหน้าหลักแล้ว · วันนี้ลดไปรวม {energy.burned.toFixed(1)} kcal · {energy.over > 0 ? `ยังเกินเป้าหมาย ${energy.over.toLocaleString()}` : `เหลือพลังงานอีก ${energy.remaining.toLocaleString()}`} kcal</p>}
@@ -1838,32 +2303,11 @@ const css = `
 .gm-card-time:hover { border-color:#ff6b81; box-shadow:0 16px 38px rgba(0,0,0,.45), 0 0 26px rgba(255,71,109,.28); }
 .gm-card-time .gm-card-ico { animation:gm-demon-bob 2.4s ease-in-out infinite; border-color:rgba(255,107,129,.5); box-shadow:0 0 20px rgba(255,71,109,.3); }
 @keyframes gm-demon-bob { 0%,100% { transform:translateY(0) rotate(-4deg); } 50% { transform:translateY(-4px) rotate(4deg); } }
-.gm-chase { position:absolute; left:50%; top:86px; transform:translateX(-50%); width:min(520px,calc(100% - 28px)); display:flex; flex-direction:column; align-items:stretch; gap:6px; pointer-events:none; }
-.gm-chase-track { position:relative; height:16px; margin:10px 18px 0 18px; border-radius:99px; background:rgba(2,8,10,.72); border:1px solid rgba(255,255,255,.22); box-shadow:0 2px 10px rgba(0,0,0,.5); }
-.gm-chase-fill { position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:linear-gradient(90deg,#ffa534,#ffd24a 60%,#baff3e); box-shadow:0 0 12px rgba(198,255,56,.5); transition:width .35s ease; }
-.gm-chase-demon, .gm-chase-me, .gm-chase-door { position:absolute; top:50%; transform:translate(-50%,-50%); font-size:24px; line-height:1; filter:drop-shadow(0 2px 4px rgba(0,0,0,.8)); }
-.gm-chase-demon { transition:left 1s linear; z-index:1; }
-.gm-chase-me { transition:left .35s ease; z-index:2; }
-.gm-chase-door { left:100%; font-size:26px; }
-.gm-chase-msg { align-self:center; padding:3px 14px; border-radius:99px; background:rgba(2,8,10,.72); font-size:13px; color:#f0faf6; text-shadow:0 1px 6px rgba(0,0,0,.9); }
-.gm-chase.danger .gm-chase-msg { color:#ffd0d8; background:rgba(120,10,30,.8); }
-.gm-chase.danger .gm-chase-demon { animation:gm-demon-shake .25s linear infinite; }
-.gm-chase.safe .gm-chase-msg { color:#e9ffb0; }
-@keyframes gm-demon-shake { 0%,100% { transform:translate(-50%,-50%) rotate(-8deg); } 50% { transform:translate(-50%,-62%) rotate(8deg); } }
-.gm-danger { position:absolute; inset:0; pointer-events:none; background:radial-gradient(ellipse at 50% 50%,transparent 55%,rgba(255,30,70,.4) 100%); animation:gm-danger-pulse .9s ease-in-out infinite; }
-@keyframes gm-danger-pulse { 0%,100% { opacity:.35; } 50% { opacity:1; } }
-.gm-prank { display:flex; align-items:center; gap:12px; width:min(480px,100%); padding:12px 16px; border:1px solid rgba(255,107,129,.65); border-radius:16px; background:linear-gradient(100deg,rgba(255,71,109,.22),rgba(120,20,60,.18)); text-align:left; box-shadow:0 0 26px rgba(255,71,109,.2); }
-.gm-prank > div { display:flex; flex-direction:column; gap:2px; }
-.gm-prank b { font:600 16px 'Kanit',sans-serif; color:#ffd0d8; }
-.gm-prank small { font-size:13.5px; line-height:1.45; color:#fff1f4; }
-.gm-prank-ico { flex:none; font-size:38px; line-height:1; animation:gm-demon-bob 1.4s ease-in-out infinite; }
-.gm-prank.safe { border-color:rgba(124,255,49,.55); background:linear-gradient(100deg,rgba(124,255,49,.16),rgba(20,80,30,.14)); box-shadow:0 0 26px rgba(124,255,49,.14); }
-.gm-prank.safe b { color:#c6ff38; }
-.gm-panel.caught { animation:gm-caught-shake .6s ease-out 1; border-color:rgba(255,107,129,.75); }
-@keyframes gm-caught-shake { 0%,100% { transform:translateX(0); } 20% { transform:translateX(-10px); } 40% { transform:translateX(9px); } 60% { transform:translateX(-6px); } 80% { transform:translateX(4px); } }
-.gm-demons { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
-.gm-demons span { position:absolute; bottom:-60px; left:calc(8% + var(--i) * 16%); font-size:clamp(34px,7vmin,60px); opacity:0; animation:gm-demon-rise 3.2s ease-out calc(var(--i) * .25s) infinite; }
-@keyframes gm-demon-rise { 0% { transform:translateY(0) rotate(-12deg); opacity:0; } 15% { opacity:.9; } 100% { transform:translateY(-105vh) rotate(14deg); opacity:0; } }
+.gm-goal { position:absolute; left:50%; top:86px; transform:translateX(-50%); width:min(520px,calc(100% - 28px)); display:flex; flex-direction:column; align-items:stretch; gap:6px; pointer-events:none; }
+.gm-goal-track { position:relative; height:12px; margin:10px 18px 0 18px; border-radius:99px; overflow:hidden; background:rgba(2,8,10,.72); border:1px solid rgba(255,255,255,.22); box-shadow:0 2px 10px rgba(0,0,0,.5); }
+.gm-goal-fill { position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:linear-gradient(90deg,#ffa534,#ffd24a 60%,#baff3e); box-shadow:0 0 12px rgba(198,255,56,.5); transition:width .35s ease; }
+.gm-goal-msg { align-self:center; padding:3px 14px; border-radius:99px; background:rgba(2,8,10,.72); font-size:13px; color:#f0faf6; text-shadow:0 1px 6px rgba(0,0,0,.9); }
+.gm-goal.done .gm-goal-msg { color:#e9ffb0; }
 @media (max-width:900px), (orientation:portrait) {
   .gm-menu { grid-template-columns:1fr; padding:16px 14px; }
   .gm-join { order:-1; padding:18px 16px 16px; }
@@ -1992,8 +2436,8 @@ const css = `
   .gm-burn b { font-size:16px; }
   .gm-energy { grid-template-columns:repeat(2,1fr); }
   .gm-top { margin:6px 6px 8px; padding:8px 10px; }
-  .gm-chase { top:70px; }
-  .gm-chase-msg { font-size:11.5px; }
+  .gm-goal { top:70px; }
+  .gm-goal-msg { font-size:11.5px; }
   .gm-card-ico { width:60px; height:60px; font-size:32px; }
   .gm-day { font-size:11px; }
   .gm-score { font-size:34px; }
@@ -2007,5 +2451,5 @@ const css = `
   .gm-check { padding:20px 12px 12px; gap:8px; }
   .gm-check h2 { font-size:18px; }
 }
-@media (prefers-reduced-motion: reduce) { .gm-count, .gm-toast, .gm-danger, .gm-demons span, .gm-card-ico, .gm-prank-ico, .gm-panel.caught, .gm-chase-demon { animation:none !important; } .gm-card, .gm-xp i, .gm-energy > div { transition:none; } .gm-btn, .gm-back, .gm-end, .gm-bar i, .gm-chip { transition:none; } }
+@media (prefers-reduced-motion: reduce) { .gm-count, .gm-toast, .gm-card-ico { animation:none !important; } .gm-card, .gm-xp i, .gm-energy > div { transition:none; } .gm-btn, .gm-back, .gm-end, .gm-bar i, .gm-chip { transition:none; } }
 `;
