@@ -2044,6 +2044,7 @@ html[data-theme="light"] .footer-brand { color:#20382d }
 .ex-tips ul { margin:0; padding:0; list-style:none; display:grid; gap:7px; }
 .ex-tips li { position:relative; padding-left:16px; color:var(--muted); font-size:12px; line-height:1.55; text-align:left; }
 .ex-tips ul { text-align:left; justify-items:stretch; }
+.ex-tips .ex-card-head { justify-content:center; text-align:center; }
 .ex-tips li:before { content:''; position:absolute; left:2px; top:.62em; width:6px; height:6px; border-radius:50%; background:#6eff35; box-shadow:0 0 8px rgba(110,255,53,.6); }
 
 @media (max-width:1200px) {
