@@ -56,6 +56,8 @@ const withTimeout = (p, ms, label) => Promise.race([
 // ขอสตรีมกล้อง: ลองเงื่อนไขที่อยากได้ก่อน ถ้าไม่ผ่านค่อยลดเงื่อนไขลงจนเหลือ video: true (เหมือนหน้าออกกำลังกาย)
 async function getCameraStream(isPortrait) {
   const tries = [
+    // จำกัดความละเอียด 640x480 และ 30fps: พอสำหรับตรวจท่าทาง และเบาพอให้ iPad/โน้ตบุ๊กส่งภาพหากันได้ลื่น (เดิมไม่จำกัด เบราว์เซอร์บางตัวเลือก 720p/1080p)
+    { video: { facingMode: 'user', width: { ideal: isPortrait ? 480 : 640 }, height: { ideal: isPortrait ? 640 : 480 }, frameRate: { ideal: 30, max: 30 } }, audio: false },
     { video: { facingMode: 'user', aspectRatio: { ideal: isPortrait ? 3 / 4 : 4 / 3 } }, audio: false },
     { video: { facingMode: 'user' }, audio: false },
     { video: true, audio: false },
@@ -135,13 +137,33 @@ const CHK0 = { sh: false, el: false, wr: false, lg: false, dist: 'none', progres
 const r3 = (n) => Math.round(n * 1000) / 1000;
 const JI = Object.fromEntries(JOINTS.map((id, i) => [id, i]));
 // ---- เชื่อมกล้องหากันแบบตรงระหว่างเครื่อง (WebRTC) โดยใช้ Firestore แลกข้อมูลจับคู่ ----
+// TURN ของตัวเอง (แนะนำ): ตั้งใน .env  VITE_TURN_URLS=turn:host:3478,turns:host:443?transport=tcp  VITE_TURN_USER=...  VITE_TURN_PASS=...
+// (ถ้าใช้ Create React App ให้เปลี่ยนเป็น process.env.REACT_APP_TURN_URLS ฯลฯ) รีเลย์สาธารณะด้านล่างเป็นแค่ตัวสำรอง มักช้า/ถูกจำกัดโควตา ทำให้ภาพกล้องไม่มาหรือกระตุกเมื่อคนละเครือข่าย
+const ENV = (typeof import.meta !== 'undefined' && import.meta.env) || {};
+const TURN_URLS = (ENV.VITE_TURN_URLS || '').split(',').map((u) => u.trim()).filter(Boolean);
 const ICE = {
+  iceCandidatePoolSize: 4,
+  bundlePolicy: 'max-bundle',
   iceServers: [
     { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-    // รีเลย์สาธารณะสำหรับทดสอบ ใช้เมื่อสองเครื่องเชื่อมตรงกันไม่ได้ (เช่นคนละเครือข่ายมือถือ) ถ้าจะใช้งานจริงจัง ควรเปลี่ยนเป็น TURN ของคุณเอง
+    ...(TURN_URLS.length ? [{ urls: TURN_URLS, username: ENV.VITE_TURN_USER, credential: ENV.VITE_TURN_PASS }] : []),
     { urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'], username: 'openrelayproject', credential: 'openrelayproject' },
   ],
 };
+// จำกัดบิตเรตวิดีโอที่ส่ง และให้รักษาจำนวนเฟรมก่อนความคมชัด (เกมต่อยต้องลื่นมากกว่าคม) ช่วยให้ iPad/มือถือที่เน็ตหรือซีพียูไม่แรงไม่กระตุก
+async function tuneSenders(pc) {
+  try {
+    await Promise.all(pc.getSenders().filter((sd) => sd.track?.kind === 'video').map(async (sd) => {
+      try { sd.track.contentHint = 'motion'; } catch { /* บางเบราว์เซอร์ไม่รองรับ */ }
+      const p = sd.getParameters();
+      if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+      p.encodings[0].maxBitrate = 600000;
+      p.encodings[0].maxFramerate = 30;
+      p.degradationPreference = 'maintain-framerate';
+      await sd.setParameters(p);
+    }));
+  } catch (e) { console.warn('tune senders', e); }
+}
 const rtcDoc = (code) => doc(getFirestore(auth.app), ROOMS, `${code}-rtc`);
 const waitIce = (pc) => new Promise((resolve) => { // รอเก็บเส้นทางเชื่อมต่อครบ แล้วส่งไปทีเดียว
   if (pc.iceGatheringState === 'complete') { resolve(); return; }
@@ -1231,6 +1253,7 @@ export default function GameMode() {
   const pcRef = useRef(null);
   const dcRef = useRef(null);
   const pcStream = useRef(null);
+  const remoteStream = useRef(null); // สตรีมกล้องของเพื่อนล่าสุด (ไว้ผูกกลับเข้า <video> ถ้าหลุด)
   const rtcUnsub = useRef(null);
   const rtcMyId = useRef('');
   const rtcLastId = useRef('');
@@ -1347,6 +1370,7 @@ export default function GameMode() {
     dcRef.current = null;
     pcRef.current = null;
     pcStream.current = null;
+    remoteStream.current = null;
     if (remoteRef.current) remoteRef.current.srcObject = null;
   };
 
@@ -1357,15 +1381,18 @@ export default function GameMode() {
     pcStream.current = streamRef.current;
     streamRef.current?.getTracks().forEach((t) => pc.addTrack(t, streamRef.current));
     pc.ontrack = (ev) => {
+      const stream = ev.streams[0] || new MediaStream([ev.track]);
+      remoteStream.current = stream;
       const v = remoteRef.current;
       if (!v) return;
-      v.srcObject = ev.streams[0] || new MediaStream([ev.track]);
+      if (v.srcObject !== stream) v.srcObject = stream;
       v.play?.().catch(() => {});
+      ev.track.onunmute = () => v.play?.().catch(() => {}); // Safari/iPad: เฟรมมาหลังจากแทร็กเริ่มแล้ว ต้องสั่งเล่นซ้ำ
     };
     pc.onconnectionstatechange = () => {
       if (pcRef.current !== pc) return; // เป็นการเชื่อมต่อรอบเก่า
       const st = pc.connectionState;
-      if (st === 'connected') { rtcRetry.current = 0; return; }
+      if (st === 'connected') { rtcRetry.current = 0; tuneSenders(pc); return; }
       if ((st === 'failed' || st === 'disconnected') && roomMeta.current?.isHost && rtcRetry.current < 4) {
         setTimeout(() => { // เจ้าของห้องส่งข้อเสนอใหม่ (id ใหม่) ฝั่งเพื่อนจะตอบกลับเองอัตโนมัติ
           if (pcRef.current !== pc || pc.connectionState === 'connected' || !roomMeta.current?.isHost) return;
@@ -1391,8 +1418,9 @@ export default function GameMode() {
     const id = String(Date.now());
     rtcMyId.current = id;
     const pc = makePeer();
-    wireDc(pc.createDataChannel('live', { ordered: false, maxRetransmits: 0 }));
+    wireDc(pc.createDataChannel('live', { ordered: false, maxPacketLifeTime: 150 })); // ข้อความ >1KB ถูกแบ่งเป็นหลายแพ็กเก็ต ถ้าไม่ให้ส่งซ้ำเลย (maxRetransmits:0) แพ็กเก็ตเดียวหายก็ทิ้งทั้งชุด ทำให้โครงร่างกระตุกบน Wi-Fi/iPad
     await pc.setLocalDescription(await pc.createOffer());
+    tuneSenders(pc);
     await waitIce(pc);
     if (pcRef.current !== pc) return; // เปลี่ยนรอบไปแล้ว
     await setDoc(rtcDoc(m.code), { id, offer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp }, answer: null });
@@ -1407,6 +1435,7 @@ export default function GameMode() {
       pc.ondatachannel = (ev) => wireDc(ev.channel);
       await pc.setRemoteDescription(d.offer);
       await pc.setLocalDescription(await pc.createAnswer());
+      tuneSenders(pc);
       await waitIce(pc);
       if (pcRef.current !== pc) return;
       await updateDoc(rtcDoc(m.code), { answer: { id: d.id, type: pc.localDescription.type, sdp: pc.localDescription.sdp } });
@@ -1847,7 +1876,7 @@ export default function GameMode() {
         if (s.mode === 'real') {
           const dc = dcRef.current;
           if (dc && dc.readyState === 'open') {
-            if (now - s.dcAt > 50) { s.dcAt = now; try { dc.send(JSON.stringify(packLive(s))); } catch { /* ส่งไม่ได้ก็ข้าม */ } }
+            if (now - s.dcAt > 66 && dc.bufferedAmount < 16384) { s.dcAt = now; try { dc.send(JSON.stringify(packLive(s))); } catch { /* ส่งไม่ได้ก็ข้าม */ } } // ~15 ครั้ง/วินาที และไม่ส่งซ้อนถ้าคิวค้าง (กันภาพเพื่อนหน่วงสะสม)
           } else if (roomMeta.current && now - s.liveAt > LIVE_MS) {
             s.liveAt = now;
             setDoc(liveDoc(roomMeta.current.code, roomMeta.current.uid), packLive(s)).catch((e) => { liveErr = e?.code || 'error'; console.warn('live send', e); });
@@ -2473,7 +2502,7 @@ const css = `
 .gm-bot-ico { font-size:clamp(48px,14vmin,96px); line-height:1; }
 .gm-botcard b { font:600 clamp(16px,3.5vmin,24px) 'Kanit',sans-serif; }
 .gm-wrap.split .gm-speed span, .gm-wrap.split .gm-lr { display:none; }
-.gm-rvideo { position:fixed; left:0; top:0; width:4px; height:4px; opacity:.01; pointer-events:none; z-index:-1; }
+.gm-rvideo { position:fixed; left:0; bottom:0; width:160px; height:120px; object-fit:cover; opacity:.02; pointer-events:none; z-index:-1; } /* iOS Safari ไม่ถอดรหัสวิดีโอที่เล็กจิ๋ว/อยู่นอกจอ จึงใช้ขนาดจริงแต่โปร่งใส */
 .gm-btn.small { min-height:38px; padding:0 14px; font-size:13px; }
 .gm-pick { display:flex; flex-direction:column; align-items:center; gap:8px; font-size:13px; color:#c4d6da; }
 .gm-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; width:min(620px,100%); }
