@@ -332,13 +332,25 @@ export default function Register() {
           align-items: flex-start;
         }
 
+        /* ช่องโลโก้สูงคงที่ -> โลโก้ขยายขึ้นด้านบนได้โดยไม่ดันเนื้อหาด้านล่างลง */
+        .logo-slot {
+          position: relative;
+          flex: 0 0 auto;
+          width: 100%;
+          height: 66px;
+          margin: 0 0 14px;
+        }
+
         .brand-mark {
-          width: min(230px, 72%);
-          max-height: 90px;
+          position: absolute;
+          left: 0;
+          bottom: 0;
+          width: 100%;
+          max-width: 400px;
           height: auto;
           object-fit: contain;
-          object-position: left center;
-          margin: 0 0 14px;
+          object-position: left bottom;
+          margin: 0;
           animation: logo-in .9s .1s cubic-bezier(.2,.8,.2,1) both, logo-float 5s 1s ease-in-out infinite;
         }
         @keyframes logo-in {
@@ -888,7 +900,8 @@ export default function Register() {
           .secure-note { margin-top: 8px; }
           .mobile-brand { width: 105px; margin-bottom: 8px; }
           .intro-panel { padding-top: 20px; padding-bottom: 20px; }
-          .brand-mark { width: min(190px, 70%); margin-bottom: 10px; }
+          .logo-slot { height: 52px; margin-bottom: 10px; }
+          .brand-mark { max-width: 310px; }
           .intro-panel h1 { font-size: 33px; }
           .intro-copy { font-size: 13px; line-height: 1.6; margin-top: 8px; }
           .feature-list { margin-top: 14px; gap: 7px; }
@@ -948,12 +961,14 @@ export default function Register() {
           <div className="register-layout">
             <section className="intro-panel" aria-label="ข้อมูลระบบ">
               <div className="intro-content">
-                <img
-                  src="/fittrack-hero-logo.png"
-                  alt="FITTRACK"
-                  className="brand-mark"
-                  draggable="false"
-                />
+                <div className="logo-slot">
+                  <img
+                    src="/fittrack-hero-logo.png"
+                    alt="FITTRACK"
+                    className="brand-mark"
+                    draggable="false"
+                  />
+                </div>
 
                 <div className="eyebrow">
                   <i />
