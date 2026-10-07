@@ -1,8 +1,9 @@
 import React, { useEffect, useLayoutEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, where } from "firebase/firestore";
 import { auth, db } from "../firebase";
+import { readEnergy, subscribeEnergy } from "../calorieSync";
 
 // แคชชื่อผู้ใช้ไว้ เพื่อให้เปลี่ยนหน้าแล้วชื่อขึ้นทันที ไม่กระพริบเป็นชื่ออื่น (key เดียวกับทุกหน้า)
 const NAME_CACHE_KEY = "fittrack-user-name";
@@ -39,6 +40,43 @@ const getSavedDailyCalories = () => {
     return 0;
   }
 };
+
+// ---------- ข้อมูลสำหรับการแจ้งเตือน (ชุดเดียวกับหน้า Dashboard / หน้าเลือกท่า) ----------
+const readHealthCache = () => {
+  try {
+    const raw = localStorage.getItem(HEALTH_CACHE_KEY);
+    const data = raw ? JSON.parse(raw) : null;
+    return data && typeof data === "object" ? data : null;
+  } catch {
+    return null;
+  }
+};
+
+const WORKOUT_CACHE_KEY = "fittrack-history-workouts";
+const CAL_PER_REP = { squat: 0.32, jumping_jack: 0.2, high_knees: 0.15, punches: 0.25 };
+const workoutKcal = (w) => (
+  w.calories !== undefined ? Number(w.calories) || 0 : (Number(w.count) || 0) * (CAL_PER_REP[w.exercise] ?? 0.32)
+);
+const workoutTime = (t) => {
+  if (!t) return null;
+  if (typeof t.toDate === "function") return t.toDate().getTime();
+  if (typeof t.__ts === "number") return t.__ts;
+  if (typeof t.seconds === "number") return t.seconds * 1000;
+  return null;
+};
+const toWorkoutLog = (list) => list
+  .map((w) => ({ t: workoutTime(w.completedAt), kcal: workoutKcal(w) }))
+  .filter((x) => x.t);
+const readWorkoutLog = () => {
+  try {
+    const raw = localStorage.getItem(WORKOUT_CACHE_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    return Array.isArray(list) ? toWorkoutLog(list) : [];
+  } catch {
+    return [];
+  }
+};
+const fmtBurn = (n) => (Math.round((n || 0) * 10) / 10).toLocaleString();
 
 // ======================================================================
 // แคตตาล็อกท่าออกกำลังกาย — ชุดเดียวกับหน้าเลือกท่า (ExerciseSelect)
@@ -214,6 +252,17 @@ export default function ExerciseSetting() {
   const [displayName, setDisplayName] = useState(getInitialName);
   const [userInitial, setUserInitial] = useState(() => getInitialName().charAt(0).toUpperCase());
 
+  const [weight, setWeight] = useState(() => readHealthCache()?.weight ?? "");
+  const [goalWeight, setGoalWeight] = useState("");
+  const [tdeeResult] = useState(() => {
+    const v = Number(readHealthCache()?.tdee);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  });
+  // ยอดเผาผลาญจากโหมดเกม (calorieSync) และเซสชันออกกำลังกายที่บันทึกไว้
+  const [energy, setEnergy] = useState(() => readEnergy());
+  const [workoutLog, setWorkoutLog] = useState(readWorkoutLog);
+  useEffect(() => subscribeEnergy(setEnergy), []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (!currentUser) { clearCachedName(); return; }
@@ -224,8 +273,22 @@ export default function ExerciseSetting() {
         setCachedName(name);
         setDisplayName(name);
         setUserInitial(name.charAt(0).toUpperCase());
+        if (data.weight) setWeight(data.weight);
+        if (data.goalWeight || data.targetWeight) setGoalWeight(String(data.goalWeight || data.targetWeight));
       } catch (err) {
         console.error("โหลดข้อมูลโปรไฟล์ไม่สำเร็จ:", err);
+      }
+
+      try {
+        const snapshot = await getDocs(query(
+          collection(db, "workouts"),
+          where("userId", "==", currentUser.uid),
+          orderBy("completedAt", "desc"),
+          limit(200)
+        ));
+        setWorkoutLog(toWorkoutLog(snapshot.docs.map((item) => item.data())));
+      } catch (err) {
+        console.error("โหลดข้อมูลการออกกำลังกายไม่สำเร็จ:", err);
       }
     });
     return () => unsubscribe();
@@ -300,10 +363,36 @@ export default function ExerciseSetting() {
   const [dailyCalories, setDailyCalories] = useState(getSavedDailyCalories);
 
   const safeTarget = Number(targetCount) || 0;
+  const todayKey = getLocalDateKey(currentDateTime);
+  const dailyTarget = Number(tdeeResult || 0);
+  const noTarget = dailyTarget <= 0;
+  const gameBurned = energy.burned;
+  const workoutBurned = workoutLog.reduce(
+    (sum, w) => (getLocalDateKey(new Date(w.t)) === todayKey ? sum + w.kcal : sum), 0
+  );
+  const burnedKcal = gameBurned + workoutBurned;
+  const netCalories = Math.max(0, Math.round(dailyCalories - burnedKcal));
+  const remainingCalories = noTarget ? 0 : dailyTarget - netCalories;
+  const overCalories = noTarget ? 0 : Math.max(0, -remainingCalories);
+
   const calorieNotice = dailyCalories === 0
     ? "วันนี้ยังไม่มีข้อมูลอาหารที่บันทึกไว้"
-    : `วันนี้บันทึกพลังงานจากอาหารแล้ว ${dailyCalories.toLocaleString()} kcal`;
-  const exerciseNotice = `ท่าที่เลือก: ${exerciseInfo.name} (${exerciseInfo.thaiName}) · เป้าหมาย ${safeTarget} ครั้ง`;
+    : noTarget
+      ? `วันนี้บันทึกพลังงานจากอาหารแล้ว ${dailyCalories.toLocaleString()} kcal (ยังไม่ได้คำนวณเป้าหมายพลังงาน)`
+      : overCalories > 0
+      ? `วันนี้ได้รับพลังงานเกินเป้าหมาย ${overCalories.toLocaleString()} kcal`
+      : `วันนี้ยังได้รับพลังงานต่ำกว่าเป้าหมาย ${Math.max(0, remainingCalories).toLocaleString()} kcal`;
+  const gameLabels = { fruit: "ชกผลไม้", time: "ชกจับเวลา" };
+  const burnDetail = Object.entries(energy.games)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => `${gameLabels[k] || k} ${v.toLocaleString()} kcal`)
+    .join(" · ");
+  const burnNotice = burnedKcal > 0
+    ? `วันนี้เผาผลาญไปแล้ว ${fmtBurn(burnedKcal)} kcal (ออกกำลังกาย ${fmtBurn(workoutBurned)} · เล่นเกม ${fmtBurn(gameBurned)}) หักออกจากพลังงานที่ได้รับ`
+    : "วันนี้ยังไม่มีการเผาผลาญจากการออกกำลังกายหรือโหมดเกม";
+  const goalNotice = goalWeight && Number(weight) > 0
+    ? `น้ำหนักปัจจุบัน ${Number(weight).toLocaleString()} กก. · เป้าหมาย ${Number(goalWeight).toLocaleString()} กก.`
+    : "เพิ่มน้ำหนักปัจจุบันและน้ำหนักเป้าหมายในโปรไฟล์ เพื่อดูความคืบหน้าสู่เป้าหมาย";
 
   const handleNotifications = async () => {
     setDailyCalories(getSavedDailyCalories());
@@ -314,9 +403,9 @@ export default function ExerciseSetting() {
         let permission = window.Notification.permission;
         if (permission === "default") permission = await window.Notification.requestPermission();
         if (permission === "granted") {
-          new window.Notification("FitTrack · ตั้งค่าการออกกำลังกาย", {
-            body: `${calorieNotice}. ${exerciseNotice}`,
-            tag: `fittrack-setting-${getLocalDateKey(currentDateTime)}`,
+          new window.Notification("FitTrack · สรุปสุขภาพวันนี้", {
+            body: `${calorieNotice}. ${burnNotice}. ${goalNotice}`,
+            tag: `fittrack-daily-${todayKey}`,
           });
         }
       } catch (error) {
@@ -386,8 +475,9 @@ export default function ExerciseSetting() {
               <button className="icon-button notification-bell" type="button" title="การแจ้งเตือน" aria-label="เปิดการแจ้งเตือน" aria-expanded={notificationsOpen} onClick={handleNotifications}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg><i></i></button>
               {notificationsOpen && <div className="notification-panel" role="status">
                 <div className="notification-panel-title"><span>การแจ้งเตือน <small>วันนี้</small></span><button type="button" aria-label="ปิดการแจ้งเตือน" onClick={() => setNotificationsOpen(false)}>×</button></div>
-                <div className="notification-item"><span className="notification-avatar dumbbell-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9v6M3.5 10v4M8.5 7v10M15.5 7v10M20.5 10v4M18 9v6M8.5 12h7" /></svg></span><div className="notification-message"><strong>FitTrack <small>· ตอนนี้</small></strong><span>{calorieNotice}</span><small>พลังงานที่บันทึก {dailyCalories.toLocaleString()} kcal</small></div><i className="notification-unread" /></div>
-                <div className="notification-item"><span className="notification-avatar dumbbell-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9v6M3.5 10v4M8.5 7v10M15.5 7v10M20.5 10v4M18 9v6M8.5 12h7" /></svg></span><div className="notification-message"><strong>FitTrack <small>· วันนี้</small></strong><span>{exerciseNotice}</span><small>กดเริ่มออกกำลังกายเมื่อพร้อม</small></div><i className="notification-unread" /></div>
+                <div className="notification-item"><span className="notification-avatar dumbbell-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9v6M3.5 10v4M8.5 7v10M15.5 7v10M20.5 10v4M18 9v6M8.5 12h7" /></svg></span><div className="notification-message"><strong>FitTrack <small>· ตอนนี้</small></strong><span>{calorieNotice}</span><small>ได้รับสุทธิ {netCalories.toLocaleString()} / {dailyTarget.toLocaleString()} kcal</small></div><i className="notification-unread" /></div>
+                <div className="notification-item"><span className="notification-avatar dumbbell-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9v6M3.5 10v4M8.5 7v10M15.5 7v10M20.5 10v4M18 9v6M8.5 12h7" /></svg></span><div className="notification-message"><strong>FitTrack <small>· โหมดเกม</small></strong><span>{burnNotice}</span><small>{burnDetail || "เล่นเกมชกผลไม้เพื่อเผาผลาญแคลอรี่"}</small></div><i className="notification-unread" /></div>
+                <div className="notification-item"><span className="notification-avatar dumbbell-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 9v6M3.5 10v4M8.5 7v10M15.5 7v10M20.5 10v4M18 9v6M8.5 12h7" /></svg></span><div className="notification-message"><strong>FitTrack <small>· วันนี้</small></strong><span>{goalNotice}</span><small>ติดตามความคืบหน้าของคุณได้ที่หน้าโปรไฟล์</small></div><i className="notification-unread" /></div>
                 <small className="notification-hint">แตะกระดิ่งเพื่อเปิดหรือปิดการแจ้งเตือน</small>
               </div>}
             </div>

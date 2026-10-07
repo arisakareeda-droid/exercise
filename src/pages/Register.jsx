@@ -29,6 +29,23 @@ export default function Register() {
   const [registeredUser, setRegisteredUser] = useState('');
   const [registeredEmail, setRegisteredEmail] = useState('');
 
+  // โหมดสี: 'dark' (ค่าเริ่มต้น) หรือ 'light' จำค่าที่เลือกไว้ในเครื่อง
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('fittrack_theme') === 'light' ? 'light' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+  const changeTheme = (t) => {
+    setTheme(t);
+    try {
+      localStorage.setItem('fittrack_theme', t);
+    } catch {
+      /* ไม่เป็นไร ถ้าบันทึกไม่ได้ก็ใช้ได้ตามปกติ */
+    }
+  };
+
   const navigate = useNavigate();
   const shellRef = useRef(null);
 
@@ -332,24 +349,24 @@ export default function Register() {
           align-items: flex-start;
         }
 
-        /* ช่องโลโก้สูงคงที่ -> โลโก้ขยายขึ้นด้านบนได้โดยไม่ดันเนื้อหาด้านล่างลง */
+        /* โลโก้อยู่ใน flow ปกติ (ไม่ลอยออกนอกช่อง) ขนาดใหญ่ แต่ตำแหน่งอยู่เหนือป้าย AI MOTION TRACKING เสมอ */
         .logo-slot {
           position: relative;
           flex: 0 0 auto;
           width: 100%;
-          height: 66px;
-          margin: 0 0 14px;
+          margin: 0 0 18px;
         }
 
+        /* รูปโลโก้มีพื้นที่โปร่งใสเหลือบน-ล่างมาก -> ครอปกรอบให้เหลือเฉพาะตัวโลโก้ (กว้าง:สูง ≈ 400:125)
+           ถ้ายังเหลือช่องว่าง ปรับเลขสูงใน aspect-ratio ลง / ถ้าโลโก้โดนตัด ปรับเลขสูงขึ้น */
         .brand-mark {
-          position: absolute;
-          left: 0;
-          bottom: 0;
+          display: block;
           width: 100%;
           max-width: 400px;
           height: auto;
-          object-fit: contain;
-          object-position: left bottom;
+          aspect-ratio: 400 / 125;
+          object-fit: cover;
+          object-position: center;
           margin: 0;
           animation: logo-in .9s .1s cubic-bezier(.2,.8,.2,1) both, logo-float 5s 1s ease-in-out infinite;
         }
@@ -392,6 +409,7 @@ export default function Register() {
 
         .intro-panel h1 {
           margin: 0;
+          color: var(--ink);
           font-size: clamp(32px, 3.3vw, 42px);
           line-height: 1.18;
           font-weight: 600;
@@ -472,6 +490,7 @@ export default function Register() {
 
         /* ───────── ฝั่งขวา: ฟอร์ม ───────── */
         .form-panel {
+          position: relative;
           display: flex;
           align-items: center;
           min-width: 0;
@@ -497,6 +516,7 @@ export default function Register() {
         .form-heading { margin-bottom: 18px; animation: rise-in .7s .2s both; }
         .form-heading h2 {
           margin: 0;
+          color: var(--ink);
           font-size: 27px;
           font-weight: 600;
         }
@@ -809,6 +829,7 @@ export default function Register() {
 
         .success-screen h2 {
           margin: 0;
+          color: var(--ink);
           font-size: 29px;
           font-weight: 600;
           animation: rise-in .6s .3s both;
@@ -864,6 +885,155 @@ export default function Register() {
           to   { opacity: 1; transform: translateY(0); }
         }
 
+        /* ───────── ปุ่มสลับโหมดสว่าง / มืด (มุมบนขวาของฝั่งฟอร์ม) ───────── */
+        .register-page .theme-toggle {
+          position: absolute;
+          top: 14px;
+          right: 16px;
+          z-index: 6;
+          display: grid;
+          place-items: center;
+          width: 38px;
+          height: 38px;
+          padding: 0;
+          border: 1px solid rgba(120,170,180,.30);
+          border-radius: 50%;
+          background: rgba(5,16,20,.62);
+          color: #ffd84a;
+          cursor: pointer;
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          transition: transform .25s, border-color .25s, box-shadow .25s, background .25s;
+        }
+        .register-page .theme-toggle svg {
+          width: 20px;
+          height: 20px;
+          animation: theme-icon-in .45s cubic-bezier(.2,1.4,.4,1) both;
+        }
+        .register-page .theme-toggle:hover {
+          transform: scale(1.08);
+          border-color: rgba(140,255,50,.5);
+          box-shadow: 0 0 18px rgba(255,216,74,.25);
+        }
+        .register-page .theme-toggle:active { transform: scale(.94); }
+        @keyframes theme-icon-in {
+          from { opacity: 0; transform: rotate(-70deg) scale(.5); }
+          to   { opacity: 1; transform: none; }
+        }
+
+        /* ───────── โหมดสว่าง ───────── */
+        .register-page.theme-light {
+          --ink: #10201b;
+          --muted: #4f6a66;
+          --lime: #3f9a00;
+          color-scheme: light;
+          color: var(--ink);
+          background: #eaf2ef;
+        }
+        .theme-light .register-bg { background: #eaf2ef; }
+        .theme-light .register-bg::after {
+          background:
+            linear-gradient(105deg, rgba(244,250,247,.80) 0%, rgba(244,250,247,.70) 55%, rgba(236,246,242,.58) 100%),
+            radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(110,150,140,.28) 100%);
+        }
+        .theme-light .glow { opacity: .32; }
+        .theme-light .register-shell {
+          border-color: rgba(60,110,100,.28);
+          background: rgba(255,255,255,.74);
+          box-shadow: 0 30px 80px rgba(30,60,50,.24), inset 0 1px 0 rgba(255,255,255,.95);
+        }
+        .theme-light .intro-panel {
+          border-right-color: rgba(60,110,100,.22);
+          background:
+            radial-gradient(circle at 50% 14%, rgba(110,200,40,.16), transparent 42%),
+            linear-gradient(165deg, rgba(255,255,255,.55), rgba(236,246,241,.32));
+        }
+        .theme-light .eyebrow {
+          color: #35514c;
+          border-color: rgba(63,154,0,.35);
+          background: rgba(110,200,40,.12);
+        }
+        .theme-light .intro-panel h1,
+        .theme-light .form-heading h2,
+        .theme-light .success-screen h2 { color: var(--ink); }
+        .theme-light .intro-panel h1 .accent {
+          background-image: linear-gradient(100deg, #2f8a00, #6cc414, #2f8a00);
+        }
+        .theme-light .intro-copy { color: #4c635f; }
+        .theme-light .feature-list li {
+          color: #2b4440;
+          border-color: rgba(60,110,100,.22);
+          background: rgba(255,255,255,.66);
+        }
+        .theme-light .feature-list li:hover {
+          border-color: rgba(63,154,0,.5);
+          background: rgba(110,200,40,.12);
+        }
+        .theme-light .feature-icon {
+          border-color: rgba(63,154,0,.35);
+          background: rgba(110,200,40,.14);
+        }
+        .theme-light .form-panel { background: rgba(255,255,255,.42); }
+        .theme-light .form-heading p { color: #55706b; }
+        .theme-light .field-label { color: #2b4440; }
+        .theme-light .field input {
+          color: #10201b;
+          border-color: #a9c2bc;
+          background: rgba(255,255,255,.90);
+        }
+        .theme-light .field input:hover { border-color: #7fa59c; }
+        .theme-light .field input:focus {
+          border-color: var(--lime);
+          background: #fff;
+          box-shadow: 0 0 0 4px rgba(110,200,40,.18), 0 6px 22px rgba(110,200,40,.12);
+        }
+        .theme-light .field input::placeholder { color: #86a09a; }
+        .theme-light .field-icon { color: #6c8a84; }
+        .theme-light .password-toggle { color: #5d7a74; }
+        .theme-light .strength-bar { background: #cfdcd8; }
+        .theme-light .strength-text { color: #55706b; }
+        .theme-light .match-bad { color: #d62f52; }
+        .theme-light .caps-hint { color: #a36b00; }
+        .theme-light .error-message {
+          color: #b3203f;
+          border-color: rgba(214,47,82,.40);
+          background: rgba(255,75,113,.10);
+        }
+        .theme-light .login-row { color: #55706b; }
+        .theme-light .secure-note { color: #5f7a74; }
+        .theme-light .secure-note svg { color: #6d8a84; }
+        .theme-light .success-screen p { color: #4c635f; }
+        .theme-light .success-screen .success-hint { color: #5f7a74; }
+        .theme-light .account-chip {
+          color: #28403b;
+          border-color: rgba(60,110,100,.35);
+          background: rgba(255,255,255,.88);
+        }
+        .register-page.theme-light .theme-toggle {
+          border-color: rgba(60,110,100,.30);
+          background: rgba(255,255,255,.85);
+          color: #f08a00;
+        }
+        .register-page.theme-light .theme-toggle:hover { box-shadow: 0 0 18px rgba(240,138,0,.28); }
+
+        /* โลโก้สีขาว/เงินจะกลืนกับพื้นสว่าง -> เพิ่มเงาเข้มบางๆ ให้อ่านชัด */
+        .theme-light .brand-mark {
+          animation: logo-in-l .9s .1s cubic-bezier(.2,.8,.2,1) both, logo-float-l 5s 1s ease-in-out infinite;
+        }
+        .theme-light .mobile-brand { filter: drop-shadow(0 2px 3px rgba(8,24,18,.55)); }
+        @keyframes logo-in-l {
+          from { opacity: 0; transform: translateY(-14px) scale(.9); filter: blur(6px) drop-shadow(0 2px 3px rgba(8,24,18,0)); }
+          to   { opacity: 1; transform: none; filter: blur(0) drop-shadow(0 2px 3px rgba(8,24,18,.55)) drop-shadow(0 8px 20px rgba(63,154,0,.25)); }
+        }
+        @keyframes logo-float-l {
+          0%, 100% { transform: translateY(0);    filter: drop-shadow(0 2px 3px rgba(8,24,18,.55)) drop-shadow(0 8px 20px rgba(63,154,0,.18)); }
+          50%      { transform: translateY(-5px); filter: drop-shadow(0 2px 3px rgba(8,24,18,.55)) drop-shadow(0 12px 26px rgba(63,154,0,.32)); }
+        }
+
+        @media (max-width: 560px) {
+          .register-page .theme-toggle { top: 10px; right: 10px; width: 34px; height: 34px; }
+        }
+
         /* ───────── Responsive (ล็อกพอดีจอ ไม่เลื่อน) ───────── */
         @media (max-width: 860px) {
           .register-page { padding: 16px; }
@@ -900,7 +1070,7 @@ export default function Register() {
           .secure-note { margin-top: 8px; }
           .mobile-brand { width: 105px; margin-bottom: 8px; }
           .intro-panel { padding-top: 20px; padding-bottom: 20px; }
-          .logo-slot { height: 52px; margin-bottom: 10px; }
+          .logo-slot { margin-bottom: 12px; }
           .brand-mark { max-width: 310px; }
           .intro-panel h1 { font-size: 33px; }
           .intro-copy { font-size: 13px; line-height: 1.6; margin-top: 8px; }
@@ -912,6 +1082,7 @@ export default function Register() {
           .secure-note { display: none; }
           .mobile-brand { display: none; }
           .intro-copy { display: none; }
+          .brand-mark { max-width: 240px; }
           .field input { height: 40px; }
           .feature-list { margin-top: 12px; }
         }
@@ -934,7 +1105,7 @@ export default function Register() {
         }
       `}</style>
 
-      <div className="register-page">
+      <div className={`register-page${theme === 'light' ? ' theme-light' : ''}`}>
         <div className="register-bg" aria-hidden="true">
           <div className="register-bg-img" />
         </div>
@@ -1018,6 +1189,25 @@ export default function Register() {
             </section>
 
             <section className="form-panel">
+              <button
+                type="button"
+                className="theme-toggle"
+                onClick={() => changeTheme(theme === 'light' ? 'dark' : 'light')}
+                aria-label={theme === 'light' ? 'โหมดสว่าง (กดเพื่อสลับเป็นโหมดมืด)' : 'โหมดมืด (กดเพื่อสลับเป็นโหมดสว่าง)'}
+                title={theme === 'light' ? 'โหมดสว่าง' : 'โหมดมืด'}
+              >
+                {theme === 'light' ? (
+                  <svg key="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4" />
+                    <path d="M12 2.5v2.2M12 19.3v2.2M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6" />
+                  </svg>
+                ) : (
+                  <svg key="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z" />
+                  </svg>
+                )}
+              </button>
+
               {!registered ? (
                 <div className="form-inner">
                   <img

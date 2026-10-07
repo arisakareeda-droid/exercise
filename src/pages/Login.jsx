@@ -1,7 +1,60 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { auth } from '../firebase';
+
+// ระบบ OTP ทำงานผ่าน Cloud Functions (ดู functions/index.js) เพราะ Firebase Auth ฝั่ง client ส่ง OTP ทางอีเมลเองไม่ได้
+// ถ้า deploy Functions ไว้คนละ region ให้ใส่ชื่อ region เป็นอาร์กิวเมนต์ที่ 2 เช่น getFunctions(auth.app, 'asia-southeast1')
+const functions = getFunctions(auth.app);
+const callRequestOtp = httpsCallable(functions, 'requestPasswordResetOtp');
+const callVerifyOtp = httpsCallable(functions, 'verifyPasswordResetOtp');
+const callResetPassword = httpsCallable(functions, 'resetPasswordWithOtp');
+
+const OTP_LEN = 6;
+const RESEND_SECONDS = 60;
+const MIN_PASSWORD = 6; // ปรับให้ตรงกับกฎรหัสผ่านในหน้าสมัครสมาชิก
+
+const maskEmail = (v) => {
+  const [name, domain] = v.split('@');
+  if (!domain) return v;
+  const keep = name.length > 2 ? 2 : 1;
+  return `${name.slice(0, keep)}${'*'.repeat(Math.max(1, Math.min(name.length - keep, 5)))}@${domain}`;
+};
+
+const getStrength = (pw) => {
+  if (!pw) return { score: 0, label: '' };
+  let s = 0;
+  if (pw.length >= 8) s++;
+  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++;
+  if (/\d/.test(pw)) s++;
+  if (/[^A-Za-z0-9]/.test(pw) || pw.length >= 12) s++;
+  const score = Math.max(1, s);
+  return { score, label: ['', 'อ่อน', 'พอใช้', 'ดี', 'แข็งแรง'][score] };
+};
+
+const resetErrorMessage = (err, step) => {
+  switch (err?.code) {
+    case 'functions/invalid-argument':
+      if (step === 'otp') return 'รหัส OTP ไม่ถูกต้อง กรุณาตรวจสอบแล้วลองใหม่';
+      if (step === 'email') return 'รูปแบบอีเมลไม่ถูกต้อง';
+      return 'รหัสผ่านใหม่ไม่ปลอดภัยพอ กรุณาตั้งรหัสผ่านใหม่';
+    case 'functions/deadline-exceeded':
+    case 'functions/permission-denied':
+      return step === 'newpass'
+        ? 'หมดเวลาทำรายการ กรุณาขอรหัส OTP ใหม่อีกครั้ง'
+        : 'รหัส OTP หมดอายุแล้ว กรุณากดขอรหัสใหม่';
+    case 'functions/resource-exhausted':
+      return step === 'otp'
+        ? 'กรอกรหัสผิดหลายครั้งเกินไป กรุณาขอรหัสใหม่'
+        : 'ขอรหัสบ่อยเกินไป กรุณารอสักครู่แล้วลองใหม่';
+    case 'functions/unavailable':
+      return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ กรุณาตรวจสอบเครือข่ายแล้วลองใหม่';
+    default:
+      console.error('Reset password error:', err);
+      return 'ดำเนินการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
+  }
+};
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -9,6 +62,179 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  // ลืมรหัสผ่าน: view = login | email | otp | newpass
+  const [view, setView] = useState('login');
+  const [swapped, setSwapped] = useState(false); // true หลังสลับหน้าครั้งแรก -> ใช้จังหวะแอนิเมชันที่เร็วกว่าตอนโหลด
+  const [resetEmail, setResetEmail] = useState('');
+  const [otp, setOtp] = useState(Array(OTP_LEN).fill(''));
+  const [resetToken, setResetToken] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const otpRefs = useRef([]);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const changeView = (next) => {
+    setError('');
+    setSwapped(true);
+    setView(next);
+  };
+
+  const goForgot = () => {
+    setNotice('');
+    setResetEmail(email);
+    changeView('email');
+  };
+
+  const backToLogin = () => {
+    setOtp(Array(OTP_LEN).fill(''));
+    setResetToken('');
+    setNewPassword('');
+    setConfirmPassword('');
+    changeView('login');
+  };
+
+  // ขั้น 1: ขอ OTP (ใช้ทั้งตอนกด "ส่งรหัส OTP" และ "ขอรหัสใหม่")
+  const requestOtp = async (isResend = false) => {
+    setError('');
+    setResetLoading(true);
+    try {
+      await callRequestOtp({ email: resetEmail.trim() });
+      setOtp(Array(OTP_LEN).fill(''));
+      setCooldown(RESEND_SECONDS);
+      if (isResend) otpRefs.current[0]?.focus();
+      else changeView('otp');
+    } catch (err) {
+      setError(resetErrorMessage(err, 'email'));
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleSendOtp = (e) => {
+    e.preventDefault();
+    requestOtp(false);
+  };
+
+  // ขั้น 2: ตรวจ OTP
+  const submitOtp = async (code) => {
+    if (resetLoading) return;
+    setError('');
+    setResetLoading(true);
+    try {
+      const res = await callVerifyOtp({ email: resetEmail.trim(), otp: code });
+      setResetToken(res.data.resetToken);
+      changeView('newpass');
+    } catch (err) {
+      setError(resetErrorMessage(err, 'otp'));
+      setOtp(Array(OTP_LEN).fill(''));
+      setTimeout(() => otpRefs.current[0]?.focus(), 0);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = (e) => {
+    e.preventDefault();
+    const code = otp.join('');
+    if (code.length === OTP_LEN) submitOtp(code);
+  };
+
+  // กรอก/วางตัวเลขลงช่อง OTP (รองรับ autofill จาก SMS/อีเมลบนมือถือที่ใส่ทั้ง 6 หลักในช่องเดียว)
+  const fillOtp = (start, digits) => {
+    setError('');
+    const next = [...otp];
+    digits.slice(0, OTP_LEN - start).split('').forEach((c, k) => {
+      next[start + k] = c;
+    });
+    setOtp(next);
+    otpRefs.current[Math.min(start + digits.length, OTP_LEN - 1)]?.focus();
+    if (next.every(Boolean)) submitOtp(next.join(''));
+  };
+
+  const handleOtpChange = (i, raw) => {
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) {
+      const next = [...otp];
+      next[i] = '';
+      setOtp(next);
+      return;
+    }
+    fillOtp(i, digits);
+  };
+
+  const handleOtpKeyDown = (i, e) => {
+    if (e.key === 'Backspace' && !otp[i] && i > 0) {
+      const next = [...otp];
+      next[i - 1] = '';
+      setOtp(next);
+      otpRefs.current[i - 1]?.focus();
+      e.preventDefault();
+    } else if (e.key === 'ArrowLeft' && i > 0) {
+      otpRefs.current[i - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && i < OTP_LEN - 1) {
+      otpRefs.current[i + 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e) => {
+    const digits = e.clipboardData.getData('text').replace(/\D/g, '');
+    if (!digits) return;
+    e.preventDefault();
+    fillOtp(0, digits);
+  };
+
+  // ขั้น 3: ตั้งรหัสผ่านใหม่
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (newPassword.length < MIN_PASSWORD) {
+      setError(`รหัสผ่านต้องมีอย่างน้อย ${MIN_PASSWORD} ตัวอักษร`);
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('รหัสผ่านทั้งสองช่องไม่ตรงกัน');
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await callResetPassword({ email: resetEmail.trim(), resetToken, newPassword });
+      setEmail(resetEmail.trim());
+      setPassword('');
+      setNotice('เปลี่ยนรหัสผ่านสำเร็จ กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่');
+      backToLogin();
+    } catch (err) {
+      const code = err?.code;
+      const msg = resetErrorMessage(err, 'newpass');
+      if (code === 'functions/deadline-exceeded' || code === 'functions/permission-denied') {
+        // หมดเวลา: พากลับไปขอ OTP ใหม่ พร้อมคงข้อความแจ้งไว้
+        setResetToken('');
+        changeView('email');
+      }
+      setError(msg);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const strength = getStrength(newPassword);
+  const mismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
+
+  const headerCopy = {
+    login: ['เข้าสู่ระบบ', 'ระบบติดตามและวิเคราะห์การออกกำลังกายด้วย AI แบบเรียลไทม์'],
+    email: ['ลืมรหัสผ่าน', 'กรอกอีเมลที่ใช้สมัคร แล้วเราจะส่งรหัส OTP 6 หลักไปให้'],
+    otp: ['ยืนยันรหัส OTP', `หากอีเมล ${maskEmail(resetEmail.trim())} ลงทะเบียนไว้ เราได้ส่งรหัส 6 หลักไปให้แล้ว`],
+    newpass: ['ตั้งรหัสผ่านใหม่', 'ยืนยันตัวตนสำเร็จ กรุณาตั้งรหัสผ่านใหม่ของคุณ'],
+  }[view];
 
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -92,6 +318,7 @@ export default function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setNotice('');
     setLoading(true);
 
     try {
@@ -935,6 +1162,225 @@ export default function Login() {
           letter-spacing: 0.04em;
         }
 
+        /* =====================================================
+           ลืมรหัสผ่าน / OTP / ตั้งรหัสผ่านใหม่
+           ===================================================== */
+
+        /* สลับหน้าในการ์ด: ใช้จังหวะที่เร็วกว่าตอนโหลดครั้งแรก */
+        .view-swap .reveal {
+          animation-delay: calc(var(--i, 0) * 60ms);
+        }
+
+        .field-meta {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 8px;
+        }
+
+        .field-meta .caps-hint.show {
+          margin-top: 0;
+        }
+
+        .forgot-link {
+          margin-left: auto;
+          padding: 2px 4px;
+          border: 0;
+          border-radius: 6px;
+          background: none;
+          color: #93a1a5;
+          font-family: "Anuphan", "Kanit", sans-serif;
+          font-size: 12px;
+          cursor: pointer;
+          transition: color 0.2s ease;
+        }
+
+        .forgot-link:hover,
+        .forgot-link:focus-visible {
+          outline: none;
+          color: #8cff32;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+
+        .success-message {
+          margin-bottom: 18px;
+          padding: 10px 13px;
+          border: 1px solid rgba(140,255,50,0.45);
+          border-radius: 8px;
+          background: rgba(140,255,50,0.07);
+          color: #b6f58a;
+          font-size: 13px;
+          line-height: 1.6;
+        }
+
+        .otp-group {
+          display: grid;
+          grid-template-columns: repeat(${OTP_LEN}, 1fr);
+          gap: 10px;
+        }
+
+        .otp-box {
+          width: 100%;
+          min-width: 0;
+          height: 56px;
+          padding: 0;
+          outline: none;
+          border: 1px solid #304951;
+          border-radius: 8px;
+          background: #061015;
+          color: #ffffff;
+          caret-color: #8cff32;
+          text-align: center;
+          font-family: "Kanit", sans-serif;
+          font-size: 24px;
+          font-weight: 600;
+          font-variant-numeric: tabular-nums;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .otp-box:hover {
+          border-color: #3f6570;
+        }
+
+        .otp-box.filled {
+          border-color: rgba(140,255,50,0.55);
+        }
+
+        .otp-box:focus {
+          border-color: #8bff39;
+          background: #08171d;
+          box-shadow: 0 0 0 2px rgba(139,255,57,0.08);
+        }
+
+        .otp-box:disabled {
+          opacity: 0.6;
+        }
+
+        .otp-group.has-error .otp-box {
+          border-color: #a62c4d;
+          animation: shake 0.45s ease both;
+        }
+
+        .otp-hint {
+          margin: 10px 0 0;
+          color: #6f8a90;
+          font-size: 12px;
+        }
+
+        .strength {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-top: 10px;
+        }
+
+        .strength-bars {
+          flex: 1;
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 4px;
+        }
+
+        .strength-bars i {
+          height: 3px;
+          border-radius: 2px;
+          background: #1c2f36;
+          transition: background 0.25s ease;
+        }
+
+        .strength.s1 i:nth-child(-n+1) { background: #ff7691; }
+        .strength.s2 i:nth-child(-n+2) { background: #ffe735; }
+        .strength.s3 i:nth-child(-n+3) { background: #c6ff38; }
+        .strength.s4 i:nth-child(-n+4) { background: #8cff32; }
+
+        .strength-label {
+          min-width: 54px;
+          min-height: 18px;
+          text-align: right;
+          color: #93a1a5;
+          font-size: 12px;
+        }
+
+        .caps-hint.is-error {
+          color: #ff7691;
+        }
+
+        .register-text.resend {
+          margin-top: 16px;
+        }
+
+        .inline-link {
+          position: relative;
+          margin: 0 0 0 6px;
+          padding: 0;
+          border: 0;
+          background: none;
+          color: #8cff32;
+          font-family: "Kanit", sans-serif;
+          font-size: 14px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: color 0.2s ease;
+        }
+
+        .inline-link:hover:not(:disabled),
+        .inline-link:focus-visible {
+          outline: none;
+          color: #c6ff38;
+          text-decoration: underline;
+          text-underline-offset: 4px;
+        }
+
+        .inline-link:disabled {
+          opacity: 0.6;
+          cursor: progress;
+        }
+
+        .resend-wait {
+          margin-left: 6px;
+          color: #6f8a90;
+        }
+
+        .back-row {
+          display: flex;
+          justify-content: center;
+          margin-top: 14px;
+        }
+
+        .back-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 10px;
+          border: 0;
+          border-radius: 8px;
+          background: none;
+          color: #93a1a5;
+          font-family: "Kanit", sans-serif;
+          font-size: 13px;
+          cursor: pointer;
+          transition: color 0.2s ease, background 0.2s ease;
+        }
+
+        .back-link svg {
+          width: 15px;
+          height: 15px;
+          transition: transform 0.2s ease;
+        }
+
+        .back-link:hover,
+        .back-link:focus-visible {
+          outline: none;
+          color: #8cff32;
+          background: rgba(139,255,57,0.08);
+        }
+
+        .back-link:hover svg {
+          transform: translateX(-3px);
+        }
+
         @media (max-width: 850px) {
           .video-stage {
             --target-x: 50vw;
@@ -991,6 +1437,9 @@ export default function Login() {
           .login-card {
             padding: 28px 22px 20px;
           }
+
+          .otp-group { gap: 7px; }
+          .otp-box { height: 52px; font-size: 22px; }
         }
 
         /* จอเตี้ย: ย่อระยะห่างลง เพื่อให้การ์ดอยู่ในจอพอดีโดยไม่ต้องเลื่อน */
@@ -1007,6 +1456,10 @@ export default function Login() {
           .login-button { height: 44px; margin-top: 2px; }
           .divider { margin: 14px 0 12px; }
           .login-footer { margin-top: 12px; }
+          .otp-box { height: 48px; font-size: 21px; }
+          .back-row { margin-top: 8px; }
+          .register-text.resend { margin-top: 12px; }
+          .strength { margin-top: 8px; }
         }
 
         @media (max-height: 580px) {
@@ -1086,12 +1539,15 @@ export default function Login() {
           </div>
 
           <div className="login-card">
+            <div key={view} className={swapped ? 'view-swap' : undefined}>
             <div className="login-header reveal" style={{ '--i': 0 }}>
               <img src="/fittrack-hero-logo.png" alt="FITTRACK" className="login-logo" draggable="false" />
-              <h1>เข้าสู่ระบบ</h1>
-              <p>ระบบติดตามและวิเคราะห์การออกกำลังกายด้วย AI แบบเรียลไทม์</p>
+              <h1>{headerCopy[0]}</h1>
+              <p>{headerCopy[1]}</p>
             </div>
 
+            {view === 'login' && (
+            <>
             <form onSubmit={handleLogin}>
               <div className="form-group reveal" style={{ '--i': 3 }}>
                 <label className="field-label" htmlFor="email">อีเมลบัญชี</label>
@@ -1146,10 +1602,21 @@ export default function Login() {
                   </button>
                 </div>
 
-                <div className={`caps-hint ${capsOn ? 'show' : ''}`} role="status">
-                  Caps Lock เปิดอยู่
+                <div className="field-meta">
+                  <div className={`caps-hint ${capsOn ? 'show' : ''}`} role="status">
+                    Caps Lock เปิดอยู่
+                  </div>
+                  <button type="button" className="forgot-link" onClick={goForgot}>
+                    ลืมรหัสผ่าน?
+                  </button>
                 </div>
               </div>
+
+              {notice && (
+                <div className="success-message" role="status">
+                  ✅ {notice}
+                </div>
+              )}
 
               {error && (
                 <div className="error-message" role="alert">
@@ -1183,10 +1650,257 @@ export default function Login() {
               ยังไม่มีบัญชีผู้ใช้งาน?
               <Link to="/register">ลงทะเบียน</Link>
             </p>
+            </>
+            )}
+
+            {/* ---------- ขั้น 1: กรอกอีเมล ---------- */}
+            {view === 'email' && (
+              <>
+                <form onSubmit={handleSendOtp}>
+                  <div className="form-group reveal" style={{ '--i': 3 }}>
+                    <label className="field-label" htmlFor="reset-email">อีเมลที่ใช้สมัคร</label>
+                    <div className="field">
+                      <input
+                        id="reset-email"
+                        type="email"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        placeholder="name@example.com"
+                        autoComplete="email"
+                        autoFocus
+                        required
+                      />
+                      <svg className="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="3" y="5" width="18" height="14" rx="3" />
+                        <path d="m4 8 8 5.5L20 8" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div className="error-message" role="alert">
+                      ⚠️ {error}
+                    </div>
+                  )}
+
+                  <div className="reveal" style={{ '--i': 4 }}>
+                    <button
+                      type="submit"
+                      className={`login-button ${resetEmail && !resetLoading ? 'ready' : ''}`}
+                      disabled={resetLoading}
+                    >
+                      {resetLoading ? (
+                        <>
+                          <span className="spinner"></span>
+                          กำลังส่งรหัส...
+                        </>
+                      ) : (
+                        'ส่งรหัส OTP'
+                      )}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="back-row reveal" style={{ '--i': 5 }}>
+                  <button type="button" className="back-link" onClick={backToLogin}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m15 6-6 6 6 6" />
+                    </svg>
+                    กลับไปเข้าสู่ระบบ
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ---------- ขั้น 2: กรอกรหัส OTP ---------- */}
+            {view === 'otp' && (
+              <>
+                <form onSubmit={handleVerifyOtp}>
+                  <div className="form-group reveal" style={{ '--i': 3 }}>
+                    <span className="field-label" id="otp-label">รหัส OTP 6 หลัก</span>
+                    <div
+                      className={`otp-group ${error ? 'has-error' : ''}`}
+                      role="group"
+                      aria-labelledby="otp-label"
+                      onPaste={handleOtpPaste}
+                    >
+                      {otp.map((d, i) => (
+                        <input
+                          key={i}
+                          ref={(el) => {
+                            otpRefs.current[i] = el;
+                          }}
+                          className={`otp-box ${d ? 'filled' : ''}`}
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          value={d}
+                          onChange={(e) => handleOtpChange(i, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                          onFocus={(e) => e.target.select()}
+                          autoComplete={i === 0 ? 'one-time-code' : 'off'}
+                          autoFocus={i === 0}
+                          aria-label={`หลักที่ ${i + 1}`}
+                          disabled={resetLoading}
+                        />
+                      ))}
+                    </div>
+                    <p className="otp-hint">รหัสมีอายุ 10 นาที · ตรวจสอบในกล่องจดหมายขยะด้วยหากไม่พบ</p>
+                  </div>
+
+                  {error && (
+                    <div className="error-message" role="alert">
+                      ⚠️ {error}
+                    </div>
+                  )}
+
+                  <div className="reveal" style={{ '--i': 4 }}>
+                    <button
+                      type="submit"
+                      className={`login-button ${otp.every(Boolean) && !resetLoading ? 'ready' : ''}`}
+                      disabled={resetLoading || !otp.every(Boolean)}
+                    >
+                      {resetLoading ? (
+                        <>
+                          <span className="spinner"></span>
+                          กำลังตรวจสอบรหัส...
+                        </>
+                      ) : (
+                        'ยืนยันรหัส'
+                      )}
+                    </button>
+                  </div>
+                </form>
+
+                <p className="register-text resend reveal" style={{ '--i': 5 }}>
+                  ไม่ได้รับรหัส?
+                  {cooldown > 0 ? (
+                    <span className="resend-wait">ขอรหัสใหม่ได้ใน {cooldown} วินาที</span>
+                  ) : (
+                    <button type="button" className="inline-link" onClick={() => requestOtp(true)} disabled={resetLoading}>
+                      ขอรหัสใหม่
+                    </button>
+                  )}
+                </p>
+
+                <div className="back-row reveal" style={{ '--i': 6 }}>
+                  <button type="button" className="back-link" onClick={() => changeView('email')}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m15 6-6 6 6 6" />
+                    </svg>
+                    ใช้อีเมลอื่น
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* ---------- ขั้น 3: ตั้งรหัสผ่านใหม่ ---------- */}
+            {view === 'newpass' && (
+              <>
+                <form onSubmit={handleResetPassword}>
+                  <div className="form-group reveal" style={{ '--i': 3 }}>
+                    <label className="field-label" htmlFor="new-password">รหัสผ่านใหม่</label>
+                    <div className="field has-toggle">
+                      <input
+                        id="new-password"
+                        type={showNew ? 'text' : 'password'}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        onKeyDown={handleCaps}
+                        onKeyUp={handleCaps}
+                        onBlur={() => setCapsOn(false)}
+                        placeholder="••••••••"
+                        autoComplete="new-password"
+                        autoFocus
+                        required
+                      />
+                      <svg className="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="4.5" y="10.5" width="15" height="10" rx="3" />
+                        <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+                      </svg>
+                      <button
+                        type="button"
+                        className="password-toggle"
+                        onClick={() => setShowNew(!showNew)}
+                        aria-label={showNew ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน'}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+                          <circle cx="12" cy="12" r="3" />
+                          {showNew && <path d="M4 4l16 16" />}
+                        </svg>
+                      </button>
+                    </div>
+                    <div className={`strength s${strength.score}`} aria-live="polite">
+                      <span className="strength-bars" aria-hidden="true"><i /><i /><i /><i /></span>
+                      <span className="strength-label">{strength.label}</span>
+                    </div>
+                  </div>
+
+                  <div className="form-group reveal" style={{ '--i': 4 }}>
+                    <label className="field-label" htmlFor="confirm-password">ยืนยันรหัสผ่านใหม่</label>
+                    <div className="field">
+                      <input
+                        id="confirm-password"
+                        type={showNew ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        onKeyDown={handleCaps}
+                        onKeyUp={handleCaps}
+                        onBlur={() => setCapsOn(false)}
+                        placeholder="••••••••"
+                        autoComplete="new-password"
+                        required
+                      />
+                      <svg className="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <rect x="4.5" y="10.5" width="15" height="10" rx="3" />
+                        <path d="m9 15.5 2 2 4-4" />
+                      </svg>
+                    </div>
+                    <div className={`caps-hint ${capsOn || mismatch ? 'show' : ''} ${!capsOn && mismatch ? 'is-error' : ''}`} role="status">
+                      {capsOn ? 'Caps Lock เปิดอยู่' : 'รหัสผ่านไม่ตรงกัน'}
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div className="error-message" role="alert">
+                      ⚠️ {error}
+                    </div>
+                  )}
+
+                  <div className="reveal" style={{ '--i': 5 }}>
+                    <button
+                      type="submit"
+                      className={`login-button ${newPassword && confirmPassword && !mismatch && !resetLoading ? 'ready' : ''}`}
+                      disabled={resetLoading}
+                    >
+                      {resetLoading ? (
+                        <>
+                          <span className="spinner"></span>
+                          กำลังบันทึก...
+                        </>
+                      ) : (
+                        'บันทึกรหัสผ่านใหม่'
+                      )}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="back-row reveal" style={{ '--i': 6 }}>
+                  <button type="button" className="back-link" onClick={backToLogin}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="m15 6-6 6 6 6" />
+                    </svg>
+                    ยกเลิก
+                  </button>
+                </div>
+              </>
+            )}
 
             <p className="login-footer reveal" style={{ '--i': 7 }}>
               © 2026 FITTRACK  ·  AI Motion Tracking
             </p>
+            </div>
           </div>
 
         </div>
