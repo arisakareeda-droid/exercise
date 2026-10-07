@@ -128,7 +128,7 @@ export default function Login() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700;800&family=Anuphan:wght@400;500;600;700&display=swap');
 
         * {
           box-sizing: border-box;
@@ -166,8 +166,7 @@ export default function Login() {
           display: flex;
           padding: 32px;
           padding-left: calc(50% + 32px); /* วิดีโอแบ่งสองซีก: ซ้ายเข้ม (โลโก้) / ขวาสว่าง (ที่ของฟอร์ม) */
-          overflow-x: hidden;
-          overflow-y: auto;
+          overflow: hidden;
           background-color: #14181f;
         }
 
@@ -300,21 +299,24 @@ export default function Login() {
 
         .login-shell {
           width: 100%;
-          max-width: 500px;
+          max-width: 460px;
+          max-height: calc(100dvh - 24px);
           margin: auto; /* อยู่กึ่งกลางซีกขวาของจอ */
           flex-shrink: 0;
-          min-height: 600px;
+          min-height: 0;
           display: grid;
           grid-template-columns: 1fr;
           position: relative;
           z-index: 2;
           overflow: hidden;
-          border: 0;
-          border-radius: 28px;
-          background: #ffffff;
+          border: 1px solid #2a5360;
+          border-radius: 15px;
+          background: #050b0e;
+          color: #f4f7f6;
           box-shadow:
-            0 40px 90px rgba(8,145,178,0.16),
-            0 12px 32px rgba(15,23,42,0.08);
+            0 0 0 1px rgba(255,255,255,0.005),
+            0 24px 60px rgba(0,0,0,0.38),
+            inset 0 0 25px rgba(0,0,0,0.25);
           animation: card-in 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
         }
 
@@ -505,12 +507,12 @@ export default function Login() {
               from var(--ang),
               transparent 0deg,
               transparent 40deg,
-              #22d3ee 95deg,
-              #3b82f6 145deg,
+              #8cff32 95deg,
+              #18d8ff 145deg,
               transparent 210deg,
               transparent 360deg
             ),
-            linear-gradient(rgba(148,163,184,0.30), rgba(148,163,184,0.30));
+            linear-gradient(rgba(42,83,96,0.0), rgba(42,83,96,0.0));
           -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
           -webkit-mask-composite: xor;
           mask-composite: exclude;
@@ -526,11 +528,11 @@ export default function Login() {
           display: flex;
           flex-direction: column;
           justify-content: center;
-          padding: 56px 50px 44px;
+          padding: 34px 44px 28px;
           background:
-            radial-gradient(circle at 100% 0%, rgba(34,211,238,0.13), transparent 42%),
-            radial-gradient(circle at 0% 100%, rgba(59,130,246,0.09), transparent 40%),
-            #ffffff;
+            radial-gradient(circle at 100% 0%, rgba(140,255,50,0.07), transparent 42%),
+            radial-gradient(circle at 0% 100%, rgba(24,216,255,0.05), transparent 40%),
+            linear-gradient(145deg, #050b0e, #071116);
         }
 
         .login-card > * {
@@ -549,7 +551,7 @@ export default function Login() {
           transition: opacity 0.35s ease;
           background: radial-gradient(
             380px circle at var(--mx, 50%) var(--my, 0%),
-            rgba(34,211,238,0.14),
+            rgba(140,255,50,0.08),
             transparent 62%
           );
         }
@@ -568,7 +570,7 @@ export default function Login() {
           height: 110px;
           z-index: 0;
           pointer-events: none;
-          background: linear-gradient(180deg, transparent, rgba(34,211,238,0.09), transparent);
+          background: linear-gradient(180deg, transparent, rgba(140,255,50,0.05), transparent);
           transform: translateY(-120px);
           animation: scan 8s ease-in-out 2.5s infinite;
         }
@@ -580,208 +582,160 @@ export default function Login() {
           56%, 100% { transform: translateY(760px); opacity: 0; }
         }
 
+        /* หัวการ์ด: โลโก้ FITTRACK (ไม่มีกรอบ/พื้นหลัง) + ชื่อหน้า อยู่กึ่งกลาง */
         .login-header {
-          margin-bottom: 32px;
-        }
-
-        .eyebrow {
-          display: inline-flex;
+          display: flex;
+          flex-direction: column;
           align-items: center;
-          gap: 11px;
-          margin-bottom: 12px;
-          color: #0891b2;
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.3em;
+          gap: 2px;
+          margin-bottom: 22px;
+          text-align: center;
         }
 
-        .eyebrow::before {
-          content: "";
-          width: 0;
-          height: 2px;
-          border-radius: 2px;
-          background: linear-gradient(90deg, #22d3ee, #3b82f6);
-          animation: line-grow 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) 0.7s forwards;
-        }
-
-        @keyframes line-grow {
-          to { width: 30px; }
+        /* ไฟล์โลโก้มีขอบโปร่งใสรอบตัว จึงใช้ margin ติดลบตามสัดส่วนความกว้างเพื่อดึงเนื้อหาให้เข้าใกล้กัน */
+        .login-logo {
+          --logo-w: 230px;
+          display: block;
+          width: var(--logo-w);
+          max-width: 100%;
+          height: auto;
+          margin: calc(var(--logo-w) * -0.16) 0 calc(var(--logo-w) * -0.26);
+          padding: 0;
+          border: 0;
+          background: none;
+          box-shadow: none;
+          object-fit: contain;
+          user-select: none;
+          -webkit-user-drag: none;
         }
 
         .login-header h1 {
-          margin: 0 0 8px;
-          padding: 0.05em 0;
-          font-size: 34px;
-          line-height: 1.5;
-          font-weight: 800;
-          background: linear-gradient(100deg, #0b1220 0%, #1e3a8a 38%, #0ea5e9 68%, #0b1220 100%);
-          background-size: 220% 100%;
-          -webkit-background-clip: text;
-          background-clip: text;
-          -webkit-text-fill-color: transparent;
-          color: transparent;
-        }
-
-        .login-header h1.reveal {
-          animation:
-            rise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both,
-            title-shine 8s ease-in-out infinite;
-          animation-delay: calc(var(--i, 0) * 90ms + 350ms), 1.5s;
-        }
-
-        @keyframes title-shine {
-          0%, 100% { background-position: 0% 50%; }
-          50%      { background-position: 100% 50%; }
+          margin: 0;
+          color: #f4f7f6;
+          font-size: 24px;
+          line-height: 1.3;
+          font-weight: 500;
+          letter-spacing: 0.02em;
         }
 
         .login-header p {
           margin: 0;
-          color: #64748b;
-          font-size: 14px;
-          line-height: 1.7;
+          color: #93a1a5;
+          font-size: 13px;
+          line-height: 1.6;
+        }
+
+        /* เส้นไล่สีบางๆ คั่นหัวการ์ดกับฟอร์ม */
+        .login-header::after {
+          content: "";
+          width: 100%;
+          height: 1px;
+          margin-top: 14px;
+          background: linear-gradient(90deg, transparent, #2a5360 30%, #5ea02c 50%, #2a5360 70%, transparent);
         }
 
         .form-group {
           margin-bottom: 18px;
         }
 
-        /* ช่องกรอกแบบ label ลอย + ไอคอนนำหน้า (โทนฟ้าให้เข้ากับปุ่ม/โลโก้) */
+        /* ช่องกรอก: label เล็กอยู่ด้านบน + กล่องสไตล์เดียวกับช่องกรอกของแดชบอร์ด (BMI) */
+        .field-label {
+          display: block;
+          margin-bottom: 8px;
+          color: #b8c1c3;
+          font-family: "Anuphan", "Kanit", sans-serif;
+          font-size: 12px;
+        }
+
         .field {
           position: relative;
         }
 
         .field input {
           width: 100%;
-          height: 62px;
-          padding: 25px 16px 7px 54px;
+          height: 48px;
+          padding: 0 12px 0 44px;
           outline: none;
-          border: 1.5px solid #d3e0d2;
-          border-radius: 16px;
-          background: #f0f5ef;
-          color: #14231a;
-          font-family: "Kanit", sans-serif;
-          font-size: 15px;
-          font-weight: 500;
-          transition: border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+          border: 1px solid #304951;
+          border-radius: 8px;
+          background: #061015;
+          color: #ffffff;
+          font-family: "Anuphan", "Kanit", sans-serif;
+          font-size: 14px;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+        }
+
+        .field input::placeholder {
+          color: #5f757b;
+          opacity: 1;
         }
 
         .field input:hover {
-          border-color: #a9c7a6;
-          background: #f5f9f4;
+          border-color: #3f6570;
         }
 
         .field input:focus {
-          border-color: #4a9a2e;
-          background: #f7fbf6;
-          box-shadow:
-            0 0 0 4px rgba(74,154,46,0.14),
-            0 10px 24px rgba(74,154,46,0.10);
+          border-color: #8bff39;
+          box-shadow: 0 0 0 2px rgba(139,255,57,0.08);
         }
 
-        .field label {
-          position: absolute;
-          left: 54px;
-          top: 19px;
-          color: #78907a;
-          font-size: 14px;
-          line-height: 1.5;
-          pointer-events: none;
-          transition: top 0.2s ease, font-size 0.2s ease, color 0.2s ease;
-        }
-
-        .field input:focus + label,
-        .field input:not(:placeholder-shown) + label,
-        .field input:-webkit-autofill + label {
-          top: 8px;
-          font-size: 11px;
-          font-weight: 600;
-          color: #5f7a62;
-        }
-
-        .field input:focus + label {
-          color: #3b8a24;
-        }
-
-        /* ไอคอนนำหน้าในวงกลมสีอ่อน */
         .field-icon {
           position: absolute;
-          left: 12px;
+          left: 13px;
           top: 50%;
-          width: 34px;
-          height: 34px;
-          padding: 8px;
+          width: 18px;
+          height: 18px;
           transform: translateY(-50%);
-          border-radius: 11px;
-          background: #e1ecdf;
-          color: #5f7a62;
+          color: #6f8a90;
           pointer-events: none;
-          transition: background 0.25s ease, color 0.25s ease;
+          transition: color 0.2s ease;
         }
 
         .field input:focus ~ .field-icon {
-          background: #d3e6cf;
-          color: #3b8a24;
-        }
-
-        /* เส้นไล่สีวิ่งออกที่ขอบล่างเมื่อโฟกัส */
-        .field-line {
-          position: absolute;
-          left: 18px;
-          right: 18px;
-          bottom: 0;
-          height: 2px;
-          border-radius: 2px;
-          background: linear-gradient(90deg, #3b8a24, #9acd32);
-          transform: scaleX(0);
-          transform-origin: left;
-          transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
-          pointer-events: none;
-        }
-
-        .field input:focus ~ .field-line {
-          transform: scaleX(1);
+          color: #8cff32;
         }
 
         /* กัน autofill ของเบราว์เซอร์ทับสีช่อง */
         .field input:-webkit-autofill,
         .field input:-webkit-autofill:focus {
-          -webkit-text-fill-color: #14231a;
-          -webkit-box-shadow: 0 0 0 100px #f0f5ef inset;
+          -webkit-text-fill-color: #ffffff;
+          -webkit-box-shadow: 0 0 0 100px #061015 inset;
+          caret-color: #ffffff;
           transition: background-color 9999s ease-out 0s;
         }
 
         .field.has-toggle input {
-          padding-right: 60px;
+          padding-right: 50px;
         }
 
         .password-toggle {
           position: absolute;
-          right: 10px;
+          right: 5px;
           top: 50%;
           transform: translateY(-50%);
-          width: 40px;
-          height: 40px;
+          width: 36px;
+          height: 36px;
           display: flex;
           align-items: center;
           justify-content: center;
-          border: none;
-          border-radius: 12px;
+          border: 0;
+          border-radius: 8px;
           background: transparent;
-          color: #78907a;
+          color: #8fa3a8;
           cursor: pointer;
           transition: background 0.2s ease, color 0.2s ease;
         }
 
         .password-toggle svg {
-          width: 20px;
-          height: 20px;
+          width: 19px;
+          height: 19px;
         }
 
         .password-toggle:hover,
         .password-toggle:focus-visible {
           outline: none;
-          background: #e1ecdf;
-          color: #3b8a24;
+          background: rgba(139,255,57,0.10);
+          color: #8cff32;
         }
 
         /* เตือน Caps Lock */
@@ -790,7 +744,7 @@ export default function Login() {
           margin-top: 0;
           overflow: hidden;
           opacity: 0;
-          color: #b45309;
+          color: #ffe735;
           font-size: 12px;
           transition: max-height 0.25s ease, opacity 0.25s ease, margin-top 0.25s ease;
         }
@@ -804,10 +758,10 @@ export default function Login() {
         .error-message {
           margin-bottom: 18px;
           padding: 10px 13px;
-          border: 1px solid #e2a0ad;
+          border: 1px solid #a62c4d;
           border-radius: 8px;
-          background: #fff0f2;
-          color: #b52e4b;
+          background: rgba(140,10,45,0.12);
+          color: #ff7691;
           font-size: 13px;
           line-height: 1.6;
           animation: shake 0.45s ease both;
@@ -821,28 +775,29 @@ export default function Login() {
           80% { transform: translateX(3px); }
         }
 
-        /* ปุ่มเข้าสู่ระบบ: ไล่สี + แสงกวาดตอนชี้ + เรืองเบาๆ เมื่อกรอกครบ */
+        /* ปุ่มเข้าสู่ระบบ: สไตล์เดียวกับปุ่มสีเขียวมะนาวของแดชบอร์ด */
         .login-button {
           position: relative;
           width: 100%;
-          height: 56px;
+          height: 50px;
+          margin-top: 6px;
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 10px;
           overflow: hidden;
-          border: none;
-          border-radius: 14px;
-          background: linear-gradient(110deg, #1d4ed8 0%, #2563eb 38%, #0ea5e9 100%);
-          background-size: 200% 100%;
+          border: 0;
+          border-radius: 8px;
+          background: linear-gradient(90deg, #72ed2e, #baff3e);
+          background-size: 140% 100%;
           background-position: 0% 0;
-          color: #ffffff;
+          color: #071005;
           font-family: "Kanit", sans-serif;
           font-size: 15px;
           font-weight: 700;
-          letter-spacing: 0.06em;
+          letter-spacing: 0.04em;
           cursor: pointer;
-          box-shadow: 0 12px 28px rgba(37,99,235,0.26);
+          box-shadow: 0 0 16px rgba(125,255,45,0.15);
           transition: background-position 0.5s ease, transform 0.2s ease, box-shadow 0.3s ease, opacity 0.2s ease;
         }
 
@@ -853,15 +808,15 @@ export default function Login() {
           left: -60%;
           width: 38%;
           height: 100%;
-          background: linear-gradient(100deg, transparent, rgba(255,255,255,0.5), transparent);
+          background: linear-gradient(100deg, transparent, rgba(255,255,255,0.45), transparent);
           transform: skewX(-20deg);
           pointer-events: none;
         }
 
         .login-button:hover:not(:disabled) {
           background-position: 100% 0;
-          transform: translateY(-2px);
-          box-shadow: 0 18px 38px rgba(14,165,233,0.36);
+          transform: translateY(-1px);
+          box-shadow: 0 0 24px rgba(125,255,45,0.32);
         }
 
         .login-button:hover:not(:disabled)::after {
@@ -872,13 +827,18 @@ export default function Login() {
           transform: translateY(0) scale(0.985);
         }
 
+        .login-button:focus-visible {
+          outline: 2px solid #c6ff38;
+          outline-offset: 3px;
+        }
+
         .login-button.ready:not(:hover) {
           animation: glow-pulse 2.4s ease-in-out infinite;
         }
 
         @keyframes glow-pulse {
-          0%, 100% { box-shadow: 0 12px 28px rgba(37,99,235,0.26), 0 0 0 0 rgba(34,211,238,0.42); }
-          50%      { box-shadow: 0 12px 28px rgba(37,99,235,0.26), 0 0 0 9px rgba(34,211,238,0); }
+          0%, 100% { box-shadow: 0 0 16px rgba(125,255,45,0.15), 0 0 0 0 rgba(140,255,50,0.40); }
+          50%      { box-shadow: 0 0 16px rgba(125,255,45,0.15), 0 0 0 8px rgba(140,255,50,0); }
         }
 
         .login-button:disabled {
@@ -911,8 +871,8 @@ export default function Login() {
           display: flex;
           align-items: center;
           gap: 13px;
-          margin: 26px 0 22px;
-          color: #94a3b8;
+          margin: 22px 0 18px;
+          color: #93a1a5;
           font-size: 11px;
         }
 
@@ -921,17 +881,17 @@ export default function Login() {
           content: "";
           flex: 1;
           height: 1px;
-          background: linear-gradient(90deg, transparent, #dbe4ef);
+          background: linear-gradient(90deg, transparent, #2a5360);
         }
 
         .divider::after {
-          background: linear-gradient(90deg, #dbe4ef, transparent);
+          background: linear-gradient(90deg, #2a5360, transparent);
         }
 
         .register-text {
           margin: 0;
           text-align: center;
-          color: #64748b;
+          color: #93a1a5;
           font-size: 14px;
         }
 
@@ -939,7 +899,7 @@ export default function Login() {
           position: relative;
           display: inline-block;
           margin-left: 6px;
-          color: #2563eb;
+          color: #8cff32;
           font-weight: 700;
           text-decoration: none;
           transition: color 0.2s ease;
@@ -953,14 +913,14 @@ export default function Login() {
           bottom: -2px;
           height: 2px;
           border-radius: 2px;
-          background: linear-gradient(90deg, #22d3ee, #2563eb);
+          background: linear-gradient(90deg, #72ed2e, #c6ff38);
           transform: scaleX(0);
           transform-origin: left;
           transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
         }
 
         .register-text a:hover {
-          color: #1d4ed8;
+          color: #c6ff38;
         }
 
         .register-text a:hover::after {
@@ -968,9 +928,9 @@ export default function Login() {
         }
 
         .login-footer {
-          margin: 30px 0 0;
+          margin: 22px 0 0;
           text-align: center;
-          color: #94a3b8;
+          color: #6f7f83;
           font-size: 10px;
           letter-spacing: 0.04em;
         }
@@ -987,10 +947,10 @@ export default function Login() {
 
           .login-shell {
             margin: auto;
-            max-width: 520px;
+            max-width: 540px;
             min-height: auto;
             grid-template-columns: 1fr;
-            border-radius: 23px;
+            border-radius: 15px;
           }
 
           .login-brand-panel {
@@ -998,7 +958,7 @@ export default function Login() {
           }
 
           .login-card {
-            padding: 46px 40px;
+            padding: 28px 32px 22px;
           }
 
           .sound-toggle {
@@ -1017,9 +977,6 @@ export default function Login() {
             display: none;
           }
 
-          .login-header h1 {
-            font-size: 29px;
-          }
         }
 
         @media (max-width: 450px) {
@@ -1028,20 +985,37 @@ export default function Login() {
           }
 
           .login-shell {
-            border-radius: 19px;
+            border-radius: 15px;
           }
 
           .login-card {
-            padding: 36px 24px;
+            padding: 28px 22px 20px;
           }
+        }
 
-          .login-header h1 {
-            font-size: 26px;
-          }
+        /* จอเตี้ย: ย่อระยะห่างลง เพื่อให้การ์ดอยู่ในจอพอดีโดยไม่ต้องเลื่อน */
+        @media (max-height: 740px) {
+          .login-page { padding-top: 12px; padding-bottom: 12px; }
+          .login-card { padding: 26px 30px 16px; }
+          .login-header { margin-bottom: 14px; }
+          .login-header::after { margin-top: 10px; }
+          .login-logo { --logo-w: 170px; }
+          .login-header h1 { font-size: 21px; }
+          .form-group { margin-bottom: 12px; }
+          .field-label { margin-bottom: 6px; }
+          .field input { height: 42px; }
+          .login-button { height: 44px; margin-top: 2px; }
+          .divider { margin: 14px 0 12px; }
+          .login-footer { margin-top: 12px; }
+        }
 
-          .login-header p {
-            font-size: 12px;
-          }
+        @media (max-height: 580px) {
+          .login-header p,
+          .login-footer { display: none; }
+          .login-logo { --logo-w: 130px; }
+          .field input { height: 38px; }
+          .login-button { height: 40px; }
+          .divider { margin: 10px 0 8px; }
         }
       `}</style>
 
@@ -1112,27 +1086,25 @@ export default function Login() {
           </div>
 
           <div className="login-card">
-            <div className="login-header">
-              <span className="eyebrow reveal" style={{ '--i': 0 }}>MEMBER LOGIN</span>
-
-              <h1 className="reveal" style={{ '--i': 1 }}>ยินดีต้อนรับกลับ</h1>
-              <p className="reveal" style={{ '--i': 2 }}>เข้าสู่ระบบเพื่อเริ่มต้นการออกกำลังกายของคุณ</p>
+            <div className="login-header reveal" style={{ '--i': 0 }}>
+              <img src="/fittrack-hero-logo.png" alt="FITTRACK" className="login-logo" draggable="false" />
+              <h1>เข้าสู่ระบบ</h1>
+              <p>ระบบติดตามและวิเคราะห์การออกกำลังกายด้วย AI แบบเรียลไทม์</p>
             </div>
 
             <form onSubmit={handleLogin}>
               <div className="form-group reveal" style={{ '--i': 3 }}>
+                <label className="field-label" htmlFor="email">อีเมลบัญชี</label>
                 <div className="field">
                   <input
                     id="email"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder=" "
+                    placeholder="name@example.com"
                     autoComplete="email"
                     required
                   />
-                  <label htmlFor="email">อีเมล</label>
-                  <span className="field-line" />
                   <svg className="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <rect x="3" y="5" width="18" height="14" rx="3" />
                     <path d="m4 8 8 5.5L20 8" />
@@ -1141,6 +1113,7 @@ export default function Login() {
               </div>
 
               <div className="form-group reveal" style={{ '--i': 4 }}>
+                <label className="field-label" htmlFor="password">รหัสผ่าน</label>
                 <div className="field has-toggle">
                   <input
                     id="password"
@@ -1150,12 +1123,10 @@ export default function Login() {
                     onKeyDown={handleCaps}
                     onKeyUp={handleCaps}
                     onBlur={() => setCapsOn(false)}
-                    placeholder=" "
+                    placeholder="••••••••"
                     autoComplete="current-password"
                     required
                   />
-                  <label htmlFor="password">รหัสผ่าน</label>
-                  <span className="field-line" />
                   <svg className="field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <rect x="4.5" y="10.5" width="15" height="10" rx="3" />
                     <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
@@ -1195,7 +1166,7 @@ export default function Login() {
                   {loading ? (
                     <>
                       <span className="spinner"></span>
-                      กำลังเข้าสู่ระบบ...
+                      กำลังตรวจสอบข้อมูล...
                     </>
                   ) : (
                     'เข้าสู่ระบบ'
@@ -1209,12 +1180,12 @@ export default function Login() {
             </div>
 
             <p className="register-text reveal" style={{ '--i': 6 }}>
-              ยังไม่มีบัญชี?
-              <Link to="/register">สมัครสมาชิก</Link>
+              ยังไม่มีบัญชีผู้ใช้งาน?
+              <Link to="/register">ลงทะเบียน</Link>
             </p>
 
             <p className="login-footer reveal" style={{ '--i': 7 }}>
-              © 2026 FITTRACK · AI Exercise Tracking
+              © 2026 FITTRACK  ·  AI Motion Tracking
             </p>
           </div>
 

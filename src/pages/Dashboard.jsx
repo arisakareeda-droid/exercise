@@ -806,7 +806,7 @@ export default function Dashboard() {
               </div>
               <div className={`warning-card today-log ${overCalories > 0 ? "danger" : "safe"}`}>
                 <div className="today-log-head">
-                  <strong>{overCalories > 0 ? "⚠️ คุณได้รับพลังงานเกินเป้าหมาย!" : noTarget ? "ℹ️ ยังไม่ได้คำนวณเป้าหมายพลังงาน" : "พลังงานวันนี้อยู่ในเป้าหมาย"}</strong>
+                  <strong>{overCalories > 0 ? "⚠️ คุณได้รับพลังงานเกินเป้าหมาย!" : noTarget ? " ยังไม่ได้คำนวณเป้าหมายพลังงาน" : "พลังงานวันนี้อยู่ในเป้าหมาย"}</strong>
                   <span className="today-log-count">{loggedItems.length} รายการ</span>
                 </div>
                 <p className="today-log-sub">{overCalories > 0 ? "แนะนำให้ลดอาหารที่มีแคลอรี่สูง และออกกำลังกายเพิ่มประมาณ 30 นาที" : noTarget ? "กรอกน้ำหนัก ส่วนสูง อายุ แล้วกดคำนวณ เพื่อดูพลังงานที่ควรได้รับต่อวัน" : "รักษาสมดุลอาหารและออกกำลังกายอย่างสม่ำเสมอ"}</p>
