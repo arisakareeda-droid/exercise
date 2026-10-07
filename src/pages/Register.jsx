@@ -148,9 +148,8 @@ export default function Register() {
           position: fixed;
           inset: 0;
           display: flex;
-          padding: 28px;
-          overflow-x: hidden;
-          overflow-y: auto;
+          padding: 24px;
+          overflow: hidden;           /* ล็อกหน้า ไม่ให้เลื่อน */
           isolation: isolate;
           color: var(--ink);
           background: #0b1114;
@@ -244,7 +243,8 @@ export default function Register() {
           --my: 0%;
           position: relative;
           width: min(980px, 100%);
-          margin: auto;               /* จัดกลางเมื่อพอดีจอ และเลื่อนได้เมื่อจอเตี้ย */
+          height: min(660px, 100%);   /* พอดีจอเสมอ */
+          margin: auto;
           overflow: hidden;
           border: 1px solid rgba(120,170,180,.30);
           border-radius: 28px;
@@ -290,7 +290,8 @@ export default function Register() {
           z-index: 1;
           display: grid;
           grid-template-columns: minmax(0, 42fr) minmax(0, 58fr);
-          min-height: 620px;
+          height: 100%;
+          min-height: 0;
         }
 
         /* ───────── ฝั่งซ้าย: แนะนำระบบ ───────── */
@@ -299,8 +300,8 @@ export default function Register() {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 44px clamp(28px, 3.6vw, 48px);
-          text-align: center;
+          padding: 32px clamp(28px, 3.6vw, 48px);
+          text-align: left;
           border-right: 1px solid rgba(90,130,138,.28);
           background:
             radial-gradient(circle at 50% 14%, rgba(140,255,50,.11), transparent 42%),
@@ -328,14 +329,16 @@ export default function Register() {
           max-width: 400px;
           display: flex;
           flex-direction: column;
-          align-items: center;
+          align-items: flex-start;
         }
 
         .brand-mark {
-          width: min(250px, 80%);
+          width: min(230px, 72%);
+          max-height: 90px;
           height: auto;
           object-fit: contain;
-          margin: 0 auto 16px;
+          object-position: left center;
+          margin: 0 0 14px;
           animation: logo-in .9s .1s cubic-bezier(.2,.8,.2,1) both, logo-float 5s 1s ease-in-out infinite;
         }
         @keyframes logo-in {
@@ -351,7 +354,8 @@ export default function Register() {
           display: inline-flex;
           align-items: center;
           gap: 9px;
-          margin: 0 auto 14px;
+          align-self: flex-start;
+          margin: 0 0 12px;
           padding: 7px 14px;
           border: 1px solid rgba(140,255,50,.24);
           border-radius: 999px;
@@ -396,7 +400,7 @@ export default function Register() {
 
         .intro-copy {
           max-width: 360px;
-          margin: 12px auto 0;
+          margin: 10px 0 0;
           color: var(--muted);
           font-family: "Anuphan", sans-serif;
           font-size: 14px;
@@ -407,8 +411,8 @@ export default function Register() {
         .feature-list {
           width: 100%;
           display: grid;
-          gap: 10px;
-          margin: 24px 0 0;
+          gap: 9px;
+          margin: 20px 0 0;
           padding: 0;
           list-style: none;
           text-align: left;
@@ -459,7 +463,9 @@ export default function Register() {
           display: flex;
           align-items: center;
           min-width: 0;
-          padding: 40px clamp(24px, 4vw, 52px);
+          min-height: 0;
+          overflow: hidden;
+          padding: 28px clamp(24px, 4vw, 52px);
           background: rgba(3,8,10,.30);
         }
 
@@ -476,7 +482,7 @@ export default function Register() {
           margin: 0 auto 18px;
         }
 
-        .form-heading { margin-bottom: 22px; animation: rise-in .7s .2s both; }
+        .form-heading { margin-bottom: 18px; animation: rise-in .7s .2s both; }
         .form-heading h2 {
           margin: 0;
           font-size: 27px;
@@ -492,7 +498,7 @@ export default function Register() {
         .form-grid {
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 16px 16px;
+          gap: 14px 16px;
         }
 
         .form-group {
@@ -638,7 +644,7 @@ export default function Register() {
         }
 
         .form-actions {
-          margin-top: 22px;
+          margin-top: 18px;
           animation: rise-in .6s .66s both;
         }
 
@@ -702,7 +708,7 @@ export default function Register() {
           display: flex;
           justify-content: center;
           gap: 7px;
-          margin-top: 18px;
+          margin-top: 14px;
           color: #7f959a;
           font-family: "Anuphan", sans-serif;
           font-size: 13.5px;
@@ -732,7 +738,7 @@ export default function Register() {
           justify-content: center;
           align-items: center;
           gap: 6px;
-          margin-top: 16px;
+          margin-top: 12px;
           color: #5d777c;
           font-family: "Anuphan", sans-serif;
           font-size: 11px;
@@ -846,23 +852,60 @@ export default function Register() {
           to   { opacity: 1; transform: translateY(0); }
         }
 
-        /* ───────── Responsive ───────── */
+        /* ───────── Responsive (ล็อกพอดีจอ ไม่เลื่อน) ───────── */
         @media (max-width: 860px) {
-          .register-page { padding: 18px; }
-          .register-shell { width: min(560px, 100%); }
-          .register-layout { grid-template-columns: 1fr; min-height: 0; }
+          .register-page { padding: 16px; }
+          .register-shell { width: min(560px, 100%); height: min(700px, 100%); }
+          .register-layout { grid-template-columns: 1fr; }
           .intro-panel { display: none; }
-          .form-panel { padding: 34px 36px; }
+          .form-panel { padding: 26px 32px; }
           .mobile-brand { display: block; }
         }
 
         @media (max-width: 560px) {
-          .register-page { padding: 12px; }
-          .register-shell { border-radius: 22px; }
-          .form-panel { padding: 28px 20px; }
-          .form-heading { margin-bottom: 18px; }
-          .form-heading h2 { font-size: 24px; }
-          .form-grid { grid-template-columns: 1fr; gap: 14px; }
+          .register-page { padding: 10px; }
+          .register-shell { width: 100%; height: 100%; border-radius: 22px; }
+          .form-panel { padding: 20px 20px; }
+          .form-heading { margin-bottom: 14px; }
+          .form-heading h2 { font-size: 23px; }
+          .form-grid { grid-template-columns: 1fr; gap: 10px; }
+          .mobile-brand { width: 130px; margin-bottom: 12px; }
+        }
+
+        /* จอเตี้ย: ย่อระยะให้ทุกอย่างยังพอดีโดยไม่ต้องเลื่อน */
+        @media (max-height: 760px) {
+          .register-page { padding: 14px; }
+          .form-panel { padding-top: 18px; padding-bottom: 18px; }
+          .form-heading { margin-bottom: 12px; }
+          .form-heading h2 { font-size: 23px; }
+          .form-heading p { font-size: 12.5px; }
+          .form-grid { gap: 10px 14px; }
+          .label-row { margin-bottom: 5px; }
+          .field input { height: 43px; }
+          .form-actions { margin-top: 13px; }
+          .register-button, .success-button { height: 46px; }
+          .login-row { margin-top: 10px; }
+          .secure-note { margin-top: 8px; }
+          .mobile-brand { width: 105px; margin-bottom: 8px; }
+          .intro-panel { padding-top: 20px; padding-bottom: 20px; }
+          .brand-mark { width: min(190px, 70%); margin-bottom: 10px; }
+          .intro-panel h1 { font-size: 33px; }
+          .intro-copy { font-size: 13px; line-height: 1.6; margin-top: 8px; }
+          .feature-list { margin-top: 14px; gap: 7px; }
+          .feature-list li { padding: 7px 10px; }
+        }
+
+        @media (max-height: 640px) {
+          .secure-note { display: none; }
+          .mobile-brand { display: none; }
+          .intro-copy { display: none; }
+          .field input { height: 40px; }
+          .feature-list { margin-top: 12px; }
+        }
+
+        @media (max-height: 540px) {
+          .feature-list { display: none; }
+          .form-heading p { display: none; }
         }
 
         @media (prefers-reduced-motion: reduce) {
